@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include <Hash.h>
+#include "Hash.h"
 
 #include <utility>
 
@@ -51,7 +51,7 @@ public:
 	using wrapper = UniquePointer;
 
 	constexpr UniquePointer() noexcept = default;
-	constexpr UniquePointer(nullpointer) noexcept : m_pointer(nullptr) { }
+	constexpr UniquePointer(std::nullptr_t) noexcept : m_pointer(nullptr) { }
 	explicit constexpr UniquePointer(pointer pointer) noexcept : m_pointer(pointer) { }
 	template <class P> explicit constexpr UniquePointer(P pointer) noexcept : m_pointer(pointer) { }
 	constexpr UniquePointer(pointer pointer, const deleter_type& deleter) noexcept : m_pointer(pointer), m_deleter(deleter) { }
@@ -142,7 +142,7 @@ public:
 	using wrapper = UniquePointer;
 
 	constexpr UniquePointer() = default;
-	constexpr UniquePointer(nullpointer) : m_pointer(nullptr) { }
+	constexpr UniquePointer(std::nullptr_t) : m_pointer(nullptr) { }
 	explicit constexpr UniquePointer(pointer pointer) : m_pointer(pointer) { }
 	template <class P> explicit constexpr UniquePointer(P pointer) : m_pointer(pointer) { }
 	template <class P> constexpr UniquePointer(P pointer, const deleter_type& deleter) : m_pointer(pointer), m_deleter(deleter) { }

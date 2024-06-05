@@ -101,7 +101,7 @@ public:
 	[[deprecated]] constexpr const std::type_info& target_type() const noexcept {
 		return targetType();
 	}
-	constexpr const type_id targetType() const noexcept {
+	constexpr type_id targetType() const noexcept {
 		if (m_callable) return m_callable->targetType();
 		else return typeId<void>();
 	}

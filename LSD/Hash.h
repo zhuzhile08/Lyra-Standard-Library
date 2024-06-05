@@ -52,12 +52,6 @@ template<> struct Hash<std::nullptr_t> {
 	}
 };
 
-template<EnumType Enum> struct Hash<Enum> {
-	constexpr std::size_t operator()(Enum e) const noexcept {
-		return static_cast<std::size_t>(e);
-	}
-};
-
 template <> struct Hash<std::type_index> {
 	std::size_t operator()(std::type_index t) const noexcept {
 		return t.hash_code();
@@ -77,6 +71,17 @@ template <> struct Hash<std::filesystem::path> {
 		return std::filesystem::hash_value(p); /// @todo implement own hash function
 	}
 };
+
+
+#ifdef LSD_ENUM_UTILITIES
+
+template<EnumType Enum> struct Hash<Enum> {
+	constexpr std::size_t operator()(Enum e) const noexcept {
+		return static_cast<std::size_t>(e);
+	}
+};
+
+#endif
 
 } // namespace lsd
 

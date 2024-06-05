@@ -108,6 +108,8 @@ template <class Integer> inline constexpr Integer sizeToIndex(Integer size) noex
 
 // compile time type id generator
 
+using type_id = const void*;
+
 template <class> struct TypeId {
 private:
 	constexpr static char m_id { };
@@ -119,6 +121,10 @@ template <class Ty> constexpr type_id typeId() noexcept {
 	return &TypeId<Ty>::m_id;
 }
 
+} // namespace lsd
+
+
+#ifdef LSD_ENUM_UTILITIES
 
 // enum utilities
 
@@ -174,12 +180,12 @@ template<EnumType Enum> Enum constexpr inline operator^=(Enum& first, Enum secon
 	));
 }
 
-} // namespace lsd
-
 namespace std {
 
-template<lsd::EnumType Enum> constexpr inline std::string to_string(Enum e) noexcept {
+template<EnumType Enum> constexpr inline std::string to_string(Enum e) noexcept {
 	return std::to_string(static_cast<std::underlying_type_t<Enum>>(e));
 }
 
-}
+} // namespace std
+
+#endif

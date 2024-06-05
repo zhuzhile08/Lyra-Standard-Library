@@ -36,7 +36,6 @@ public:
 	using array_type = Ty*;
 	using const_array_type = const_value*;
 
-	using std::size_t = std::size_t;
 	using iterator = ForwardListIterator<value_type>;
 	using const_iterator = ForwardListIterator<const_value>; 
 

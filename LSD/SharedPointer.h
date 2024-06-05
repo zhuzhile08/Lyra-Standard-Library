@@ -20,7 +20,7 @@ private:
 	class ReferenceCounter {
 	public:
 		using value_type = Ty;
-		using counter_type = uint32;
+		using counter_type = std::size_t;
 
 	private:
 		struct DeleterBase {
@@ -85,7 +85,7 @@ public:
 	using wrapper = SharedPointer;
 
 	constexpr SharedPointer() noexcept = default;
-	constexpr SharedPointer(nullpointer) noexcept { }
+	constexpr SharedPointer(std::nullptr_t) noexcept { }
 	template <class Other> constexpr SharedPointer(Other* ptr) { 
 		m_pointer = ptr;
 		if (m_pointer) m_refCount = new reference_counter_type();

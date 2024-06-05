@@ -36,7 +36,6 @@ public:
 	using pointer_type = Ty*;
 	using const_pointer_type = const_value*;
 
-	using std::size_t = std::size_t;
 	using iterator = Iterator<value_type>;
 	using const_iterator = Iterator<const_value>; 
 	using reverse_iterator = ReverseIterator<value_type>;
