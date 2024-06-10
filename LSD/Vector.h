@@ -16,6 +16,7 @@
 #include "Iterators.h"
 
 #include <cstdlib>
+#include <cassert>
 #include <new>
 #include <utility>
 #include <initializer_list>
