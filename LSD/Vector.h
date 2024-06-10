@@ -34,7 +34,7 @@ public:
 	using reference = value_type&;
 	using const_reference = const_value&;
 	using rvreference = value_type&&;
-	using pointer_type = Ty*;
+	using pointer_type = value_type*;
 	using const_pointer_type = const_value*;
 
 	using iterator = Iterator<value_type>;
