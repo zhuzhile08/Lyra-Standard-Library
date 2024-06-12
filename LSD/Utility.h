@@ -121,7 +121,21 @@ template <class Ty> constexpr type_id typeId() noexcept {
 	return &TypeId<Ty>::m_id;
 }
 
+
+// std::swap general overload
+
+template <class Ty> concept Swappable = requires(Ty a, Ty b) { a.swap(b); };
+
 } // namespace lsd
+
+
+namespace std {
+
+template <lsd::Swappable Ty> void swap(Ty& a, Ty& b) {
+	a.swap(b);
+}
+
+} // namespace std
 
 
 #ifdef LSD_ENUM_UTILITIES
