@@ -34,6 +34,9 @@ template <
 public:
 	static constexpr float maxLoadFactor = 2;
 
+	using size_type = std::size_t;
+	using difference_type = std::ptrdiff_t;
+
 	using mapped_type = Ty;
 	using key_type = Key;
 	using allocator_type = Alloc;
@@ -47,7 +50,7 @@ public:
 	using const_pointer = const pointer;
 	using array = Vector<value_type>;
 
-	using bucket_type = std::size_t;
+	using bucket_type = size_type;
 	using bucket_pointer = bucket_type*;
 	using bucket_list = ForwardList<bucket_type>;
 	using buckets = Vector<bucket_list>;
@@ -60,13 +63,13 @@ public:
 	using hasher = Hash;
 	using key_equal = Equal;
 
-	using wrapper = UnorderedSparseMap;
-	using const_wrapper_reference = const wrapper&;
-	using wrapper_rvreference = wrapper&&;
+	using container = UnorderedSparseMap;
+	using const_container_reference = const container&;
+	using container_rvreference = container&&;
 
 	constexpr UnorderedSparseMap() noexcept : m_buckets(2) { } 
 	explicit constexpr UnorderedSparseMap(
-		std::size_t bucketCount, 
+		size_type bucketCount, 
 		const hasher& hash = hasher(), 
 		const key_equal& keyEqual = key_equal(), 
 		const allocator_type& alloc = allocator_type()) noexcept : 
@@ -74,15 +77,15 @@ public:
 		m_buckets(hashmapBucketSizeCheck(bucketCount, 2)), 
 		m_hasher(hash), 
 		m_equal(keyEqual) { } 
-	constexpr UnorderedSparseMap(std::size_t bucketCount, const allocator_type& alloc) noexcept : 
+	constexpr UnorderedSparseMap(size_type bucketCount, const allocator_type& alloc) noexcept : 
 		m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, 2)) { } 
-	constexpr UnorderedSparseMap(std::size_t bucketCount, const hasher& hasher, const allocator_type& alloc) noexcept : 
+	constexpr UnorderedSparseMap(size_type bucketCount, const hasher& hasher, const allocator_type& alloc) noexcept : 
 		m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, 2)), m_hasher(hasher) { } 
 	explicit constexpr UnorderedSparseMap(const allocator_type& alloc) noexcept : 
 		m_array(alloc), m_buckets(2) { } 
 	template <class It> constexpr UnorderedSparseMap(
 		It first, It last, 
-		std::size_t bucketCount = 0, // set to 0 for default evaluation
+		size_type bucketCount = 0, // set to 0 for default evaluation
 		const hasher& hash = hasher(), 
 		const key_equal& keyEqual = key_equal(), 
 		const allocator_type& alloc = allocator_type()) noexcept requires isIteratorValue<It> : 
@@ -93,13 +96,13 @@ public:
 		insert(first, last);
 	}
 	template <class It> constexpr UnorderedSparseMap(
-		It first, It last, std::size_t bucketCount, const allocator_type& alloc) noexcept 
+		It first, It last, size_type bucketCount, const allocator_type& alloc) noexcept 
 		requires isIteratorValue<It> : m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, last - first)) {
 		insert(first, last);
 	}
 	template <class It> constexpr UnorderedSparseMap(
 		It first, It last, 
-		std::size_t bucketCount,
+		size_type bucketCount,
 		const hasher& hasher,
 		const allocator_type& alloc) noexcept requires isIteratorValue<It> : 
 		m_array(alloc),
@@ -107,17 +110,17 @@ public:
 		m_hasher(hasher) {
 		insert(first, last);
 	}
-	constexpr UnorderedSparseMap(const_wrapper_reference other) : 
+	constexpr UnorderedSparseMap(const_container_reference other) : 
 		m_array(other.m_array), m_buckets(other.m_buckets) { }
-	constexpr UnorderedSparseMap(const_wrapper_reference other, const allocator_type& alloc) :
+	constexpr UnorderedSparseMap(const_container_reference other, const allocator_type& alloc) :
 		m_array(other.m_array, alloc), m_buckets(other.m_buckets) { }
-	constexpr UnorderedSparseMap(wrapper_rvreference other) noexcept : 
+	constexpr UnorderedSparseMap(container_rvreference other) noexcept : 
 		m_array(std::move(other.m_array)), m_buckets(std::move(other.m_buckets)) { }
-	constexpr UnorderedSparseMap(wrapper_rvreference other, const allocator_type& alloc) : 
+	constexpr UnorderedSparseMap(container_rvreference other, const allocator_type& alloc) : 
 		m_array(std::move(other.m_array), alloc), m_buckets(std::move(other.m_buckets)) { }
 	constexpr UnorderedSparseMap(
 		std::initializer_list<value_type> ilist, 
-		std::size_t bucketCount = 0, // set to 0 for default evaluation
+		size_type bucketCount = 0, // set to 0 for default evaluation
 		const hasher& hash = hasher(), 
 		const key_equal& keyEqual = key_equal(), 
 		const allocator_type& alloc = allocator_type()) noexcept : 
@@ -127,26 +130,26 @@ public:
 		m_equal(keyEqual) {
 		insert(ilist.begin(), ilist.end());
 	} 
-	constexpr UnorderedSparseMap(std::initializer_list<value_type> ilist, std::size_t bucketCount, const allocator_type& alloc) noexcept : 
+	constexpr UnorderedSparseMap(std::initializer_list<value_type> ilist, size_type bucketCount, const allocator_type& alloc) noexcept : 
 		m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, ilist.size())) {
 		insert(ilist.begin(), ilist.end());
 	} 
 	constexpr UnorderedSparseMap(
-		std::initializer_list<value_type> ilist, std::size_t bucketCount, const hasher& hasher, const allocator_type& alloc) noexcept : 
+		std::initializer_list<value_type> ilist, size_type bucketCount, const hasher& hasher, const allocator_type& alloc) noexcept : 
 		m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, ilist.size())), m_hasher(hasher) {
 		insert(ilist.begin(), ilist.end());
 	}
 	constexpr ~UnorderedSparseMap() = default;
 
-	constexpr UnorderedSparseMap& operator=(const_wrapper_reference other) noexcept {
+	constexpr UnorderedSparseMap& operator=(const_container_reference other) noexcept {
 		std::swap(other.m_array, this->m_array);
 		m_buckets = std::move(bucketsDeepCopy(other));
 
 		return *this;
 	}
-	constexpr UnorderedSparseMap& operator=(wrapper_rvreference other) noexcept = default;
+	constexpr UnorderedSparseMap& operator=(container_rvreference other) noexcept = default;
 
-	constexpr void swap(wrapper& other) {
+	constexpr void swap(container& other) {
 		m_array.swap(other.m_array);
 		m_buckets.swap(other.m_buckets);
 	}
@@ -188,40 +191,40 @@ public:
 		return m_array.crend();
 	}
 
-	constexpr bucket_iterator begin(std::size_t index) noexcept {
+	constexpr bucket_iterator begin(size_type index) noexcept {
 		return m_buckets[index].begin();
 	}
-	constexpr const_bucket_iterator begin(std::size_t index) const noexcept {
+	constexpr const_bucket_iterator begin(size_type index) const noexcept {
 		return m_buckets[index].begin();
 	}
-	constexpr const_bucket_iterator cbegin(std::size_t index) const noexcept {
+	constexpr const_bucket_iterator cbegin(size_type index) const noexcept {
 		return m_buckets[index].cbegin();
 	}
-	constexpr bucket_iterator end(std::size_t index) noexcept {
+	constexpr bucket_iterator end(size_type index) noexcept {
 		return m_buckets[index].end();
 	}
-	constexpr const_bucket_iterator end(std::size_t index) const noexcept {
+	constexpr const_bucket_iterator end(size_type index) const noexcept {
 		return m_buckets[index].end();
 	}
-	constexpr const_bucket_iterator cend(std::size_t index) const noexcept {
+	constexpr const_bucket_iterator cend(size_type index) const noexcept {
 		return m_buckets[index].cend();
 	}
-	constexpr bucket_iterator rbegin(std::size_t index) noexcept {
+	constexpr bucket_iterator rbegin(size_type index) noexcept {
 		return m_buckets[index].rbegin();
 	}
-	constexpr const_bucket_iterator rbegin(std::size_t index) const noexcept {
+	constexpr const_bucket_iterator rbegin(size_type index) const noexcept {
 		return m_buckets[index].rbegin();
 	}
-	constexpr const_bucket_iterator crbegin(std::size_t index) const noexcept {
+	constexpr const_bucket_iterator crbegin(size_type index) const noexcept {
 		return m_buckets[index].crbegin();
 	}
-	constexpr bucket_iterator rend(std::size_t index) noexcept {
+	constexpr bucket_iterator rend(size_type index) noexcept {
 		return m_buckets[index].rend();
 	}
-	constexpr const_bucket_iterator rend(std::size_t index) const noexcept {
+	constexpr const_bucket_iterator rend(size_type index) const noexcept {
 		return m_buckets[index].rend();
 	}
-	constexpr const_bucket_iterator crend(std::size_t index) const noexcept {
+	constexpr const_bucket_iterator crend(size_type index) const noexcept {
 		return m_buckets[index].crend();
 	}
 
@@ -238,10 +241,10 @@ public:
 		return m_array.back();
 	}
 
-	void rehash(std::size_t count) noexcept {
+	void rehash(size_type count) noexcept {
 		m_buckets.resizeAndClear(count);
 
-		std::size_t i = 0;
+		size_type i = 0;
 		for (auto it = m_array.begin(); it != m_array.end(); it++, i++)
 			m_buckets[keyToBucket(it->first)].emplaceFront(i);
 	}
@@ -375,7 +378,7 @@ public:
 		for (auto it = first; it != last; it++) erase(it);
 		return &*first;
 	}
-	constexpr std::size_t erase(const key_type& key) noexcept {
+	constexpr size_type erase(const key_type& key) noexcept {
 		auto it = find(key);
 
 		if (it != m_array.end()) {
@@ -385,7 +388,7 @@ public:
 
 		return 0;
 	}
-	template <class K> constexpr std::size_t erase(K&& key) noexcept
+	template <class K> constexpr size_type erase(K&& key) noexcept
 		requires(!std::is_convertible_v<K, iterator> && !std::is_convertible_v<K, const_iterator>) {
 		auto it = find(std::forward<K>(key));
 
@@ -430,13 +433,13 @@ public:
 		m_buckets.clear();
 	}
 
-	[[nodiscard]] constexpr std::size_t size() const noexcept {
+	[[nodiscard]] constexpr size_type size() const noexcept {
 		return m_array.size();
 	}
-	[[nodiscard]] constexpr std::size_t maxSize() const noexcept {
+	[[nodiscard]] constexpr size_type maxSize() const noexcept {
 		return m_array.maxSize();
 	}
-	[[deprecated]] [[nodiscard]] constexpr std::size_t max_size() const noexcept {
+	[[deprecated]] [[nodiscard]] constexpr size_type max_size() const noexcept {
 		return maxSize();
 	}
 	[[nodiscard]] bool empty() const noexcept {
@@ -449,25 +452,25 @@ public:
 		return m_array.allocator();
 	}
 
-	[[nodiscard]] constexpr std::size_t bucketCount() const noexcept {
+	[[nodiscard]] constexpr size_type bucketCount() const noexcept {
 		return m_buckets.size();
 	}
-	[[deprecated]] [[nodiscard]] constexpr std::size_t bucket_count() const noexcept {
+	[[deprecated]] [[nodiscard]] constexpr size_type bucket_count() const noexcept {
 		return m_buckets.size();
 	}
-	[[nodiscard]] constexpr std::size_t maxBucketSize() const noexcept {
+	[[nodiscard]] constexpr size_type maxBucketSize() const noexcept {
 		return m_buckets.maxSize();
 	}
-	[[deprecated]] [[nodiscard]] constexpr std::size_t max_bucket_size() const noexcept {
+	[[deprecated]] [[nodiscard]] constexpr size_type max_bucket_size() const noexcept {
 		return m_buckets.maxSize();
 	}
-	[[nodiscard]] constexpr std::size_t bucketSize(std::size_t index) const noexcept {
+	[[nodiscard]] constexpr size_type bucketSize(size_type index) const noexcept {
 		return m_buckets[index]->size();
 	}
-	[[deprecated]] [[nodiscard]] constexpr std::size_t bucket_size(std::size_t index) const noexcept {
+	[[deprecated]] [[nodiscard]] constexpr size_type bucket_size(size_type index) const noexcept {
 		return m_buckets[index]->size();
 	}
-	template <class K> [[nodiscard]] std::size_t bucket(const K& key) const noexcept
+	template <class K> [[nodiscard]] size_type bucket(const K& key) const noexcept
 		requires(!std::is_convertible_v<K, iterator> && !std::is_convertible_v<K, const_iterator>) {
 		return keyToBucket(key);
 	}
@@ -492,7 +495,7 @@ public:
 		}
 		return found;
 	}
-	template <class K> [[nodiscard]] constexpr std::size_t count(const K& key) const noexcept
+	template <class K> [[nodiscard]] constexpr size_type count(const K& key) const noexcept
 		requires(!std::is_convertible_v<K, iterator> && !std::is_convertible_v<K, const_iterator>) {
 		if (contains(key)) return 1;
 		return 0;
@@ -559,7 +562,7 @@ private:
 	constexpr void rehashIfNecessary() noexcept {
 		if (m_array.size() >= m_buckets.size() * maxLoadFactor) rehash(nextPrime(m_array.size()));
 	}
-	template <class K> constexpr std::size_t keyToBucket(const K& key) const noexcept
+	template <class K> constexpr size_type keyToBucket(const K& key) const noexcept
 		requires(!std::is_convertible_v<K, iterator> && !std::is_convertible_v<K, const_iterator>) {
 		return m_hasher(key) % m_buckets.size();
 	}

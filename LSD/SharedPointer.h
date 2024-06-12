@@ -77,12 +77,12 @@ private:
 	};
 
 public:
-	using value_type = std::remove_extent_t<Ty>;
+	using element_type = std::remove_extent_t<Ty>;
 	using reference_counter_type = ReferenceCounter;
 	using reference_counter = reference_counter_type*;
 	using counter_type = typename reference_counter_type::counter_type;
 	using pointer = Ty*;
-	using wrapper = SharedPointer;
+	using container = SharedPointer;
 
 	constexpr SharedPointer() noexcept = default;
 	constexpr SharedPointer(std::nullptr_t) noexcept { }
@@ -94,8 +94,8 @@ public:
 		m_pointer = ptr;
 		if (m_pointer) m_refCount = new reference_counter_type(std::forward<Deleter>(del));
 	}
-	constexpr SharedPointer(const wrapper& other) : m_pointer(other.m_pointer), m_refCount(other.m_refCount) { m_refCount->increment(); }
-	constexpr SharedPointer(wrapper&& other) : m_pointer(std::exchange(other.m_pointer, nullptr)), m_refCount(std::exchange(other.m_refCount, nullptr)) { }
+	constexpr SharedPointer(const container& other) : m_pointer(other.m_pointer), m_refCount(other.m_refCount) { m_refCount->increment(); }
+	constexpr SharedPointer(container&& other) : m_pointer(std::exchange(other.m_pointer, nullptr)), m_refCount(std::exchange(other.m_refCount, nullptr)) { }
 	template <class T> constexpr SharedPointer(const SharedPointer<T>& other) : m_pointer(other.m_pointer), m_refCount(dynamic_cast<reference_counter>(other.m_refCount)) { m_refCount->increment(); }
 	template <class T> constexpr SharedPointer(SharedPointer<T>&& other) : m_pointer(std::exchange(other.m_pointer, nullptr)), m_refCount(dynamic_cast<reference_counter>(std::exchange(other.m_refCount, nullptr))) { }
 	template <class T> constexpr SharedPointer(UniquePointer<T>&& other) {
@@ -113,42 +113,42 @@ public:
 		m_refCount = nullptr;
 	}
 
-	constexpr SharedPointer& operator=(const wrapper& other) {
-		wrapper(other).swap(*this);
+	constexpr SharedPointer& operator=(const container& other) {
+		container(other).swap(*this);
 		return *this;
 	}
-	constexpr SharedPointer& operator=(wrapper&& other) {
-		wrapper(std::move(other)).swap(*this);
+	constexpr SharedPointer& operator=(container&& other) {
+		container(std::move(other)).swap(*this);
 		return *this;
 	}
 	template <class T> constexpr SharedPointer& operator=(const SharedPointer<T>& other) {
-		wrapper(other).swap(*this);
+		container(other).swap(*this);
 		return *this;
 	}
 	template <class T> constexpr SharedPointer& operator=(SharedPointer<T>&& other) {
-		wrapper(std::move(other)).swap(*this);
+		container(std::move(other)).swap(*this);
 		return *this;
 	}
 	template <class T, class D> constexpr SharedPointer& operator=(UniquePointer<T, D>&& other) {
-		wrapper(std::move(other)).swap(*this);
+		container(std::move(other)).swap(*this);
 		return *this;
 	}
 
 	template <class ... Args> [[nodiscard]] static SharedPointer create(Args&&... args) {
-		return SharedPointer(new value_type(std::forward<Args>(args)...));
+		return SharedPointer(new element_type(std::forward<Args>(args)...));
 	}
 
 	void reset() {
-		wrapper().swap(*this);
+		container().swap(*this);
 	}
 	template <class T> void reset(T* ptr) {
-		wrapper(ptr).swap(*this);
+		container(ptr).swap(*this);
 	}
 	template <class T, class D> void reset(T* ptr, D del) {
-		wrapper(ptr, del).swap(*this);
+		container(ptr, del).swap(*this);
 	}
 
-	void swap(wrapper& other) noexcept {
+	void swap(container& other) noexcept {
 		std::swap(m_pointer, other.m_pointer);
 		std::swap(m_refCount, other.m_refCount);
 	}
@@ -159,7 +159,7 @@ public:
 	constexpr pointer operator->() const noexcept {
 		return m_pointer;
 	}
-	constexpr value_type& operator*() const noexcept {
+	constexpr element_type& operator*() const noexcept {
 		return *m_pointer;
 	}
 

@@ -32,7 +32,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) *(ptr + c) = c2;
+		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
 		return ptr;
 	}
 
@@ -55,24 +55,25 @@ public:
 		else return dst;
 	}
 
-	constexpr static bool compare(const char_type* s1, const char_type* s2, std::size_t count) {
-		for (auto c = count; c < count; c++)
-			if (*(s1 + c) != *(s2 + c)) 
-				return false;
+	constexpr static int compare(const char_type* s1, const char_type* s2, std::size_t count) {
+		for (; count > 0; count--, s1++, s2++) {
+			if (lt(*s1, *s2)) return -1;
+			else if (!lt(*s1, *s2) && !eq(*s1, *s2)) return 1;
+		}
 
-		return true;
+		return 0;
 	}
 
 	constexpr static std::size_t length(const char_type* s) {
 		std::size_t size = 0;
 
-		for (; *s != '\0'; s++, size++) { }
+		for (; !eq(*s, '\0'); s++, size++) { }
 
 		return size;
 	}
 
 	constexpr static const char_type* find(const char_type* ptr, std::size_t count, const char_type& ch) {
-		for (; count > 0; ptr++, count--) if (*ptr == ch) return ptr;
+		for (; count > 0; ptr++, count--) if (eq(*ptr, ch)) return ptr;
 		return nullptr;
 	}
 
@@ -120,7 +121,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) *(ptr + c) = c2;
+		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
 		return ptr;
 	}
 
@@ -144,11 +145,12 @@ public:
 	}
 
 	constexpr static bool compare(const char_type* s1, const char_type* s2, std::size_t count) {
-		for (auto c = count; c < count; c++)
-			if (!eq(*(s1 + c), *(s2 + c))) 
-				return false;
+		for (; count > 0; count--, s1++, s2++) {
+			if (lt(*s1, *s2)) return -1;
+			else if (!lt(*s1, *s2) && !eq(*s1, *s2)) return 1;
+		}
 
-		return true;
+		return 0;
 	}
 
 	constexpr static std::size_t length(const char_type* s) {
@@ -208,7 +210,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) *(ptr + c) = c2;
+		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
 		return ptr;
 	}
 
@@ -232,11 +234,12 @@ public:
 	}
 
 	constexpr static bool compare(const char_type* s1, const char_type* s2, std::size_t count) {
-		for (auto c = count; c < count; c++)
-			if (!eq(*(s1 + c), *(s2 + c))) 
-				return false;
+		for (; count > 0; count--, s1++, s2++) {
+			if (lt(*s1, *s2)) return -1;
+			else if (!lt(*s1, *s2) && !eq(*s1, *s2)) return 1;
+		}
 
-		return true;
+		return 0;
 	}
 
 	constexpr static std::size_t length(const char_type* s) {
@@ -296,7 +299,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) *(ptr + c) = c2;
+		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
 		return ptr;
 	}
 
@@ -320,11 +323,12 @@ public:
 	}
 
 	constexpr static bool compare(const char_type* s1, const char_type* s2, std::size_t count) {
-		for (auto c = count; c < count; c++)
-			if (!eq(*(s1 + c), *(s2 + c))) 
-				return false;
+		for (; count > 0; count--, s1++, s2++) {
+			if (lt(*s1, *s2)) return -1;
+			else if (!lt(*s1, *s2) && !eq(*s1, *s2)) return 1;
+		}
 
-		return true;
+		return 0;
 	}
 
 	constexpr static std::size_t length(const char_type* s) {
@@ -384,7 +388,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) *(ptr + c) = c2;
+		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
 		return ptr;
 	}
 
@@ -408,11 +412,12 @@ public:
 	}
 
 	constexpr static bool compare(const char_type* s1, const char_type* s2, std::size_t count) {
-		for (auto c = count; c < count; c++)
-			if (!eq(*(s1 + c), *(s2 + c))) 
-				return false;
+		for (; count > 0; count--, s1++, s2++) {
+			if (lt(*s1, *s2)) return -1;
+			else if (!lt(*s1, *s2) && !eq(*s1, *s2)) return 1;
+		}
 
-		return true;
+		return 0;
 	}
 
 	constexpr static std::size_t length(const char_type* s) {

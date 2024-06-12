@@ -34,18 +34,18 @@ public:
 	using reference = value_type&;
 	using const_reference = const_value&;
 	using rvreference = value_type&&;
-	using pointer_type = value_type*;
-	using const_pointer_type = const_value*;
+	using pointer = value_type*;
+	using const_pointer = const_value*;
 
 	using iterator = Iterator<value_type>;
 	using const_iterator = Iterator<const_value>; 
 	using reverse_iterator = ReverseIterator<value_type>;
 	using const_reverse_iterator = ReverseIterator<const_value>; 
 
-	using wrapper = Vector;
-	using wrapper_reference = wrapper&;
-	using const_wrapper_reference = const wrapper&;
-	using wrapper_rvreference = wrapper&&;
+	using container = Vector;
+	using container_reference = container&;
+	using const_container_reference = const container&;
+	using container_rvreference = container&&;
 	using init_list = std::initializer_list<value_type>;
 
 	constexpr Vector() noexcept { }
@@ -62,20 +62,20 @@ public:
 		m_alloc(alloc) {
 		assign(first, last);
 	}
-	constexpr Vector(const_wrapper_reference other) : 
+	constexpr Vector(const_container_reference other) : 
 		Vector(other.m_begin, other.m_end) { }
-	constexpr Vector(const_wrapper_reference other, const_alloc_reference alloc) : 
+	constexpr Vector(const_container_reference other, const_alloc_reference alloc) : 
 		Vector(other.m_begin, other.m_end, alloc) { }
-	constexpr Vector(wrapper_rvreference other) noexcept :
+	constexpr Vector(container_rvreference other) noexcept :
 		m_alloc(std::exchange(other.m_alloc, m_alloc)), 
-		m_begin(std::exchange(other.m_begin, pointer_type { })),
-		m_end(std::exchange(other.m_end, pointer_type { })),
-		m_cap(std::exchange(other.m_cap, pointer_type { })) { }
-	constexpr Vector(wrapper_rvreference other, const_alloc_reference alloc) : 
+		m_begin(std::exchange(other.m_begin, pointer { })),
+		m_end(std::exchange(other.m_end, pointer { })),
+		m_cap(std::exchange(other.m_cap, pointer { })) { }
+	constexpr Vector(container_rvreference other, const_alloc_reference alloc) : 
 		m_alloc(alloc),
-		m_begin(std::exchange(other.m_begin, pointer_type { })),
-		m_end(std::exchange(other.m_end, pointer_type { })),
-		m_cap(std::exchange(other.m_cap, pointer_type { }))  { }
+		m_begin(std::exchange(other.m_begin, pointer { })),
+		m_end(std::exchange(other.m_end, pointer { })),
+		m_cap(std::exchange(other.m_cap, pointer { }))  { }
 	constexpr Vector(init_list ilist, const_alloc_reference alloc = allocator_type()) :
 		Vector(ilist.begin(), ilist.end(), alloc) { }
 
@@ -88,19 +88,19 @@ public:
 		m_cap = nullptr;
 	}
 
-	constexpr wrapper_reference operator=(const_wrapper_reference other) {
+	constexpr container_reference operator=(const_container_reference other) {
 		m_alloc = other.m_alloc;
 		assign(other.begin(), other.end());
 		return *this;
 	}
-	constexpr wrapper_reference operator=(wrapper_rvreference other) noexcept {
+	constexpr container_reference operator=(container_rvreference other) noexcept {
 		std::swap(other.m_alloc, m_alloc);
 		std::swap(other.m_begin, m_begin);
 		std::swap(other.m_end, m_end);
 		std::swap(other.m_cap, m_cap);
 		return *this;
 	}
-	constexpr wrapper_reference operator=(init_list ilist) {
+	constexpr container_reference operator=(init_list ilist) {
 		assign(ilist.begin(), ilist.end());
 		return *this;
 	}
@@ -126,7 +126,7 @@ public:
 		assign(ilist.begin(), ilist.end());
 	}
 
-	constexpr void swap(wrapper_reference other) {
+	constexpr void swap(container_reference other) {
 		std::swap(m_begin, other.m_begin);
 		std::swap(m_end, other.m_end);
 		std::swap(m_cap, other.m_cap);
@@ -200,20 +200,21 @@ public:
 		auto cap = capacity();
 
 		if (count > cap) {
-			auto s = this->size();
+			auto s = size();
 			auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, count));
-			auto oldEnd = std::exchange(m_end, m_begin + s);
-			m_cap = m_begin + count;
 
 			if (oldBegin) {
 				auto beginIt = m_begin;
 				auto oldBeginIt = oldBegin;
 
-				while (oldBeginIt != oldEnd)
+				while (oldBeginIt != m_end)
 					allocator_traits::construct(m_alloc, beginIt++, std::move(*(oldBeginIt++)));
 
 				allocator_traits::deallocate(m_alloc, oldBegin, cap);
 			}
+
+			m_cap = m_begin + count;
+			m_end = m_begin + s;
 		}
 	}
 	constexpr void shrinkToFit() {
@@ -222,12 +223,19 @@ public:
 
 		if (s < cap) {
 			auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, s));
-			auto oldEnd = std::exchange(m_end, m_begin + s);
 
 			if (oldBegin) {
-				std::move(oldBegin, oldEnd, m_begin);
+				auto beginIt = m_begin;
+				auto oldBeginIt = oldBegin;
+
+				while (oldBeginIt != m_end)
+					allocator_traits::construct(m_alloc, beginIt++, std::move(*(oldBeginIt++)));
+
 				allocator_traits::deallocate(m_alloc, oldBegin, cap);
 			}
+
+			m_cap = m_begin + count;
+			m_end = m_begin + s;
 		}
 	}
 	[[deprecated]] constexpr void shrink_to_fit() {
@@ -448,10 +456,10 @@ public:
 		return m_begin == m_end;
 	}
 
-	[[nodiscard]] constexpr const_pointer_type data() const noexcept {
+	[[nodiscard]] constexpr const_pointer data() const noexcept {
 		return m_begin;
 	}
-	[[nodiscard]] constexpr pointer_type data() noexcept {
+	[[nodiscard]] constexpr pointer data() noexcept {
 		return m_begin;
 	}
 
@@ -486,9 +494,9 @@ public:
 private:
 	NO_UNIQUE_ADDRESS allocator_type m_alloc { };
 
-	pointer_type m_begin { };
-	pointer_type m_end { };
-	pointer_type m_cap { };
+	pointer m_begin { };
+	pointer m_end { };
+	pointer m_cap { };
 
 	constexpr void smartReserve(std::size_t size) noexcept {
 		auto cap = capacity();

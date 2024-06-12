@@ -25,6 +25,9 @@ concept DynarrayValueType = std::is_move_assignable_v<Ty> && std::is_default_con
 
 // very dangerous dynamic array implementation, please only store contents <= 4 bytes in small quantities
 template <DynarrayValueType Ty, std::size_t Capacity> struct Dynarray {
+	using size_type = std::size_t;
+	using difference_type = std::ptrdiff_t;
+
 	using value_type = Ty;
 	using const_value = const value_type;
 	using reference = value_type&;
@@ -37,55 +40,55 @@ template <DynarrayValueType Ty, std::size_t Capacity> struct Dynarray {
 	using reverse_iterator = typename array::reverse_iterator;
 	using const_reverse_iterator = typename array::const_reverse_iterator;
 
-	using wrapper = Dynarray<value_type, Capacity>;
-	using wrapper_reference = wrapper&;
-	using const_wrapper_reference = const wrapper&;
-	using wrapper_rvreference = wrapper&&;
+	using container = Dynarray<value_type, Capacity>;
+	using container_reference = container&;
+	using const_container_reference = const container&;
+	using container_rvreference = container&&;
 	using init_list = std::initializer_list<value_type>;
 
 	constexpr Dynarray() noexcept = default;
-	constexpr Dynarray(std::size_t size) {
+	constexpr Dynarray(size_type size) {
 		resize(size);
 	}
-	constexpr Dynarray(std::size_t size, const Ty& value) {
+	constexpr Dynarray(size_type size, const Ty& value) {
 		assign(size, value);
 	}
 	template <class It> constexpr Dynarray(It first, It last) requires isIteratorValue<It> {
 		assign(first, last);
 	}
-	constexpr Dynarray(const_wrapper_reference other) : m_size(other.m_size), m_array(other.m_array) { }
-	constexpr Dynarray(wrapper_rvreference other) : m_size(std::move(other.m_size)), m_array(std::move(other.m_array)) { }
+	constexpr Dynarray(const_container_reference other) : m_size(other.m_size), m_array(other.m_array) { }
+	constexpr Dynarray(container_rvreference other) : m_size(std::move(other.m_size)), m_array(std::move(other.m_array)) { }
 	constexpr Dynarray(init_list ilist) {
 		assign(ilist.begin(), ilist.end());
 	}
-	template <std::size_t OtherSize> constexpr Dynarray(const Dynarray<value_type, OtherSize>& other) { 
+	template <size_type OtherSize> constexpr Dynarray(const Dynarray<value_type, OtherSize>& other) { 
 		assign(other.begin(), other.end());
 	}
-	template <std::size_t OtherSize> constexpr Dynarray(Dynarray<value_type, OtherSize>&& other) {
+	template <size_type OtherSize> constexpr Dynarray(Dynarray<value_type, OtherSize>&& other) {
 		assign(other.begin(), other.end());
 	}
 
 
-	constexpr wrapper& operator=(const_wrapper_reference other) {
+	constexpr container& operator=(const_container_reference other) {
 		assign(other.begin(), other.end());
 		return *this;
 	}
-	constexpr wrapper& operator=(wrapper_rvreference other) noexcept {
+	constexpr container& operator=(container_rvreference other) noexcept {
 		m_array = std::move(other.m_array);
 		m_size = other.m_size;
 		return *this;
 	}
-	constexpr wrapper& operator=(init_list ilist) {
+	constexpr container& operator=(init_list ilist) {
 		assign(ilist.begin(), ilist.end());
 		return *this;
 	}
 
-	constexpr void assign(std::size_t count, const_reference value) {
+	constexpr void assign(size_type count, const_reference value) {
 		clear();
 		resize(count, value);
 	}
 	template <class It> constexpr void assign(It first, It last) noexcept requires isIteratorValue<It> {
-		std::size_t newSize = last - first;
+		size_type newSize = last - first;
 		m_size = std::min(newSize, Capacity);
 		
 		if constexpr (std::is_copy_constructible_v<value_type>) 
@@ -99,7 +102,7 @@ template <DynarrayValueType Ty, std::size_t Capacity> struct Dynarray {
 		assign(ilist.begin(), ilist.end());
 	}
 
-	constexpr void swap(const_wrapper_reference array) noexcept {
+	constexpr void swap(const_container_reference array) noexcept {
 		std::swap(m_array, array.m_array);
 	}
 
@@ -164,11 +167,11 @@ template <DynarrayValueType Ty, std::size_t Capacity> struct Dynarray {
 	}
 
 
-	constexpr void resize(std::size_t size) noexcept {
+	constexpr void resize(size_type size) noexcept {
 		if (m_size < size) m_size = size;
 		else for ( ; m_size > size; m_size--) popBack();
 	}
-	constexpr void resize(std::size_t size, const_reference value) noexcept {
+	constexpr void resize(size_type size, const_reference value) noexcept {
 		if (m_size < size) {
 			for ( ; size != 0; size--) pushBack(value);
 			m_size += size;
@@ -209,7 +212,7 @@ template <DynarrayValueType Ty, std::size_t Capacity> struct Dynarray {
 
 		return insertIt;
 	}
-	constexpr iterator insert(const_iterator pos, std::size_t count, const_reference value) {
+	constexpr iterator insert(const_iterator pos, size_type count, const_reference value) {
 		if (m_size + count > Capacity) throw std::out_of_range("lsd::Dynarray::insert: Dynamic Array is already full!");
 
 		auto moveIt = &back();
@@ -334,13 +337,13 @@ template <DynarrayValueType Ty, std::size_t Capacity> struct Dynarray {
 		m_size = 0;
 	}
 
-	[[nodiscard]] constexpr std::size_t size() const noexcept {
+	[[nodiscard]] constexpr size_type size() const noexcept {
 		return m_size;
 	}
-	[[nodiscard]] constexpr std::size_t maxSize() const noexcept { 
+	[[nodiscard]] constexpr size_type maxSize() const noexcept { 
 		return Capacity;
 	}
-	[[deprecated]] [[nodiscard]] constexpr std::size_t max_size() const noexcept {
+	[[deprecated]] [[nodiscard]] constexpr size_type max_size() const noexcept {
 		return Capacity;
 	}
 	[[nodiscard]] constexpr bool empty() const noexcept {
@@ -356,21 +359,21 @@ template <DynarrayValueType Ty, std::size_t Capacity> struct Dynarray {
 	[[nodiscard]] constexpr operator const_value* () const noexcept { return m_array; }
 
 
-	[[nodiscard]] constexpr reference operator[](std::size_t index) noexcept {
+	[[nodiscard]] constexpr reference operator[](size_type index) noexcept {
 		return m_array[index];
 	}
-	[[nodiscard]] constexpr const_reference operator[](std::size_t index) const noexcept {
+	[[nodiscard]] constexpr const_reference operator[](size_type index) const noexcept {
 		return m_array[index];
 	}
-	[[deprecated]] [[nodiscard]] constexpr reference at(std::size_t index) noexcept {
+	[[deprecated]] [[nodiscard]] constexpr reference at(size_type index) noexcept {
 		return m_array.at(index);
 	}
-	[[deprecated]] [[nodiscard]] constexpr const_reference at(std::size_t index) const noexcept {
+	[[deprecated]] [[nodiscard]] constexpr const_reference at(size_type index) const noexcept {
 		return m_array.at(index);
 	}
 
 private:
-	std::size_t m_size = 0;
+	size_type m_size = 0;
 	array m_array = array();
 };
 

@@ -2,7 +2,7 @@
  * @file FunctionPointer.h
  * @author zhuzhile08 (zhuzhile08@gmail.com)
  * 
- * @brief a basic wrapper around a C style function pointer
+ * @brief a basic container around a C style function pointer
  * 
  * @date 2022-12-05
  * 
@@ -22,8 +22,8 @@ template <class> class Function;
 
 template <class Ty, class... Args> class Function <Ty(Args...)> {
 private:
-	using result = Ty;
-	using wrapper = Function;
+	using result_type = Ty;
+	using container = Function;
 
 	class BasicCallableWrapper {
 	public:
@@ -68,16 +68,16 @@ private:
 
 public:
 	constexpr Function() noexcept = default;
-	constexpr Function(const wrapper& function) noexcept : m_callable(function.m_callable ? function.m_callable->clone() : nullptr) { }
-	constexpr Function(wrapper&& function) noexcept : m_callable(std::move(function.function)) { }
+	constexpr Function(const container& function) noexcept : m_callable(function.m_callable ? function.m_callable->clone() : nullptr) { }
+	constexpr Function(container&& function) noexcept : m_callable(std::move(function.function)) { }
 	template <class Callable> constexpr Function(Callable&& callable) noexcept requires std::is_invocable_r_v<Ty, Callable, Args...> : 
 		m_callable(real_callable<Callable>::create(std::forward<Callable>(callable))) { }
 
-	constexpr Function& operator=(const wrapper& function) noexcept {
+	constexpr Function& operator=(const container& function) noexcept {
 		m_callable = (function.m_callable) ? std::move(function.m_callable->clone()) : nullptr;
 		return *this;
 	}
-	constexpr Function& operator=(wrapper&& function) noexcept {
+	constexpr Function& operator=(container&& function) noexcept {
 		m_callable = std::move(function.m_callable);
 		return *this;
 	}
@@ -90,7 +90,7 @@ public:
 		return *this;
 	}
 
-	constexpr void swap(wrapper& second) noexcept {
+	constexpr void swap(container& second) noexcept {
 		m_callable.swap(second->m_callable);
 	}
 
@@ -118,7 +118,7 @@ public:
 	constexpr operator bool() const noexcept {
 		return m_callable;
 	}
-	constexpr result operator()(Args... args) {
+	constexpr result_type operator()(Args... args) {
 		if (!m_callable) throw std::bad_function_call();
 		return m_callable->run(std::forward<Args>(args)...);
 	}

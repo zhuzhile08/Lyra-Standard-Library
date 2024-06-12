@@ -31,9 +31,9 @@ public:
 	using pointer_const = const_value*;
 	using reference = value_type&;
 	using const_reference = const_value&;
-	using wrapper = Iterator;
-	using wrapper_reference = wrapper&;
-	using const_wrapper_reference = const wrapper&;
+	using container = Iterator;
+	using container_reference = container&;
+	using const_container_reference = const container&;
 
 	constexpr Iterator() noexcept = default;
 	constexpr Iterator(pointer pointer) noexcept : m_pointer(pointer) { }
@@ -46,52 +46,52 @@ public:
 	constexpr pointer get() noexcept { return m_pointer; }
 	constexpr const_pointer get() const noexcept { return m_pointer; }
 
-	constexpr wrapper_reference operator++() noexcept { 
+	constexpr container_reference operator++() noexcept { 
 		++m_pointer; 
 		return *this; 
 	}
-	constexpr wrapper operator++(int) noexcept { 
-		wrapper tmp = *this; 
+	constexpr container operator++(int) noexcept { 
+		container tmp = *this; 
 		++(*this); 
 		return tmp; 
 	}
-	constexpr wrapper_reference operator--() noexcept { 
+	constexpr container_reference operator--() noexcept { 
 		--m_pointer; 
 		return *this; 
 	}
-	constexpr wrapper operator--(int) noexcept { 
-		wrapper tmp = *this; 
+	constexpr container operator--(int) noexcept { 
+		container tmp = *this; 
 		--(*this); 
 		return tmp; 
 	}
 
-	friend constexpr wrapper operator+(const_wrapper_reference it, std::size_t i) noexcept {
-		return wrapper(it.m_pointer + i);
+	friend constexpr container operator+(const_container_reference it, std::size_t i) noexcept {
+		return container(it.m_pointer + i);
 	}
-	friend constexpr wrapper operator+(std::size_t i, const_wrapper_reference it) noexcept {
-		return wrapper(it.m_pointer + i);
+	friend constexpr container operator+(std::size_t i, const_container_reference it) noexcept {
+		return container(it.m_pointer + i);
 	}
-	friend constexpr wrapper operator-(const_wrapper_reference it, std::size_t i) noexcept {
+	friend constexpr container operator-(const_container_reference it, std::size_t i) noexcept {
 		return it + (-i); 
 	}
-	friend constexpr wrapper operator-(std::size_t i, const_wrapper_reference it) noexcept {
+	friend constexpr container operator-(std::size_t i, const_container_reference it) noexcept {
 		return it + (-i); 
 	}
-	friend constexpr std::size_t operator-(const_wrapper_reference first, const_wrapper_reference second) noexcept {
+	friend constexpr std::size_t operator-(const_container_reference first, const_container_reference second) noexcept {
 		return first.m_pointer - second.m_pointer;
 	}
-	friend constexpr std::size_t operator-(pointer_const first, const_wrapper_reference second) noexcept {
+	friend constexpr std::size_t operator-(pointer_const first, const_container_reference second) noexcept {
 		return first - second.m_pointer;
 	}
-	friend constexpr std::size_t operator-(const_wrapper_reference first, pointer_const second) noexcept {
+	friend constexpr std::size_t operator-(const_container_reference first, pointer_const second) noexcept {
 		return first.m_pointer - second;
 	}
 
-	friend wrapper& operator+=(wrapper_reference it, std::size_t i) noexcept {
+	friend container& operator+=(container_reference it, std::size_t i) noexcept {
 		it = it + i;
 		return it;
 	}
-	friend wrapper& operator-=(wrapper_reference it, std::size_t i) noexcept {
+	friend container& operator-=(container_reference it, std::size_t i) noexcept {
 		it = it - i;
 		return it;
 	}
@@ -106,12 +106,12 @@ public:
 		return m_pointer;
 	}
 
-	friend constexpr bool operator==(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer == second.m_pointer; }
-	friend constexpr bool operator!=(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer != second.m_pointer; }
-	friend constexpr bool operator>(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer > second.m_pointer; }
-	friend constexpr bool operator<(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer < second.m_pointer; }
-	friend constexpr bool operator>=(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer >= second.m_pointer; }
-	friend constexpr bool operator<=(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer <= second.m_pointer; }
+	friend constexpr bool operator==(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer == second.m_pointer; }
+	friend constexpr bool operator!=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer != second.m_pointer; }
+	friend constexpr bool operator>(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer > second.m_pointer; }
+	friend constexpr bool operator<(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer < second.m_pointer; }
+	friend constexpr bool operator>=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer >= second.m_pointer; }
+	friend constexpr bool operator<=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer <= second.m_pointer; }
 
 private:
 	pointer m_pointer;
@@ -129,9 +129,9 @@ public:
 	using pointer_const = const_value*;
 	using reference = value_type&;
 	using const_reference = const_value&;
-	using wrapper = ReverseIterator;
-	using wrapper_reference = wrapper&;
-	using const_wrapper_reference = const wrapper&;
+	using container = ReverseIterator;
+	using container_reference = container&;
+	using const_container_reference = const container&;
 
 	constexpr ReverseIterator() noexcept = default;
 	constexpr ReverseIterator(pointer pointer) noexcept : m_pointer(pointer) { }
@@ -144,52 +144,52 @@ public:
 	constexpr pointer get() noexcept { return m_pointer; }
 	constexpr const_pointer get() const noexcept { return m_pointer; }
 
-	constexpr wrapper_reference operator++() noexcept { 
+	constexpr container_reference operator++() noexcept { 
 		--m_pointer; 
 		return *this; 
 	}
-	constexpr wrapper operator++(int) noexcept { 
-		wrapper tmp = *this; 
+	constexpr container operator++(int) noexcept { 
+		container tmp = *this; 
 		++(*this); 
 		return tmp; 
 	}
-	constexpr wrapper_reference operator--() noexcept { 
+	constexpr container_reference operator--() noexcept { 
 		++m_pointer; 
 		return *this; 
 	}
-	constexpr wrapper operator--(int) noexcept { 
-		wrapper tmp = *this; 
+	constexpr container operator--(int) noexcept { 
+		container tmp = *this; 
 		--(*this); 
 		return tmp; 
 	}
 
-	friend constexpr wrapper operator+(const_wrapper_reference it, std::size_t i) noexcept {
-		return wrapper(it.m_pointer - i);
+	friend constexpr container operator+(const_container_reference it, std::size_t i) noexcept {
+		return container(it.m_pointer - i);
 	}
-	friend constexpr wrapper operator+(std::size_t i, const_wrapper_reference it) noexcept {
-		return wrapper(it.m_pointer - i);
+	friend constexpr container operator+(std::size_t i, const_container_reference it) noexcept {
+		return container(it.m_pointer - i);
 	}
-	friend constexpr wrapper operator-(const_wrapper_reference it, std::size_t i) noexcept {
+	friend constexpr container operator-(const_container_reference it, std::size_t i) noexcept {
 		return it + i; 
 	}
-	friend constexpr wrapper operator-(std::size_t i, const_wrapper_reference it) noexcept {
+	friend constexpr container operator-(std::size_t i, const_container_reference it) noexcept {
 		return it + i; 
 	}
-	friend constexpr std::size_t operator-(const_wrapper_reference first, const_wrapper_reference second) noexcept {
+	friend constexpr std::size_t operator-(const_container_reference first, const_container_reference second) noexcept {
 		return second.m_pointer - first.m_pointer;
 	}
-	friend constexpr std::size_t operator-(pointer_const first, const_wrapper_reference second) noexcept {
+	friend constexpr std::size_t operator-(pointer_const first, const_container_reference second) noexcept {
 		return second.m_pointer - first;
 	}
-	friend constexpr std::size_t operator-(const_wrapper_reference first, pointer_const second) noexcept {
+	friend constexpr std::size_t operator-(const_container_reference first, pointer_const second) noexcept {
 		return second - first.m_pointer;
 	}
 
-	friend wrapper& operator+=(wrapper_reference it, std::size_t i) noexcept {
+	friend container& operator+=(container_reference it, std::size_t i) noexcept {
 		it = it + i;
 		return it;
 	}
-	friend wrapper& operator-=(wrapper_reference it, std::size_t i) noexcept {
+	friend container& operator-=(container_reference it, std::size_t i) noexcept {
 		it = it - i;
 		return it;
 	}
@@ -204,12 +204,12 @@ public:
 		return m_pointer;
 	}
 
-	friend constexpr bool operator==(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer == second.m_pointer; }
-	friend constexpr bool operator!=(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer != second.m_pointer; }
-	friend constexpr bool operator>(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer < second.m_pointer; }
-	friend constexpr bool operator<(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer > second.m_pointer; }
-	friend constexpr bool operator>=(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer <= second.m_pointer; }
-	friend constexpr bool operator<=(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer >= second.m_pointer; }
+	friend constexpr bool operator==(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer == second.m_pointer; }
+	friend constexpr bool operator!=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer != second.m_pointer; }
+	friend constexpr bool operator>(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer < second.m_pointer; }
+	friend constexpr bool operator<(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer > second.m_pointer; }
+	friend constexpr bool operator>=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer <= second.m_pointer; }
+	friend constexpr bool operator<=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer >= second.m_pointer; }
 
 private:
 	pointer m_pointer;
@@ -231,9 +231,9 @@ public:
 	using node_type = detail::ForwardListNode<value_type>;
 	using node_pointer = node_type*;
 
-	using wrapper = ForwardListIterator;
-	using wrapper_reference = wrapper&;
-	using const_wrapper_reference = const wrapper&;
+	using container = ForwardListIterator;
+	using container_reference = container&;
+	using const_container_reference = const container&;
 
 	constexpr ForwardListIterator() noexcept = default;
 	constexpr ForwardListIterator(node_base* pointer) noexcept : m_pointer(pointer) { }
@@ -245,12 +245,12 @@ public:
 	constexpr node_base* get() noexcept { return m_pointer; }
 	constexpr const node_base* get() const noexcept { return m_pointer; }
 
-	constexpr wrapper_reference operator++() noexcept { 
+	constexpr container_reference operator++() noexcept { 
 		m_pointer = m_pointer->next; 
 		return *this; 
 	}
-	constexpr wrapper operator++(int) noexcept { 
-		wrapper tmp = *this; 
+	constexpr container operator++(int) noexcept { 
+		container tmp = *this; 
 		++(*this); 
 		return tmp; 
 	}
@@ -259,8 +259,8 @@ public:
 		return m_pointer;
 	}
 
-	friend constexpr bool operator==(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer == second.m_pointer; }
-	friend constexpr bool operator!=(const_wrapper_reference first, const_wrapper_reference second) noexcept { return first.m_pointer != second.m_pointer; }
+	friend constexpr bool operator==(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer == second.m_pointer; }
+	friend constexpr bool operator!=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer != second.m_pointer; }
 
 private:
 	node_base* m_pointer;

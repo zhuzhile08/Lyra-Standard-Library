@@ -45,10 +45,10 @@ template <class Ty> struct DefaultDeleter<Ty []> {
 
 template <class Ty, class DTy = detail::DefaultDeleter<Ty>> class UniquePointer {
 public:
-	using value_type = Ty;
+	using element_type = Ty;
 	using pointer = Ty*;
 	using deleter_type = DTy;
-	using wrapper = UniquePointer;
+	using container = UniquePointer;
 
 	constexpr UniquePointer() noexcept = default;
 	constexpr UniquePointer(std::nullptr_t) noexcept : m_pointer(nullptr) { }
@@ -80,13 +80,13 @@ public:
 	constexpr UniquePointer& operator=(const UniquePointer&) = delete;
 
 	template <class ... Args> [[nodiscard]] static constexpr UniquePointer create(Args&&... args) {
-		return UniquePointer(new value_type(std::forward<Args>(args)...));
+		return UniquePointer(new element_type(std::forward<Args>(args)...));
 	}
 
 	constexpr pointer operator->() const noexcept {
 		return m_pointer;
 	}
-	constexpr value_type& operator*() const noexcept {
+	constexpr element_type& operator*() const noexcept {
 		return *m_pointer;
 	}
 
@@ -136,10 +136,10 @@ private:
 // deviates from standard implementation, acts like a runtime allocated lsd::Array/std::array
 template <class Ty, class DTy> class UniquePointer<Ty[], DTy> {
 public:
-	using value_type = Ty;
+	using element_type = Ty;
 	using pointer = Ty*;
 	using deleter_type = DTy;
-	using wrapper = UniquePointer;
+	using container = UniquePointer;
 
 	constexpr UniquePointer() = default;
 	constexpr UniquePointer(std::nullptr_t) : m_pointer(nullptr) { }
@@ -171,7 +171,7 @@ public:
 	constexpr UniquePointer& operator=(const UniquePointer&) = delete;
 
 	template <class ... Args> [[nodiscard]] static constexpr UniquePointer create(std::size_t size) {
-		return UniquePointer(new value_type[size]);
+		return UniquePointer(new element_type[size]);
 	}
 
 	[[nodiscard]] constexpr pointer release() noexcept {

@@ -35,6 +35,9 @@ template <
 	template<class...> class Container = UnorderedSparseSet> 
 class BasicNode {
 public:
+	using size_type = std::size_t;
+	using difference_type = std::ptrdiff_t;
+
 	using value_type = Type;
 	using const_value = const value_type;
 	using reference = value_type&;
@@ -132,7 +135,7 @@ public:
 		return m_children.erase(first, last); 
 		return *dynamic_cast<pointer>(this);
 	}
-	template <class KeyType> constexpr std::size_t erase(KeyType&& name) requires std::is_convertible_v<KeyType, key_type> { 
+	template <class KeyType> constexpr size_type erase(KeyType&& name) requires std::is_convertible_v<KeyType, key_type> { 
 		return m_children.erase(std::forward(name)); 
 	}
 
@@ -169,7 +172,7 @@ public:
 
 		if constexpr (stringlike) {
 			key_type k(key);
-			std::size_t beg = 0, cur;
+			size_type beg = 0, cur;
 			pointer_const p = dynamic_cast<pointer_const>(this);
 
 			while ((cur = k.find("::", beg)) < k.size()) {
@@ -191,7 +194,7 @@ public:
 
 		if constexpr (stringlike) {
 			key_type k(key);
-			std::size_t beg = 0, cur;
+			size_type beg = 0, cur;
 			pointer p = dynamic_cast<pointer>(this);
 
 			while ((cur = k.find("::", beg)) < k.size()) {
@@ -211,7 +214,7 @@ public:
 	template <class KeyType> constexpr const_reference operator[](KeyType&& name) const { return *m_children[std::forward<KeyType>(name)]; }
 	template <class KeyType> constexpr reference operator[](KeyType&& name) { return *m_children[std::forward<KeyType>(name)]; }
 
-	[[nodiscard]] constexpr std::size_t size() const noexcept { return m_children.size(); }
+	[[nodiscard]] constexpr size_type size() const noexcept { return m_children.size(); }
 	[[nodiscard]] constexpr key_type name() const noexcept { return m_name; }
 	[[nodiscard]] constexpr pointer parent() noexcept { return dynamic_cast<pointer>(m_parent); }
 	[[nodiscard]] constexpr const_pointer const parent() const noexcept { return dynamic_cast<pointer>(m_parent); }

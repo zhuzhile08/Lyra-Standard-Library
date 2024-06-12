@@ -24,6 +24,9 @@ namespace lsd {
 
 template <class Ty, class Alloc = std::allocator<Ty>> class ForwardList {
 public:
+	using size_type = std::size_t;
+	using difference_type = std::ptrdiff_t;
+
 	using allocator_type = Alloc;
 	using const_alloc_reference = const allocator_type&;
 	using allocator_traits = AllocatorTraits<allocator_type>;
@@ -33,16 +36,14 @@ public:
 	using reference = value_type&;
 	using const_reference = const_value&;
 	using rvreference = value_type&&;
-	using array_type = Ty*;
-	using const_array_type = const_value*;
 
 	using iterator = ForwardListIterator<value_type>;
 	using const_iterator = ForwardListIterator<const_value>; 
 
-	using wrapper = ForwardList;
-	using wrapper_reference = wrapper&;
-	using const_wrapper_reference = const wrapper&;
-	using wrapper_rvreference = wrapper&&;
+	using container = ForwardList;
+	using container_reference = container&;
+	using const_container_reference = const container&;
+	using container_rvreference = container&&;
 	using init_list = std::initializer_list<value_type>;
 
 private:
@@ -56,15 +57,15 @@ public:
 
 	constexpr ForwardList() = default;
 	constexpr ForwardList(const_alloc_reference alloc) : m_alloc(alloc) { }
-	constexpr ForwardList(std::size_t count, const_reference value, const_alloc_reference alloc = allocator_type()) : 
+	constexpr ForwardList(size_type count, const_reference value, const_alloc_reference alloc = allocator_type()) : 
 		m_alloc(alloc) { insertAfter(beforeBegin(), count, value); }
-	constexpr ForwardList(std::size_t count, const_alloc_reference alloc = allocator_type()) : 
+	constexpr ForwardList(size_type count, const_alloc_reference alloc = allocator_type()) : 
 		m_alloc(alloc) { resize(count); }
 	template<class It> constexpr ForwardList(It first, It last, const_alloc_reference alloc = allocator_type()) requires isIteratorValue<It> : 
 		m_alloc(alloc) { insertAfter(beforeBegin(), first, last); }
-	constexpr ForwardList(const_wrapper_reference other, const_alloc_reference alloc = allocator_type()) :
+	constexpr ForwardList(const_container_reference other, const_alloc_reference alloc = allocator_type()) :
 		m_alloc(alloc) { insertAfter(beforeBegin(), other.begin(), other.end()); }
-	constexpr ForwardList(wrapper_rvreference other, const_alloc_reference alloc = allocator_type()) : 
+	constexpr ForwardList(container_rvreference other, const_alloc_reference alloc = allocator_type()) : 
 		m_alloc(alloc), m_beforeHead(std::exchange(other.m_beforeHead, { })) { }
 	constexpr ForwardList(init_list ilist, const_alloc_reference alloc = allocator_type()) :
 		m_alloc(alloc) { insertAfter(beforeBegin(), ilist.begin(), ilist.end()); }
@@ -74,7 +75,7 @@ public:
 		m_beforeHead.next = nullptr;
 	}
 
-	constexpr void assign(std::size_t count, const_reference value) {
+	constexpr void assign(size_type count, const_reference value) {
 		clear();
 		insertAfter(beforeBegin(), count, value);
 	}
@@ -86,11 +87,11 @@ public:
 		assign(ilist.begin(), ilist.end());
 	}
 
-	constexpr ForwardList& operator=(const_wrapper_reference other) {
+	constexpr ForwardList& operator=(const_container_reference other) {
 		assign(other.begin(), other.end());
 		return *this;
 	}
-	constexpr ForwardList& operator=(wrapper_rvreference other) noexcept {
+	constexpr ForwardList& operator=(container_rvreference other) noexcept {
 		m_alloc = std::move(other.m_alloc);
 		m_beforeHead = std::exchange(other.m_beforeHead, nullptr);
 		return *this;
@@ -100,7 +101,7 @@ public:
 		return *this;
 	}
 
-	constexpr void swap(wrapper_reference other) noexcept {
+	constexpr void swap(container_reference other) noexcept {
 		std::swap(m_alloc, other.m_alloc);
 		std::swap(m_beforeHead.next, other.m_beforeHead.next);
 	}
@@ -171,7 +172,7 @@ public:
 
 		return it->next;
 	}
-	constexpr iterator insertAfter(const_iterator pos, std::size_t count, const_reference value) {
+	constexpr iterator insertAfter(const_iterator pos, size_type count, const_reference value) {
 		auto it = const_cast<detail::ForwardListNodeBase*>(pos.get());
 		auto next = it->next;
 
@@ -223,7 +224,7 @@ public:
 	[[deprecated]] constexpr iterator insert_after(const_iterator pos, rvreference value) {
 		return insertAfter(pos, std::move(value));
 	}
-	[[deprecated]] constexpr iterator insert_after(const_iterator pos, std::size_t count, const_reference value) {
+	[[deprecated]] constexpr iterator insert_after(const_iterator pos, size_type count, const_reference value) {
 		return insertAfter(pos, count, value);
 	}
 	template <class It> [[deprecated]] constexpr iterator insert_after(const_iterator pos, It first, It last) requires isIteratorValue<It> {
@@ -262,8 +263,8 @@ public:
 		popFront();
 	}
 
-	constexpr void resize(std::size_t count) {
-		std::size_t size = 0;
+	constexpr void resize(size_type count) {
+		size_type size = 0;
 		--count; // because count has to be subtracted everywhere else by 1 anyways
 		for (auto it = begin(); it != end(); it++, size++) {
 			if (size >= count) {
@@ -275,8 +276,8 @@ public:
 			}
 		}
 	}
-	constexpr void resize(std::size_t count, const value_type& value) {
-		std::size_t size = 0;
+	constexpr void resize(size_type count, const value_type& value) {
+		size_type size = 0;
 		--count; // because count has to be subtracted everywhere else by 1 anyways
 		for (auto it = begin(); it != end(); it++, size++) {
 			if (size >= count) {
@@ -336,10 +337,10 @@ public:
 		if (m_beforeHead) return m_beforeHead == m_beforeHead.next;
 		return true;
 	}
-	[[nodiscard]] constexpr std::size_t maxSize() const noexcept {
+	[[nodiscard]] constexpr size_type maxSize() const noexcept {
 		return node_traits::maxSize(m_alloc);
 	}
-	[[nodiscard]] [[deprecated]] constexpr std::size_t max_size() const noexcept {
+	[[nodiscard]] [[deprecated]] constexpr size_type max_size() const noexcept {
 		return node_traits::maxSize(m_alloc);
 	}
 
