@@ -514,8 +514,8 @@ private:
 	array m_array { };
 	buckets m_buckets { };
 
-	NO_UNIQUE_ADDRESS hasher m_hasher { };
-	NO_UNIQUE_ADDRESS key_equal m_equal { };
+	[[no_unique_address]] hasher m_hasher { };
+	[[no_unique_address]] key_equal m_equal { };
 
 	constexpr void rehashIfNecessary() noexcept {
 		if (m_array.size() >= m_buckets.size() * maxLoadFactor) rehash(nextPrime(m_array.size()));
