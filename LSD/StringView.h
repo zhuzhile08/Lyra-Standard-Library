@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "Utility.h"
+#include "Hash.h"
 #include "Iterators.h"
 #include "CharTraits.h"
 
@@ -47,51 +47,42 @@ public:
 	using container_rvreference = container&&;
 	using init_list = std::initializer_list<value_type>;
 
+	using ostream_type = std::basic_ostream<value_type, std::char_traits<value_type>>;
+	using istream_type = std::basic_istream<value_type, std::char_traits<value_type>>;
+
 	static constexpr size_type npos = size_type(-1);
 
 	static_assert(!std::is_array_v<value_type>, "lsd::String: Character type has to be a non-array");
 	static_assert(std::is_trivial_v<value_type>, "lsd::String: Character type has to be trivial");
 	static_assert(std::is_standard_layout_v<value_type>, "lsd::String: Character type has to be in standard layout");
-	static_assert(std::is_same_v<value_type, traits_type::char_type>, "lsd::String: Character type has to be the same as the type provided to the character traits");
+	static_assert(std::is_same_v<value_type, typename traits_type::char_type>, "lsd::String: Character type has to be the same as the type provided to the character traits");
 
 	constexpr BasicStringView() noexcept = default;
-	constexpr BasicStringView(pointer s, size_type count) : m_begin(s), m_end(s + count) { }
-	constexpr BasicStringView(pointer s) : m_begin(s), m_end(char_traits::length(s)) { }
+	constexpr BasicStringView(const_pointer s, size_type count) : m_begin(s), m_end(s + count) { }
+	constexpr BasicStringView(const_pointer s) : m_begin(s), m_end(s + traits_type::length(s)) { }
 	template <class It, class End> constexpr BasicStringView(It first, End last) 
-		requires (isIteratorValue<It> && !std::is_convertible_v<End, size_type> && (std::iter_value_t<It> == value_type)) : 
-		m_begin(static_cast<pointer>(first)),
-		m_end(static_cast<pointer>(last)) { }
+		requires (isIteratorValue<It> && !std::is_convertible_v<End, size_type> && std::same_as<std::iter_value_t<It>, value_type>) : 
+		m_begin(static_cast<const_pointer>(first)),
+		m_end(static_cast<const_pointer>(last)) { }
 	constexpr BasicStringView(std::nullptr_t) = delete;
 	constexpr BasicStringView(const_container_reference) noexcept = default;
 
-	constexpr BasicStringView(const_container_reference) noexcept = default;
-
-	constexpr void swap(container_reference) noexcept {
+	constexpr void swap(container_reference other) noexcept {
 		std::swap(m_begin, other.m_begin);
 		std::swap(m_end, other.m_end);
 	}
 
-	[[nodiscard]] constexpr iterator begin() noexcept {
-		return m_begin;
-	}
 	[[nodiscard]] constexpr const_iterator begin() const noexcept {
 		return m_begin;
 	}
 	[[nodiscard]] constexpr const_iterator cbegin() const noexcept {
 		return m_begin;
 	}
-	[[nodiscard]] constexpr iterator end() noexcept {
-		return m_end;
-	}
 	[[nodiscard]] constexpr const_iterator end() const noexcept {
 		return m_end;
 	}
 	[[nodiscard]] constexpr const_iterator cend() const noexcept {
 		return m_end;
-	}
-	[[nodiscard]] constexpr reverse_iterator rbegin() noexcept {
-		auto e = m_end;
-		return e ? e - 1 : nullptr;
 	}
 	[[nodiscard]] constexpr const_reverse_iterator rbegin() const noexcept {
 		auto e = m_end;
@@ -100,10 +91,6 @@ public:
 	[[nodiscard]] constexpr const_reverse_iterator crbegin() const noexcept {
 		auto e = m_end;
 		return e ? e - 1 : nullptr;
-	}
-	[[nodiscard]] constexpr reverse_iterator rend() noexcept {
-		auto b = m_begin;
-		return b ? b - 1 : nullptr;
 	}
 	[[nodiscard]] constexpr const_reverse_iterator rend() const noexcept {
 		auto b = m_begin;
@@ -114,14 +101,8 @@ public:
 		return b ? b - 1 : nullptr;
 	}
 
-	[[nodiscard]] constexpr reference front() noexcept {
-		return *m_begin;
-	}
 	[[nodiscard]] constexpr const_reference front() const noexcept {
 		return *m_begin;
-	}
-	[[nodiscard]] constexpr reference back() noexcept {
-		return *(m_end - 1);
 	}
 	[[nodiscard]] constexpr const_reference back() const noexcept {
 		return *(m_end - 1);
@@ -151,11 +132,10 @@ public:
 	}
 
 	constexpr int compare(container v) const noexcept {
-		auto r = traits_type::compare(m_begin, v.data(), std::min(size(), v.size()));
+		auto r = traits_type::compare(m_begin, v.m_begin, std::min(size(), v.size()));
 		if (r == 0) {
 			if (size() < v.size()) return -2;
 			else if (size() > v.size()) return 2;
-			else return 0;
 		} else return r;
 	}
 	constexpr int compare(size_type pos, size_type count, container other) const {
@@ -182,13 +162,13 @@ public:
 	}	
 	constexpr bool startsWith(value_type c) const noexcept {
 		if (empty()) return false;
-		else return raits_type::eq(c, *m_begin);
+		else return traits_type::eq(c, *m_begin);
 	}
 	[[deprecated]] constexpr bool starts_with(value_type c) const noexcept {
 		return startsWith(c);
 	}
 	constexpr bool startsWith(const_pointer s) const {
-		return traits_type::compare(m_begin, s, std::min(size(), char_traits::length(s))) == 0;
+		return traits_type::compare(m_begin, s, std::min(size(), traits_type::length(s))) == 0;
 	}
 	[[deprecated]] constexpr bool starts_with(const_pointer s) const {
 		return startsWith(s);
@@ -202,13 +182,13 @@ public:
 	}
 	constexpr bool endsWith(value_type c) const noexcept {
 		if (empty()) return false;
-		else return raits_type::eq(c, *(m_end - 1));
+		else return traits_type::eq(c, *(m_end - 1));
 	}
 	[[deprecated]] constexpr bool ends_with(value_type c) const noexcept {
 		return endsWith(c);
 	}
 	constexpr bool endsWith(const_pointer s) const {
-		auto len = char_traits::length(s);
+		auto len = traits_type::length(s);
 		if (size() < len) return false;
 		return traits_type::compare(m_begin + (size() - len), s, len) == 0;
 	}
@@ -219,20 +199,20 @@ public:
 	constexpr bool contains(container other) const noexcept {
 		if (size() >= other.size())
 			for (auto it = m_begin; it != (m_end - other.size() + 1); it++)
-				if (char_traits::compare(other.m_begin, it, other.size()) == 0) return true;
+				if (traits_type::compare(other.m_begin, it, other.size()) == 0) return true;
 
 		return false;
 	}
 	constexpr bool contains(value_type c) const noexcept {
-		for (auto it = m_begin; it != m_end; it++) if (char_traits::eq(c, *it)) return true;
+		for (auto it = m_begin; it != m_end; it++) if (traits_type::eq(c, *it)) return true;
 		else return false;
 	}
 	constexpr bool contains(const_pointer s) const {
-		auto sSize = char_traits::length(s);
+		auto sSize = traits_type::length(s);
 
 		if (size() >= sSize)
 			for (auto it = m_begin; it != (m_end - sSize + 1); it++)
-				if (char_traits::compare(s, it, sSize) == 0) return true;
+				if (traits_type::compare(s, it, sSize) == 0) return true;
 
 		return false;
 	}
@@ -240,12 +220,12 @@ public:
 	constexpr size_type find(container other, size_type pos = 0) const noexcept {
 		if ((size() - pos) >= other.size())
 			for (auto it = (m_begin + pos); it != (m_end - other.size() + 1); it++)
-				if (char_traits::compare(other.m_begin, it, other.size()) == 0) return it - m_begin;
+				if (traits_type::compare(other.m_begin, it, other.size()) == 0) return it - m_begin;
 
 		return npos;
 	}
 	constexpr size_type find(value_type c, size_type pos = 0) const noexcept {
-		return find(container(std::addressof(c), 1), pos)
+		return find(container(std::addressof(c), 1), pos);
 	}
 	constexpr size_type find(const_pointer s, size_type pos, size_type count) const {
 		return find(container(s, count), pos);
@@ -257,12 +237,12 @@ public:
 	constexpr size_type rfind(container other, size_type pos = npos) const noexcept {
 		if ((size() - pos) >= other.size())
 			for (auto it = (m_end - 1 - other.size()); it != (m_begin + pos - 1); it--)
-				if (char_traits::compare(other.m_begin, it, other.size()) == 0) return it - m_begin;
+				if (traits_type::compare(other.m_begin, it, other.size()) == 0) return it - m_begin;
 
 		return npos;
 	}
 	constexpr size_type rfind(value_type c, size_type pos = npos) const noexcept {
-		return rfind(container(std::addressof(ch), 1), pos);
+		return rfind(container(std::addressof(c), 1), pos);
 	}
 	constexpr size_type rfind(const_pointer s, size_type pos, size_type count) const {
 		return rfind(container(s, count), pos);
@@ -274,7 +254,7 @@ public:
 	constexpr size_type findFirstOf(container other, size_type pos = 0) const noexcept {
 		for (auto it = (m_begin + pos); it != m_end; it++) 
 			for (auto oIt = other.m_begin; oIt != other.m_end; oIt++)
-				if (char_traits::eq(*it, *oIt)) return it - m_begin;
+				if (traits_type::eq(*it, *oIt)) return it - m_begin;
 			
 		return npos;
 	}
@@ -303,7 +283,7 @@ public:
 	constexpr size_type findLastOf(container other, size_type pos = npos) const noexcept {
 		for (auto it = (m_end - 1); it != (m_begin + pos - 1); it++) 
 			for (auto oIt = other.m_begin; oIt != other.m_end; oIt++)
-				if (char_traits::eq(*it, *oIt)) return it - m_begin;
+				if (traits_type::eq(*it, *oIt)) return it - m_begin;
 			
 		return npos;
 	}
@@ -333,7 +313,7 @@ public:
 		auto it = m_begin + pos;
 		for (; it != m_end; it++)
 			for (auto oIt = other.m_begin; oIt != other.m_end; oIt++)
-				if (char_traits::eq(*it, *oIt)) return npos;
+				if (traits_type::eq(*it, *oIt)) return npos;
 			
 		return it - m_begin;
 	}
@@ -363,7 +343,7 @@ public:
 		auto it = m_end - 1;
 		for (; it != (m_begin + pos - 1); it++)
 			for (auto oIt = other.m_begin; oIt != other.m_end; oIt++)
-				if (char_traits::eq(*it, *oIt)) return npos;
+				if (traits_type::eq(*it, *oIt)) return npos;
 			
 		return it - m_begin;
 	}
@@ -405,19 +385,11 @@ public:
 		return m_begin == m_end;
 	}
 
-	[[nodiscard]] constexpr pointer data() noexcept {
-		return pBegin();
-	}
 	[[nodiscard]] constexpr const_pointer data() const noexcept {
-		return pBegin();
+		return m_begin;
 	}
 
 	[[nodiscard]] constexpr const_reference at(size_type index) const {
-		auto ptr = m_begin + index;
-		if (ptr >= m_end) throw std::out_of_range("lsd::BasicString::at(): Index exceeded string bounds!");
-		return *ptr;
-	}
-	[[nodiscard]] constexpr reference at(size_type index) {
 		auto ptr = m_begin + index;
 		if (ptr >= m_end) throw std::out_of_range("lsd::BasicString::at(): Index exceeded string bounds!");
 		return *ptr;
@@ -427,15 +399,25 @@ public:
 		assert((ptr < m_end) && "lsd::BasicString::operator[]: Index exceeded string bounds!");
 		return *ptr;
 	}
-	[[nodiscard]] constexpr reference operator[](size_type index) {
-		auto ptr = m_begin + index;
-		assert((ptr < m_end) && "lsd::BasicStringView::operator[]: Index exceeded string bounds!");
-		return *ptr;
+
+	friend ostream_type& operator<<(ostream_type& stream, const_container_reference string) {
+		for (auto it = string.m_begin; it != string.m_end; it++) {
+			stream << *it;
+		}
+		return stream;
+	}
+	friend istream_type& operator>>(istream_type& stream, const_container_reference string) {
+		for (auto it = string.m_begin; it != string.m_end; it++) {
+			stream >> *it;
+		}
+		return stream;
 	}
 
 private:
-	pointer m_begin { };
-	pointer m_end { };
+	const_pointer m_begin { };
+	const_pointer m_end { };
+
+	template <class, class, class> friend class BasicString;
 };
 
 using StringView = BasicStringView<char>;
@@ -443,5 +425,30 @@ using WStringView = BasicStringView<wchar_t>;
 using U8StringView = BasicStringView<char8_t>;
 using U16StringView = BasicStringView<char16_t>;
 using U32StringView = BasicStringView<char32_t>;
+
+
+template <class C> struct Hash<BasicStringView<C>> {
+	using view_type = BasicStringView<C>;
+
+	std::size_t operator()(const view_type& s) const noexcept { // uses the djb2 instead of murmur- or CityHash
+		std::size_t hash = 5381; 
+
+#ifdef DJB2_HASH_MULTIPLY_33
+#ifdef DJB2_HASH_ADD_CHARACTER
+		for (auto it = s.begin(); it != s.end(); it++) hash = hash * 33 + *it;
+#else
+		for (auto it = s.begin(); it != s.end(); it++) hash = hash * 33 ^ *it;
+#endif
+#else
+#ifdef DJB2_HASH_ADD_CHARACTER
+		for (auto it = s.begin(); it != s.end(); it++) hash = ((hash << 5) + hash) + *it;
+#else
+		for (auto it = s.begin(); it != s.end(); it++) hash = ((hash << 5) + hash) ^ *it;
+#endif
+#endif
+
+		return hash;
+	}
+};
 
 } // namespace lsd

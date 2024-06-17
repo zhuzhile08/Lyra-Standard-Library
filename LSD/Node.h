@@ -19,8 +19,8 @@
 #include <type_traits>
 #include <utility>
 
-#include <string>
-#include <string_view>
+#include "String.h"
+#include "StringView.h"
 
 namespace lsd {
 
@@ -30,9 +30,9 @@ template <class Ty> static constexpr inline bool isHashMapValue = IsHashMap<Ty>:
 
 template <
 	class Type, 
-	template<class...> class SmartPointer = UniquePointer,
-	class Key = std::string,
-	template<class...> class Container = UnorderedSparseSet> 
+	template <class...> class SmartPointer = UniquePointer,
+	class Key = String,
+	template <class...> class Container = UnorderedSparseSet> 
 class BasicNode {
 public:
 	using size_type = std::size_t;

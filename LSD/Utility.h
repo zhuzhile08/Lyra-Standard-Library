@@ -11,9 +11,10 @@
 
 #pragma once
 
+#include "String.h"
+#include "StringView.h"
+
 #include <functional>
-#include <string>
-#include <string_view>
 
 namespace lsd {
 
@@ -24,13 +25,13 @@ template <typename Ty> [[nodiscard]] constexpr inline const void* getAddress(con
 
 // string operation
 
-template <template <class...> class Container> [[nodiscard]] inline constexpr Container<std::string> parse(std::string_view s, std::string_view d) noexcept {
-	Container<std::string> r;
+template <template <class...> class Container> [[nodiscard]] inline constexpr Container<String> parse(StringView s, StringView d) noexcept {
+	Container<String> r;
 
 	std::size_t begin = 0;
 	std::size_t current;
 
-	while ((current = s.find(d, begin)) != std::string::npos) {
+	while ((current = s.find(d, begin)) != String::npos) {
 		r.emplace_back(s.substr(begin, current - begin));
 		begin = current + d.size();
 	}
@@ -40,13 +41,13 @@ template <template <class...> class Container> [[nodiscard]] inline constexpr Co
 	return r;
 }
 
-template <template <class...> class Container> [[nodiscard]] inline constexpr Container<std::wstring> parse(std::wstring_view s, std::wstring_view d) noexcept {
-	Container<std::wstring> r;
+template <template <class...> class Container> [[nodiscard]] inline constexpr Container<WString> parse(WStringView s, WStringView d) noexcept {
+	Container<WString> r;
 
 	std::size_t begin = 0;
 	std::size_t current;
 
-	while ((current = s.find(d, begin)) != std::string::npos) {
+	while ((current = s.find(d, begin)) != String::npos) {
 		r.emplace_back(s.substr(begin, current - begin));
 		begin = current + d.size();
 	}
@@ -146,58 +147,67 @@ template <class Ty> concept EnumType = std::is_enum_v<Ty>;
 
 // credits to https://gist.github.com/StrikerX3/46b9058d6c61387b3f361ef9d7e00cd4 for these operators!
 
-template<EnumType Enum> constexpr inline Enum operator|(Enum first, Enum second) noexcept {
+template <EnumType Enum> constexpr inline Enum operator|(Enum first, Enum second) noexcept {
 	return static_cast<Enum>(
 		static_cast<std::underlying_type_t<Enum>>(first) |
 		static_cast<std::underlying_type_t<Enum>>(second)
 	);
 }
 
-template<EnumType Enum> Enum constexpr inline operator&(Enum first, Enum second) noexcept {
+template <EnumType Enum> Enum constexpr inline operator&(Enum first, Enum second) noexcept {
 	return static_cast<Enum>(
 		static_cast<std::underlying_type_t<Enum>>(first) &
 		static_cast<std::underlying_type_t<Enum>>(second)
 	);
 }
 
-template<EnumType Enum> Enum constexpr inline operator^(Enum first, Enum second) noexcept {
+template <EnumType Enum> Enum constexpr inline operator^(Enum first, Enum second) noexcept {
 	return static_cast<Enum>(
 		static_cast<std::underlying_type_t<Enum>>(first) ^
 		static_cast<std::underlying_type_t<Enum>>(second)
 	);
 }
 
-template<EnumType Enum> Enum constexpr inline operator~(Enum first) noexcept {
+template <EnumType Enum> Enum constexpr inline operator~(Enum first) noexcept {
 	return static_cast<Enum>(
 		~static_cast<std::underlying_type_t<Enum>>(first)
 	);
 }
 
-template<EnumType Enum> Enum constexpr inline operator|=(Enum& first, Enum second) noexcept {
+template <EnumType Enum> Enum constexpr inline operator|=(Enum& first, Enum second) noexcept {
 	return (first = static_cast<Enum>(
 		static_cast<std::underlying_type_t<Enum>>(first) |
 		static_cast<std::underlying_type_t<Enum>>(second)
 	));
 }
 
-template<EnumType Enum> Enum constexpr inline operator&=(Enum& first, Enum second) noexcept {
+template <EnumType Enum> Enum constexpr inline operator&=(Enum& first, Enum second) noexcept {
 	return (first = static_cast<Enum>(
 		static_cast<std::underlying_type_t<Enum>>(first) &
 		static_cast<std::underlying_type_t<Enum>>(second)
 	));
 }
 
-template<EnumType Enum> Enum constexpr inline operator^=(Enum& first, Enum second) noexcept {
+template <EnumType Enum> Enum constexpr inline operator^=(Enum& first, Enum second) noexcept {
 	return (first = static_cast<Enum>(
 		static_cast<std::underlying_type_t<Enum>>(first) ^
 		static_cast<std::underlying_type_t<Enum>>(second)
 	));
 }
 
-namespace std {
+namespace lsd {
 
-template<EnumType Enum> constexpr inline std::string to_string(Enum e) noexcept {
-	return std::to_string(static_cast<std::underlying_type_t<Enum>>(e));
+template <EnumType Enum> struct Hash<Enum> {
+	constexpr std::size_t operator()(Enum e) const noexcept {
+		return static_cast<std::size_t>(e);
+	}
+};
+
+template <EnumType Enum> inline String toString(Enum e) noexcept {
+	return lsd::toString(static_cast<std::underlying_type_t<Enum>>(e));
+}
+template <EnumType Enum> inline WString toWString(Enum e) noexcept {
+	return lsd::toString(static_cast<std::underlying_type_t<Enum>>(e));
 }
 
 } // namespace std
