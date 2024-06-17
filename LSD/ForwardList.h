@@ -61,7 +61,7 @@ public:
 		m_alloc(alloc) { insertAfter(beforeBegin(), count, value); }
 	constexpr ForwardList(size_type count, const_alloc_reference alloc = allocator_type()) : 
 		m_alloc(alloc) { resize(count); }
-	template<class It> constexpr ForwardList(It first, It last, const_alloc_reference alloc = allocator_type()) requires isIteratorValue<It> : 
+	template <class It> constexpr ForwardList(It first, It last, const_alloc_reference alloc = allocator_type()) requires isIteratorValue<It> : 
 		m_alloc(alloc) { insertAfter(beforeBegin(), first, last); }
 	constexpr ForwardList(const_container_reference other, const_alloc_reference alloc = allocator_type()) :
 		m_alloc(alloc) { insertAfter(beforeBegin(), other.begin(), other.end()); }
@@ -79,7 +79,7 @@ public:
 		clear();
 		insertAfter(beforeBegin(), count, value);
 	}
-	template<class It> constexpr void assign(It first, It last) requires isIteratorValue<It> {
+	template <class It> constexpr void assign(It first, It last) requires isIteratorValue<It> {
 		clear();
 		insertAfter(beforeBegin(), first, last);
 	}
@@ -188,7 +188,7 @@ public:
 
 		return ptr;
 	}
-	template<class It> constexpr iterator insertAfter(const_iterator pos, It first, It last) requires isIteratorValue<It> {
+	template <class It> constexpr iterator insertAfter(const_iterator pos, It first, It last) requires isIteratorValue<It> {
 		auto it = const_cast<detail::ForwardListNodeBase*>(pos.get());
 		auto next = it->next;
 
@@ -345,7 +345,7 @@ public:
 	}
 
 private:
-	NO_UNIQUE_ADDRESS node_alloc m_alloc { };
+	no_uniuqe_address node_alloc m_alloc { };
 	detail::ForwardListNodeBase m_beforeHead { };
 
 	static constexpr node_pointer baseToNode(detail::ForwardListNodeBase* base) noexcept {

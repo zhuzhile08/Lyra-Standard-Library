@@ -106,11 +106,11 @@ public:
 		else return typeId<void>();
 	}
 
-	template<class TTy> constexpr TTy* target() noexcept {
+	template <class TTy> constexpr TTy* target() noexcept {
 		if constexpr (targetType() == typeId<TTy>()) return m_callable;
 		else return nullptr;
 	}
-	template<class TTy> constexpr const TTy* target() const noexcept{
+	template <class TTy> constexpr const TTy* target() const noexcept{
 		if constexpr (targetType() == typeId<TTy>()) return m_callable;
 		else return nullptr;
 	}
