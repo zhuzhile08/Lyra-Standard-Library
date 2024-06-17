@@ -345,7 +345,7 @@ public:
 	}
 
 private:
-	no_uniuqe_address node_alloc m_alloc { };
+	[[no_unique_address]] node_alloc m_alloc { };
 	detail::ForwardListNodeBase m_beforeHead { };
 
 	static constexpr node_pointer baseToNode(detail::ForwardListNodeBase* base) noexcept {
