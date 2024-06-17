@@ -166,9 +166,9 @@ public:
 	}
 	constexpr BasicString(init_list ilist, const_alloc_reference alloc = allocator_type()) :
 		BasicString(ilist.begin(), ilist.end(), alloc) { }
-	template <class StringViewLike> constexpr BasicString(const StringViewLike& sv, const_alloc_reference alloc = allocator_type()) requires isConvertibleToView<const StringViewLike&> :
+	template <class StringViewLike> constexpr BasicString(const StringViewLike& sv, const_alloc_reference alloc = allocator_type()) requires isConvertibleToView<StringViewLike> :
 		BasicString(static_cast<view_type>(sv).m_begin, static_cast<view_type>(sv).m_end, alloc) { }
-	template <class StringViewLike> constexpr BasicString(const StringViewLike& sv, size_type pos, size_type count, const_alloc_reference alloc = allocator_type()) requires isConvertibleToView<const StringViewLike&> 
+	template <class StringViewLike> constexpr BasicString(const StringViewLike& sv, size_type pos, size_type count, const_alloc_reference alloc = allocator_type()) requires isConvertibleToView<StringViewLike> 
 		 : m_alloc(alloc) {
 		view_type v(sv);
 		return assign(v.m_begin + pos, v.m_begin + pos + std::min(count, v.size() - pos));
@@ -212,7 +212,7 @@ public:
 	constexpr container_reference operator=(init_list ilist) {
 		return assign(ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference operator=(const StringViewLike& sv) requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr container_reference operator=(const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
 		view_type v(sv);
 		return assign(v.m_begin, v.m_end);
 	}
@@ -265,11 +265,11 @@ public:
 	constexpr container_reference assign(init_list ilist) {
 		return assign(ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference assign(const StringViewLike& sv) requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr container_reference assign(const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
 		view_type v(sv);
 		return assign(v.m_begin, v.m_end);
 	}
-	template <class StringViewLike> constexpr container_reference assign(const StringViewLike& sv, size_type pos, size_type count = npos) requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr container_reference assign(const StringViewLike& sv, size_type pos, size_type count = npos) requires isConvertibleToView<StringViewLike> {
 		view_type v(sv);
 		if (pos > v.size()) throw std::out_of_range("lsd::BasicString::operator=(): Requested position exceeded string bounds!");
 
@@ -588,12 +588,12 @@ public:
 	constexpr iterator insert(const_iterator pos, init_list ilist) {
 		return insert(pos, ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference insert(size_type index, const StringViewLike& sv) requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr container_reference insert(size_type index, const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
 		insert(m_long.begin + index, sv.m_begin, sv.m_end);
 		
 		return *this;
 	}
-	template <class StringViewLike> constexpr container_reference insert(size_type index, const StringViewLike& sv, size_type svIndex, size_type count = npos) requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr container_reference insert(size_type index, const StringViewLike& sv, size_type svIndex, size_type count = npos) requires isConvertibleToView<StringViewLike> {
 		insert(m_long.begin + index, sv.m_begin + svIndex, sv.m_begin + svIndex + std::min(count, sv.size() - svIndex));
 		
 		return *this;
@@ -644,11 +644,11 @@ public:
 	constexpr container_reference append(init_list ilist) {
 		return append(ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference append(const StringViewLike& sv) requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr container_reference append(const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
 		view_type view(sv);
 		return append(view.begin(), view.end());
 	}
-	template <class StringViewLike> constexpr container_reference append(const StringViewLike& sv, size_type pos, size_type count = npos) requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr container_reference append(const StringViewLike& sv, size_type pos, size_type count = npos) requires isConvertibleToView<StringViewLike> {
 		view_type view(sv);
 		auto s = view.size();
 		if (pos > s) throw std::out_of_range("lsd::BasicString::append(): Position exceeded string view bounds!");
@@ -674,7 +674,7 @@ public:
 	constexpr container_reference operator+=(init_list ilist) {
 		return append(ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference operator+=(const StringViewLike& sv) requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr container_reference operator+=(const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
 		view_type view(sv);
 		return append(view.begin(), view.end());
 	}
@@ -712,6 +712,210 @@ public:
 	constexpr void clear() {
 		if (smallStringMode()) std::fill_n(m_short.data, smallStringMax, value_type { });
 		else destructBehind(m_long.begin);
+	}
+
+	constexpr size_type find(const_container_reference other, size_type pos = 0) const noexcept {
+		return find(other.cStr(), pos, other.size());
+	}
+	constexpr size_type find(const_pointer s, size_type pos, size_type count) const {
+		auto siz = size();
+		auto beg = pBegin();
+
+		if (siz >= count && pos <= siz - count)
+			for (auto it = beg + pos; it < (pEnd() - count); it++)
+				if (traits_type::compare(s, it, count) == 0) return it - beg;
+
+		return npos;
+	}
+	constexpr size_type find(const_pointer s, size_type pos = 0) const {
+		return find(s, pos, traits_type::length(s));
+	}
+	constexpr size_type find(value_type c, size_type pos = 0) const noexcept {
+		return find(std::addressof(c), pos, 1);
+	}
+	template <class StringViewLike> constexpr size_type find(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return find(v.m_begin, pos, v.size());
+	}
+
+	constexpr size_type rfind(const_container_reference other, size_type pos = 0) const noexcept {
+		return rfind(other.cStr(), pos, other.size());
+	}
+	constexpr size_type rfind(const_pointer s, size_type pos, size_type count) const {
+		auto siz = size();
+		auto beg = pBegin();
+
+		if (siz >= count && pos <= siz - count)
+			for (auto it = (pEnd() - 1 - count); it > (beg + pos - 1); it--)
+				if (traits_type::compare(s, it, count) == 0) return it - beg;
+
+		return npos;
+	}
+	constexpr size_type rfind(const_pointer s, size_type pos = 0) const {
+		return rfind(s, pos, traits_type::length(s));
+	}
+	constexpr size_type rfind(value_type c, size_type pos = 0) const noexcept {
+		return rfind(std::addressof(c), pos, 1);
+	}
+	template <class StringViewLike> constexpr size_type rfind(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return rfind(v.m_begin, pos, v.size());
+	}
+
+	constexpr size_type findFirstOf(const_container_reference other, size_type pos = 0) const noexcept {
+		return findFirstOf(other.cStr(), pos, other.size());
+	}
+	[[deprecated]] constexpr size_type find_first_of(const_container_reference other, size_type pos = 0) const noexcept {
+		return findFirstOf(other.cStr(), pos, other.size());
+	}
+	constexpr size_type findFirstOf(const_pointer s, size_type pos, size_type count) const {
+		auto beg = pBegin();
+
+		for (auto it = beg + pos; it < pEnd(); it++) 
+			for (auto sIt = s; sIt != (s + count); sIt++)
+				if (traits_type::eq(*it, *sIt)) return it - beg;
+			
+		return npos;
+	}
+	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos, size_type count) const {
+		return findFirstOf(s, pos, count);
+	}
+	constexpr size_type findFirstOf(const_pointer s, size_type pos = 0) const {
+		return findFirstOf(s, pos, traits_type::length(s));
+	}
+	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos = 0) const {
+		return findFirstOf(s, pos, traits_type::length(s));
+	}
+	constexpr size_type findFirstOf(value_type c, size_type pos = 0) const noexcept {
+		return findFirstOf(std::addressof(c), pos, 1);
+	}
+	[[deprecated]] constexpr size_type find_first_of(value_type c, size_type pos = 0) const noexcept {
+		return findFirstOf(std::addressof(c), pos, 1);
+	}
+	template <class StringViewLike> constexpr size_type findFirstOf(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return findFirstOf(v.m_begin, pos, v.size());
+	}
+	[[deprecated]] template <class StringViewLike> constexpr size_type find_first_of(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return findFirstOf(v.m_begin, pos, v.size());
+	}
+
+	constexpr size_type findLastOf(const_container_reference other, size_type pos = 0) const noexcept {
+		return findLastOf(other.cStr(), pos, other.size());
+	}
+	[[deprecated]] constexpr size_type find_last_of(const_container_reference other, size_type pos = 0) const noexcept {
+		return findLastOf(other.cStr(), pos, other.size());
+	}
+	constexpr size_type findLastOf(const_pointer s, size_type pos, size_type count) const {
+		auto beg = pBegin();
+
+		for (auto it = pEnd() - 1; it > (beg + pos - 1); it--) 
+			for (auto sIt = s; sIt != (s + count); sIt++)
+				if (traits_type::eq(*it, *sIt)) return it - beg;
+			
+		return npos;
+	}
+	[[deprecated]] constexpr size_type find_last_of(const_pointer s, size_type pos, size_type count) const {
+		return findLastOf(s, pos, count);
+	}
+	constexpr size_type findLastOf(const_pointer s, size_type pos = 0) const {
+		return findLastOf(s, pos, traits_type::length(s));
+	}
+	[[deprecated]] constexpr size_type find_last_of(const_pointer s, size_type pos = 0) const {
+		return findLastOf(s, pos, traits_type::length(s));
+	}
+	constexpr size_type findLastOf(value_type c, size_type pos = 0) const noexcept {
+		return findLastOf(std::addressof(c), pos, 1);
+	}
+	[[deprecated]] constexpr size_type find_last_of(value_type c, size_type pos = 0) const noexcept {
+		return findLastOf(std::addressof(c), pos, 1);
+	}
+	template <class StringViewLike> constexpr size_type findLastOf(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return findLastOf(v.m_begin, pos, v.size());
+	}
+	[[deprecated]] template <class StringViewLike> constexpr size_type find_last_of(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return findLastOf(v.m_begin, pos, v.size());
+	}
+
+	constexpr size_type findFirstNotOf(const_container_reference other, size_type pos = 0) const noexcept {
+		return findFirstNotOf(other.cStr(), pos, other.size());
+	}
+	[[deprecated]] constexpr size_type find_first_not_of(const_container_reference other, size_type pos = 0) const noexcept {
+		return findFirstNotOf(other.cStr(), pos, other.size());
+	}
+	constexpr size_type findFirstNotOf(const_pointer s, size_type pos, size_type count) const {
+		auto beg = pBegin();
+
+		for (auto it = beg + pos; it < pEnd(); it++) 
+			for (auto sIt = s; sIt != (s + count); sIt++)
+				if (!traits_type::eq(*it, *sIt)) return it - beg;
+
+		return npos;
+	}
+	[[deprecated]] constexpr size_type find_first_not_of(const_pointer s, size_type pos, size_type count) const {
+		return findFirstNotOf(s, pos, count);
+	}
+	constexpr size_type findFirstNotOf(const_pointer s, size_type pos = 0) const {
+		return findFirstNotOf(s, pos, traits_type::length(s));
+	}
+	[[deprecated]] constexpr size_type find_first_not_of(const_pointer s, size_type pos = 0) const {
+		return findFirstNotOf(s, pos, traits_type::length(s));
+	}
+	constexpr size_type findFirstNotOf(value_type c, size_type pos = 0) const noexcept {
+		return findFirstNotOf(std::addressof(c), pos, 1);
+	}
+	[[deprecated]] constexpr size_type find_first_not_of(value_type c, size_type pos = 0) const noexcept {
+		return findFirstNotOf(std::addressof(c), pos, 1);
+	}
+	template <class StringViewLike> constexpr size_type findFirstNotOf(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return findFirstNotOf(v.m_begin, pos, v.size());
+	}
+	[[deprecated]] template <class StringViewLike> constexpr size_type find_first_not_of(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return findFirstNotOf(v.m_begin, pos, v.size());
+	}
+
+	constexpr size_type findLastNotOf(const_container_reference other, size_type pos = 0) const noexcept {
+		return findLastNotOf(other.cStr(), pos, other.size());
+	}
+	[[deprecated]] constexpr size_type find_last_not_of(const_container_reference other, size_type pos = 0) const noexcept {
+		return findLastNotOf(other.cStr(), pos, other.size());
+	}
+	constexpr size_type findLastNotOf(const_pointer s, size_type pos, size_type count) const {
+		auto beg = pBegin();
+
+		for (auto it = pEnd() - 1; it > (beg + pos - 1); it--) 
+			for (auto sIt = s; sIt != (s + count); sIt++)
+				if (!traits_type::eq(*it, *sIt)) return it - beg;
+			
+		return npos;
+	}
+	[[deprecated]] constexpr size_type find_last_not_of(const_pointer s, size_type pos, size_type count) const {
+		return findLastNotOf(s, pos, count);
+	}
+	constexpr size_type findLastNotOf(const_pointer s, size_type pos = 0) const {
+		return findLastNotOf(s, pos, traits_type::length(s));
+	}
+	[[deprecated]] constexpr size_type find_last_not_of(const_pointer s, size_type pos = 0) const {
+		return findLastNotOf(s, pos, traits_type::length(s));
+	}
+	constexpr size_type findLastNotOf(value_type c, size_type pos = 0) const noexcept {
+		return findLastNotOf(std::addressof(c), pos, 1);
+	}
+	[[deprecated]] constexpr size_type find_last_not_of(value_type c, size_type pos = 0) const noexcept {
+		return findLastNotOf(std::addressof(c), pos, 1);
+	}
+	template <class StringViewLike> constexpr size_type findLastNotOf(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return findLastNotOf(v.m_begin, pos, v.size());
+	}
+	[[deprecated]] template <class StringViewLike> constexpr size_type find_last_not_of(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
+		auto v = view_type(sv);
+		return findLastNotOf(v.m_begin, pos, v.size());
 	}
 
 
@@ -755,17 +959,85 @@ public:
 			else if (siz > sCount) return 2;
 		} else return r;
 	}
-	template <class StringViewLike> constexpr int compare(const StringViewLike& sv) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr int compare(const StringViewLike& sv) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
 		return compare(0, npos, sv.m_begin, sv.size());
 	}
-	template <class StringViewLike> constexpr int compare(size_type pos, size_type count, const StringViewLike& sv) const requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr int compare(size_type pos, size_type count, const StringViewLike& sv) const requires isConvertibleToView<StringViewLike> {
 		return compare(pos, count, sv.m_begin, sv.size());
 	}
-	template <class StringViewLike> constexpr int compare(size_type pos, size_type count, const StringViewLike& sv, size_type sPos, size_type sCount = npos) const requires isConvertibleToView<const StringViewLike&> {
+	template <class StringViewLike> constexpr int compare(size_type pos, size_type count, const StringViewLike& sv, size_type sPos, size_type sCount = npos) const requires isConvertibleToView<StringViewLike> {
 		return compare(pos, count, sv.m_begin + sPos, std::min(sCount, sv.size() - sPos));
 	}
 
-	
+	constexpr bool startsWith(view_type sv) const noexcept	{
+		if (sv.size() <= size()) return traits_type::compare(pBegin(), sv.m_begin, sv.size());
+		else return false;
+	}
+	[[deprecated]] constexpr bool starts_with(view_type sv) const noexcept 	{
+		return startsWith(sv);
+	}
+	constexpr bool startsWith(value_type c) const noexcept {
+		return traits_type::eq(*pBegin(), c);
+	}
+	[[deprecated]] constexpr bool starts_with(value_type c) const noexcept {
+		return startsWith(c);
+	}
+	constexpr bool startsWith(const_pointer s) const {
+		return startsWith(view_type(s));
+	}
+	[[deprecated]] constexpr bool starts_with(pointer s) const {
+		return startsWith(s);
+	}
+
+	constexpr bool endsWith(view_type sv) const noexcept {
+		if (sv.size() <= size()) return traits_type::compare(pEnd() - sv.size() - 1, sv.m_begin, sv.size());
+		else return false;
+	}
+	[[deprecated]] constexpr bool ends_with(view_type sv) const noexcept 	{
+		return endsWith(sv);
+	}
+	constexpr bool endsWith(value_type c) const noexcept {
+		return traits_type::eq(back(), c);
+	}
+	[[deprecated]] constexpr bool ends_with(value_type c) const noexcept {
+		return endsWith(c);
+	}
+	constexpr bool endsWith(const_pointer s) const {
+		return endsWith(view_type(s));
+	}
+	[[deprecated]] constexpr bool ends_with(pointer s) const {
+		return endsWith(s);
+	}
+
+	constexpr bool contains(view_type sv) const noexcept {
+		auto siz = size();
+		auto beg = pBegin();
+
+		if (siz >= sv.size())
+			for (auto it = be; it < (pEnd() - sv.size() + 1); it++)
+				if (traits_type::compare(sv.data(), it, sv.size()) == 0) return true;
+
+		return false;
+	}
+	constexpr bool contains(value_type c) const noexcept {
+		for (auto it = pBegin(); it != pEnd(); it++)
+			if (traits_type::eq(*it, c))
+				return true;
+
+		return false;
+	}
+	constexpr bool contains(const_pointer s) const {
+		return contains(view_type(s));
+	}
+
+	constexpr container substr(size_type pos = 0, size_type count = npos) const& {
+		return container(*this, pos, count);
+	}
+	constexpr container substr(size_type pos = 0, size_type count = npos) && {
+		return container(std::move(*this), pos, count)
+	}
+
+
 	template <class ReturnType, class Caster, class... Args> [[nodiscard]] ReturnType castTo(Caster caster, std::size_t* pos, Args&&... args) const {
 		auto it = pBegin();
 		for (; !std::isspace(*it); it++) { }
@@ -1101,7 +1373,6 @@ template <class C> struct Hash<BasicString<C>> {
 [[nodiscard]] inline String toString(long double value) {
 	return String::castFrom<long double, sizeof(long double) * 8 + 1>(value, "%g");
 }
-
 
 [[nodiscard]] inline WString toWString(int value) {
 	return WString::castFrom<int, SIGNED_SCALAR_DIGITS(int)>(value, L"%i");
