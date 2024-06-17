@@ -60,7 +60,13 @@ public:
 	}
 	template <class It> constexpr Vector(It first, It last, const_alloc_reference alloc = allocator_type()) requires isIteratorValue<It> : 
 		m_alloc(alloc) {
-		assign(first, last);
+		if (first != last) {
+			auto count = last - first;
+			smartReserve(count);
+
+			while (first != last) 
+				allocator_traits::construct(m_alloc, m_end++, *(first++));
+		}
 	}
 	constexpr Vector(const_container_reference other) : 
 		Vector(other.m_begin, other.m_end) { }
@@ -115,11 +121,9 @@ public:
 		if (first != last) {
 			auto count = last - first;
 			smartReserve(count);
-			m_end = m_begin + count;
 
-			auto it = m_begin;
 			while (first != last) 
-				allocator_traits::construct(m_alloc, it++, *(first++));
+				allocator_traits::construct(m_alloc, m_end++, *(first++));
 		}
 	}
 	constexpr void assign(init_list ilist) {
@@ -234,8 +238,8 @@ public:
 				allocator_traits::deallocate(m_alloc, oldBegin, cap);
 			}
 
-			m_cap = m_begin + count;
 			m_end = m_begin + s;
+			m_cap = m_end;
 		}
 	}
 	[[deprecated]] constexpr void shrink_to_fit() {
@@ -298,9 +302,7 @@ public:
 				
 				return pos;
 			}
-		} else {
-			return { };
-		}
+		} else return const_cast<pointer>(position.get());
 	}
 	template <class It> constexpr iterator insert(const_iterator position, It first, It last) requires isIteratorValue<It> {
 		if (first != last) {
@@ -353,9 +355,7 @@ public:
 
 				return pos;
 			}
-		} else {
-			return { };
-		}
+		} else return const_cast<pointer>(position.get());
 	}
 	constexpr iterator insert(const_iterator pos, init_list ilist) {
 		return insert(pos, ilist.begin(), ilist.end());
@@ -393,40 +393,38 @@ public:
 		auto it = m_begin + (pos - m_begin);
 		allocator_traits::destroy(m_alloc, &*it);
 
-		allocator_traits::construct(m_alloc, &*it, std::move(*(it + 1))); // weird bit here because it needs to reconstruct the previously destroyed element
-		std::move(it + 2, m_end, it + 1);
+		allocator_traits::construct(m_alloc, &*it++, std::move(*it)); // weird bit here because it needs to reconstruct the previously destroyed element
+		std::move(it + 1, m_end, it);
 
 		popBack();
 
 		return it;
 	}
 	constexpr iterator erase(const_iterator first, const_iterator last) {
-		auto firstIt = m_begin + (first - m_begin);
+		auto it = m_begin + (first - m_begin);
 
-		if (first < last) {
+		if (first != last) {
 			auto distance = last - first;
-			auto lastIt = firstIt + distance;
-
-			auto it = firstIt;	
+			auto lastIt = it + distance;
 
 			if (distance >= (m_end - last)) { // if there are more deleted elements than elements at the end, the while loop is centered around moving the end into the deleted section
 				while (lastIt != m_end) {
 					allocator_traits::destroy(m_alloc, it);
 					allocator_traits::construct(m_alloc, it++, std::move(*(lastIt++)));
 				}
-			} else { // otherwise focus on getting the entire secon deleted first, then move the remaining elements at the end
+			} else { // otherwise focus on getting the entire section deleted first, then move the remaining elements at the end
 				while (it != last) {
 					allocator_traits::destroy(m_alloc, it);
 					allocator_traits::construct(m_alloc, it++, std::move(*(lastIt++)));
 				}
 
-				std::move(lastIt, m_end, it);
+				it = std::move(lastIt, m_end, it);
 			}
 
-			destructBehind(m_end - distance);
+			destructBehind(it);
 		}
 
-		return firstIt;
+		return it;
 	}
 
 	constexpr void popBack() {
@@ -492,7 +490,7 @@ public:
 	}
 
 private:
-	NO_UNIQUE_ADDRESS allocator_type m_alloc { };
+	[[no_unique_address]] allocator_type m_alloc { };
 
 	pointer m_begin { };
 	pointer m_end { };
@@ -560,7 +558,8 @@ private:
 			auto pos = m_begin + index; // convert to non-const iterator
 
 			if (pos < oldEnd || m_end > m_begin) { // edge case, there is probably a better way to do this
-				allocator_traits::construct(m_alloc, oldEnd--, std::move(*oldEnd));
+				allocator_traits::construct(m_alloc, oldEnd, std::move(*oldEnd));
+				--oldEnd;
 				std::move_backward(pos, oldEnd, oldEnd + 1);
 			}
 
