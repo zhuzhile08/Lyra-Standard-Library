@@ -40,7 +40,7 @@ private:
 			}
 
 		private:
-			NO_UNIQUE_ADDRESS deleter_type m_d = deleter_type();
+			[[no_unique_address]] deleter_type m_d = deleter_type();
 		};
 
 		using deleter_type = UniquePointer<DeleterBase>;
