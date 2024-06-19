@@ -12,7 +12,6 @@
 #pragma once
 
 #include "Utility.h"
-#include "Allocator.h"
 #include "Iterators.h"
 
 #include <cstdlib>
@@ -27,7 +26,7 @@ template <class Ty, class Alloc = std::allocator<Ty>> class Vector { // @todo cu
 public:
 	using allocator_type = Alloc;
 	using const_alloc_reference = const allocator_type&;
-	using allocator_traits = AllocatorTraits<allocator_type>;
+	using allocator_traits = std::allocator_traits<allocator_type>;
 
 	using value_type = Ty;
 	using const_value = const value_type;
@@ -442,7 +441,7 @@ public:
 		return m_end - m_begin;
 	}
 	[[nodiscard]] constexpr std::size_t maxSize() const noexcept {
-		return std::min<std::size_t>(-1, allocator_traits::maxSize(m_alloc));
+		return std::min<std::size_t>(-1, allocator_traits::max_size(m_alloc));
 	}
 	[[deprecated]] [[nodiscard]] constexpr std::size_t max_size() const noexcept {
 		return maxSize();

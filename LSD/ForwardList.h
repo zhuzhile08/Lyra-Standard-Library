@@ -12,7 +12,6 @@
 #pragma once
 
 #include "Utility.h"
-#include "Allocator.h"
 #include "Iterators.h"
 #include "ForwardListNode.h"
 
@@ -29,7 +28,7 @@ public:
 
 	using allocator_type = Alloc;
 	using const_alloc_reference = const allocator_type&;
-	using allocator_traits = AllocatorTraits<allocator_type>;
+	using allocator_traits = std::allocator_traits<allocator_type>;
 
 	using value_type = Ty;
 	using const_value = const value_type;
@@ -338,10 +337,10 @@ public:
 		return true;
 	}
 	[[nodiscard]] constexpr size_type maxSize() const noexcept {
-		return node_traits::maxSize(m_alloc);
+		return node_traits::max_size(m_alloc);
 	}
 	[[nodiscard]] [[deprecated]] constexpr size_type max_size() const noexcept {
-		return node_traits::maxSize(m_alloc);
+		return node_traits::max_size(m_alloc);
 	}
 
 private:
