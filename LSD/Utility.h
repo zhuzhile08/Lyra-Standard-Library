@@ -123,17 +123,43 @@ template <class Ty> constexpr type_id typeId() noexcept {
 }
 
 
-// std::swap general overload
+// container concepts
 
-template <class Ty> concept Swappable = requires(Ty a, Ty b) { a.swap(b); };
+template <class Ty> concept IteratableContainer = requires(Ty c1, Ty c2) {
+	typename Ty::size_type;
+	typename Ty::value_type;
+	c1.swap(c2);
+};
 
 } // namespace lsd
 
 
 namespace std {
 
-template <lsd::Swappable Ty> void swap(Ty& a, Ty& b) {
+// standard library function overloads for custom containers
+
+template <lsd::IteratableContainer Ty> void swap(Ty& a, Ty& b) {
 	a.swap(b);
+}
+
+template <lsd::IteratableContainer Ty, class Value = typename Ty::value_type> Ty::size_type erase(Ty& container, const Value& value) {
+	auto it = std::remove(container.begin(), container.end(), value);
+	auto r = container.end() - it;
+	container.erase(it, container.end());
+	return r;
+}
+template <lsd::IteratableContainer Ty, class Pred> Ty::size_type erase(Ty& container, Pred pred) {
+	auto it = std::remove(container.begin(), container.end(), pred);
+	auto r = container.end() - it;
+	container.erase(it, container.end());
+	return r;
+}
+
+template <class CharTy, class Traits, class Alloc> auto quoted(const lsd::BasicString<CharTy, Traits, Alloc>& str, CharTy delim = CharTy('"'), CharTy escape = CharTy('\\')) {
+	return quoted(str.data(), delim, escape);
+}
+template <class CharTy, class Traits> auto quoted(const lsd::BasicStringView<CharTy, Traits>& str, CharTy delim = CharTy('"'), CharTy escape = CharTy('\\')) {
+	return quoted(str.data(), delim, escape);
 }
 
 } // namespace std

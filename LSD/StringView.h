@@ -52,10 +52,10 @@ public:
 
 	static constexpr size_type npos = size_type(-1);
 
-	static_assert(!std::is_array_v<value_type>, "lsd::String: Character type has to be a non-array");
-	static_assert(std::is_trivial_v<value_type>, "lsd::String: Character type has to be trivial");
-	static_assert(std::is_standard_layout_v<value_type>, "lsd::String: Character type has to be in standard layout");
-	static_assert(std::is_same_v<value_type, typename traits_type::char_type>, "lsd::String: Character type has to be the same as the type provided to the character traits");
+	static_assert(!std::is_array_v<value_type>, "lsd::String: Character type has to be a non-array!");
+	static_assert(std::is_trivial_v<value_type>, "lsd::String: Character type has to be trivial!");
+	static_assert(std::is_standard_layout_v<value_type>, "lsd::String: Character type has to be in standard layout!");
+	static_assert(std::is_same_v<value_type, typename traits_type::char_type>, "lsd::String: Character type has to be the same as the type provided to the character traits!");
 
 	constexpr BasicStringView() noexcept = default;
 	constexpr BasicStringView(const_pointer s, size_type count) : m_begin(s), m_end(s + count) { }
