@@ -122,12 +122,12 @@ public:
 	}
 
 	constexpr size_type copy(pointer dest, size_type count, size_type pos = 0) const {
-		if (pos > size()) throw std::out_of_range("lsd::BasicStringView::copy(): Position exceeded string bounds!");
+		if (pos > size()) throw std::out_of_range("lsd::BasicStringView::copy(): Position exceded string bounds!");
 		return traits_type::copy(dest, m_begin + pos, std::min(count, size() - pos));
 	}
 
 	constexpr BasicStringView substr(size_type pos = 0, size_type count = npos) const {
-		if (pos > size()) throw std::out_of_range("lsd::BasicStringView::substr(): Position exceeded string bounds!");
+		if (pos > size()) throw std::out_of_range("lsd::BasicStringView::substr(): Position exceded string bounds!");
 		return container(m_begin, std::min(count, size() - pos));
 	}
 
@@ -204,169 +204,179 @@ public:
 		return false;
 	}
 	constexpr bool contains(value_type c) const noexcept {
-		for (auto it = m_begin; it != m_end; it++) if (traits_type::eq(c, *it)) return true;
-		else return false;
-	}
-	constexpr bool contains(const_pointer s) const {
-		auto sSize = traits_type::length(s);
-
-		if (size() >= sSize)
-			for (auto it = m_begin; it != (m_end - sSize + 1); it++)
-				if (traits_type::compare(s, it, sSize) == 0) return true;
+		for (auto it = m_begin; it != m_end; it++) 
+			if (traits_type::eq(*it, c)) return true;
 
 		return false;
 	}
-
-	constexpr size_type find(container other, size_type pos = 0) const noexcept {
-		if ((size() - pos) >= other.size())
-			for (auto it = (m_begin + pos); it != (m_end - other.size() + 1); it++)
-				if (traits_type::compare(other.m_begin, it, other.size()) == 0) return it - m_begin;
-
-		return npos;
+	constexpr bool contains(const_pointer s) const {
+		return contains(container(s));
 	}
-	constexpr size_type find(value_type c, size_type pos = 0) const noexcept {
-		return find(container(std::addressof(c), 1), pos);
+
+	constexpr size_type find(const_container_reference other, size_type pos = 0) const noexcept {
+		return find(other.data(), pos, other.size());
 	}
 	constexpr size_type find(const_pointer s, size_type pos, size_type count) const {
-		return find(container(s, count), pos);
+		if (size() >= count && pos <= size() - count)
+			for (auto it = m_begin + pos; it < (m_end - count); it++)
+				if (traits_type::compare(s, it, count) == 0) return it - m_begin;
+
+		return npos;
 	}
 	constexpr size_type find(const_pointer s, size_type pos = 0) const {
-		return find(container(s), pos);
+		return find(s, pos, traits_type::length(s));
+	}
+	constexpr size_type find(value_type c, size_type pos = 0) const noexcept {
+		return find(std::addressof(c), pos, 1);
 	}
 
-	constexpr size_type rfind(container other, size_type pos = npos) const noexcept {
-		if ((size() - pos) >= other.size())
-			for (auto it = (m_end - 1 - other.size()); it != (m_begin + pos - 1); it--)
-				if (traits_type::compare(other.m_begin, it, other.size()) == 0) return it - m_begin;
-
-		return npos;
-	}
-	constexpr size_type rfind(value_type c, size_type pos = npos) const noexcept {
-		return rfind(container(std::addressof(c), 1), pos);
+	constexpr size_type rfind(const_container_reference other, size_type pos = npos) const noexcept {
+		return rfind(other.data(), pos, other.size());
 	}
 	constexpr size_type rfind(const_pointer s, size_type pos, size_type count) const {
-		return rfind(container(s, count), pos);
+		pos = std::min(pos, size() - count);
+
+		if (size() >= count)
+			for (auto it = (m_begin + pos); it != (m_begin - 1); it--)
+				if (traits_type::compare(s, it, count) == 0) return it - m_begin;
+
+		return npos;
 	}
 	constexpr size_type rfind(const_pointer s, size_type pos = npos) const {
-		return rfind(container(s), pos);
+		return rfind(s, pos, traits_type::length(s));
+	}
+	constexpr size_type rfind(value_type c, size_type pos = npos) const noexcept {
+		return rfind(std::addressof(c), pos, 1);
 	}
 
-	constexpr size_type findFirstOf(container other, size_type pos = 0) const noexcept {
-		for (auto it = (m_begin + pos); it != m_end; it++) 
-			for (auto oIt = other.m_begin; oIt != other.m_end; oIt++)
-				if (traits_type::eq(*it, *oIt)) return it - m_begin;
-			
-		return npos;
+	constexpr size_type findFirstOf(const_container_reference other, size_type pos = 0) const noexcept {
+		return findFirstOf(other.data(), pos, other.size());
 	}
-	[[deprecated]] constexpr size_type find_first_of(container other, size_type pos = 0) const noexcept {
-		return findFirstOf(other, pos);
-	}
-	constexpr size_type findFirstOf(value_type c, size_type pos = 0) const noexcept {
-		return findFirstOf(container(std::addressof(c), 1), pos);
-	}
-	[[deprecated]] constexpr size_type find_first_of(value_type c, size_type pos = 0) const noexcept {
-		return findFirstOf(container(std::addressof(c), 1), pos);
+	[[deprecated]] constexpr size_type find_first_of(const_container_reference other, size_type pos = 0) const noexcept {
+		return findFirstOf(other.data(), pos, other.size());
 	}
 	constexpr size_type findFirstOf(const_pointer s, size_type pos, size_type count) const {
-		return findFirstOf(container(s, count), pos);
-	}
-	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos, size_type count) const {
-		return findFirstOf(container(s, count), pos);
-	}
-	constexpr size_type findFirstOf(const_pointer s, size_type pos = 0) const {
-		return findFirstOf(container(s), pos);
-	}
-	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos = 0) const {
-		return findFirstOf(container(s), pos);
-	}
-
-	constexpr size_type findLastOf(container other, size_type pos = npos) const noexcept {
-		for (auto it = (m_end - 1); it != (m_begin + pos - 1); it++) 
-			for (auto oIt = other.m_begin; oIt != other.m_end; oIt++)
-				if (traits_type::eq(*it, *oIt)) return it - m_begin;
+		for (auto it = m_begin + pos; it < m_end; it++) 
+			for (auto sIt = s; sIt != (s + count); sIt++)
+				if (traits_type::eq(*it, *sIt)) return it - m_begin;
 			
 		return npos;
 	}
-	[[deprecated]] constexpr size_type find_last_of(container other, size_type pos = npos) const noexcept {
-		return findLastOf(other, pos);
+	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos, size_type count) const {
+		return findFirstOf(s, pos, count);
 	}
-    constexpr size_type findLastOf(value_type c, size_type pos = npos) const noexcept {
-		return findLastOf(container(std::addressof(c), 1), pos);
+	constexpr size_type findFirstOf(const_pointer s, size_type pos = 0) const {
+		return findFirstOf(s, pos, traits_type::length(s));
 	}
-    [[deprecated]] constexpr size_type find_last_of(value_type c, size_type pos = npos) const noexcept {
-		return findLastOf(container(std::addressof(c), 1), pos);
+	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos = 0) const {
+		return findFirstOf(s, pos, traits_type::length(s));
+	}
+	constexpr size_type findFirstOf(value_type c, size_type pos = 0) const noexcept {
+		return findFirstOf(std::addressof(c), pos, 1);
+	}
+	[[deprecated]] constexpr size_type find_first_of(value_type c, size_type pos = 0) const noexcept {
+		return findFirstOf(std::addressof(c), pos, 1);
+	}
+
+	constexpr size_type findLastOf(const_container_reference other, size_type pos = npos) const noexcept {
+		return findLastOf(other.cStr(), pos, other.size());
+	}
+	[[deprecated]] constexpr size_type find_last_of(const_container_reference other, size_type pos = npos) const noexcept {
+		return findLastOf(other.cStr(), pos, other.size());
 	}
 	constexpr size_type findLastOf(const_pointer s, size_type pos, size_type count) const {
-		return findLastOf(container(s, count), pos);
+		if (size() != 0) {
+			pos = std::min(pos, size() - 1);
+
+			for (auto it = m_begin + pos; it > (m_begin - 1); it--) 
+				for (auto sIt = s; sIt != (s + count); sIt++)
+					if (traits_type::eq(*it, *sIt)) return it - m_begin;
+		}
+
+		return npos;
 	}
 	[[deprecated]] constexpr size_type find_last_of(const_pointer s, size_type pos, size_type count) const {
-		return findLastOf(container(s, count), pos);
+		return findLastOf(s, pos, count);
 	}
 	constexpr size_type findLastOf(const_pointer s, size_type pos = npos) const {
-		return findLastOf(container(s), pos);
+		return findLastOf(s, pos, traits_type::length(s));
 	}
 	[[deprecated]] constexpr size_type find_last_of(const_pointer s, size_type pos = npos) const {
-		return findLastOf(container(s), pos);
+		return findLastOf(s, pos, traits_type::length(s));
+	}
+	constexpr size_type findLastOf(value_type c, size_type pos = npos) const noexcept {
+		return findLastOf(std::addressof(c), pos, 1);
+	}
+	[[deprecated]] constexpr size_type find_last_of(value_type c, size_type pos = npos) const noexcept {
+		return findLastOf(std::addressof(c), pos, 1);
 	}
 
-	constexpr size_type findFirstNotOf(container other, size_type pos = 0) const noexcept {
-		auto it = m_begin + pos;
-		for (; it != m_end; it++)
-			for (auto oIt = other.m_begin; oIt != other.m_end; oIt++)
-				if (traits_type::eq(*it, *oIt)) return npos;
-			
-		return it - m_begin;
+	constexpr size_type findFirstNotOf(const_container_reference other, size_type pos = 0) const noexcept {
+		return findFirstNotOf(other.cStr(), pos, other.size());
 	}
-	[[deprecated]] constexpr size_type find_first_not_of(container other, size_type pos = 0) const noexcept {
-		return findFirstNotOf(other, pos);
-	}
-	constexpr size_type findFirstNotOf(value_type c, size_type pos = 0) const noexcept {
-		return findFirstNotOf(container(std::addressof(c), 1), pos);
-	}
-	[[deprecated]] constexpr size_type find_first_not_of(value_type c, size_type pos = 0) const noexcept {
-		return findFirstNotOf(container(std::addressof(c), 1), pos);
+	[[deprecated]] constexpr size_type find_first_not_of(const_container_reference other, size_type pos = 0) const noexcept {
+		return findFirstNotOf(other.cStr(), pos, other.size());
 	}
 	constexpr size_type findFirstNotOf(const_pointer s, size_type pos, size_type count) const {
-		return findFirstNotOf(container(s, count), pos);
+		for (auto it = m_begin + pos; it < m_end; it++) {
+			bool found = false;
+			for (auto sIt = s; sIt != (s + count) && !found; sIt++)
+				if (!traits_type::eq(*it, *sIt)) found = true;
+			if (!found) return it - m_begin;
+		}
+
+		return npos;
 	}
 	[[deprecated]] constexpr size_type find_first_not_of(const_pointer s, size_type pos, size_type count) const {
-		return findFirstNotOf(container(s, count), pos);
+		return findFirstNotOf(s, pos, count);
 	}
 	constexpr size_type findFirstNotOf(const_pointer s, size_type pos = 0) const {
-		return findFirstNotOf(container(s), pos);
+		return findFirstNotOf(s, pos, traits_type::length(s));
 	}
 	[[deprecated]] constexpr size_type find_first_not_of(const_pointer s, size_type pos = 0) const {
-		return findFirstNotOf(container(s), pos);
+		return findFirstNotOf(s, pos, traits_type::length(s));
+	}
+	constexpr size_type findFirstNotOf(value_type c, size_type pos = 0) const noexcept {
+		return findFirstNotOf(std::addressof(c), pos, 1);
+	}
+	[[deprecated]] constexpr size_type find_first_not_of(value_type c, size_type pos = 0) const noexcept {
+		return findFirstNotOf(std::addressof(c), pos, 1);
 	}
 
-	constexpr size_type findLastNotOf(container other, size_type pos = npos) const noexcept {
-		auto it = m_end - 1;
-		for (; it != (m_begin + pos - 1); it++)
-			for (auto oIt = other.m_begin; oIt != other.m_end; oIt++)
-				if (traits_type::eq(*it, *oIt)) return npos;
-			
-		return it - m_begin;
+	constexpr size_type findLastNotOf(const_container_reference other, size_type pos = npos) const noexcept {
+		return findLastNotOf(other.cStr(), pos, other.size());
 	}
-	[[deprecated]] constexpr size_type find_last_not_of(container other, size_type pos = npos) const noexcept {
-		return findLastNotOf(other, pos);
-	}
-    constexpr size_type findLastNotOf(value_type c, size_type pos = npos) const noexcept {
-		return findLastNotOf(container(std::addressof(c), 1), pos);
-	}
-    [[deprecated]] constexpr size_type find_last_not_of(value_type c, size_type pos = npos) const noexcept {
-		return findLastNotOf(container(std::addressof(c), 1), pos);
+	[[deprecated]] constexpr size_type find_last_not_of(const_container_reference other, size_type pos = 0) const noexcept {
+		return findLastNotOf(other.cStr(), pos, other.size());
 	}
 	constexpr size_type findLastNotOf(const_pointer s, size_type pos, size_type count) const {
-		return findLastNotOf(container(s, count), pos);
+		if (size() != 0) {
+			pos = std::min(pos, size() - 1);
+
+			for (auto it = m_end - 1; it > (m_begin + pos - 1); it--) {
+				bool found = false;
+				for (auto sIt = s; sIt != (s + count) && !found; sIt++)
+					if (!traits_type::eq(*it, *sIt)) found = true; 
+				if (!found) return it - m_begin;
+			}
+		}
+			
+		return npos;
 	}
 	[[deprecated]] constexpr size_type find_last_not_of(const_pointer s, size_type pos, size_type count) const {
-		return findLastNotOf(container(s, count), pos);
+		return findLastNotOf(s, pos, count);
 	}
 	constexpr size_type findLastNotOf(const_pointer s, size_type pos = npos) const {
-		return findLastNotOf(container(s), pos);
+		return findLastNotOf(s, pos, traits_type::length(s));
 	}
 	[[deprecated]] constexpr size_type find_last_not_of(const_pointer s, size_type pos = npos) const {
-		return findLastNotOf(container(s), pos);
+		return findLastNotOf(s, pos, traits_type::length(s));
+	}
+	constexpr size_type findLastNotOf(value_type c, size_type pos = npos) const noexcept {
+		return findLastNotOf(std::addressof(c), pos, 1);
+	}
+	[[deprecated]] constexpr size_type find_last_not_of(value_type c, size_type pos = npos) const noexcept {
+		return findLastNotOf(std::addressof(c), pos, 1);
 	}
 
 	[[nodiscard]] constexpr size_type size() const noexcept {
@@ -391,12 +401,12 @@ public:
 
 	[[nodiscard]] constexpr const_reference at(size_type index) const {
 		auto ptr = m_begin + index;
-		if (ptr >= m_end) throw std::out_of_range("lsd::BasicString::at(): Index exceeded string bounds!");
+		if (ptr >= m_end) throw std::out_of_range("lsd::BasicString::at(): Index exceded string bounds!");
 		return *ptr;
 	}
 	[[nodiscard]] constexpr const_reference operator[](size_type index) const {
 		auto ptr = m_begin + index;
-		assert((ptr < m_end) && "lsd::BasicString::operator[]: Index exceeded string bounds!");
+		assert((ptr < m_end) && "lsd::BasicString::operator[]: Index exceded string bounds!");
 		return *ptr;
 	}
 
