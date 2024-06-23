@@ -215,8 +215,7 @@ public:
 	template <class KeyType> constexpr reference operator[](KeyType&& name) { return *m_children[std::forward<KeyType>(name)]; }
 
 	[[nodiscard]] constexpr size_type size() const noexcept { return m_children.size(); }
-	[[nodiscard]] constexpr key_type name() const noexcept { return m_name; }
-	[[nodiscard]] constexpr pointer parent() noexcept { return dynamic_cast<pointer>(m_parent); }
+	[[nodiscard]] constexpr const_key_reference name() const noexcept { return m_name; }
 	[[nodiscard]] constexpr const_pointer const parent() const noexcept { return dynamic_cast<pointer>(m_parent); }
 
 protected:
