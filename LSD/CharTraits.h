@@ -32,7 +32,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
+		std::fill_n(ptr, count, c2);
 		return ptr;
 	}
 
@@ -45,13 +45,13 @@ public:
 
 	constexpr static char_type* move(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::move(src, src + count, dst);
-		if (dst > src) return std::move_backward(src, src + count, dst);
+		else if (dst > src) return std::move_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
 	constexpr static char_type* copy(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::copy(src, src + count, dst);
-		if (dst > src) return std::copy_backward(src, src + count, dst);
+		else if (dst > src) return std::copy_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
@@ -121,7 +121,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
+		std::fill_n(ptr, count, c2);
 		return ptr;
 	}
 
@@ -134,13 +134,13 @@ public:
 
 	constexpr static char_type* move(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::move(src, src + count, dst);
-		if (dst > src) return std::move_backward(src, src + count, dst);
+		else if (dst > src) return std::move_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
 	constexpr static char_type* copy(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::copy(src, src + count, dst);
-		if (dst > src) return std::copy_backward(src, src + count, dst);
+		else if (dst > src) return std::copy_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
@@ -210,7 +210,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
+		std::fill_n(ptr, count, c2);
 		return ptr;
 	}
 
@@ -223,13 +223,13 @@ public:
 
 	constexpr static char_type* move(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::move(src, src + count, dst);
-		if (dst > src) return std::move_backward(src, src + count, dst);
+		else if (dst > src) return std::move_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
 	constexpr static char_type* copy(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::copy(src, src + count, dst);
-		if (dst > src) return std::copy_backward(src, src + count, dst);
+		else if (dst > src) return std::copy_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
@@ -299,7 +299,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
+		std::fill_n(ptr, count, c2);
 		return ptr;
 	}
 
@@ -312,13 +312,13 @@ public:
 
 	constexpr static char_type* move(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::move(src, src + count, dst);
-		if (dst > src) return std::move_backward(src, src + count, dst);
+		else if (dst > src) return std::move_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
 	constexpr static char_type* copy(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::copy(src, src + count, dst);
-		if (dst > src) return std::copy_backward(src, src + count, dst);
+		else if (dst > src) return std::copy_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
@@ -388,7 +388,7 @@ public:
 		c1 = c2;
 	}
 	constexpr static char_type* assign(char_type* ptr, std::size_t count, char_type c2) {
-		for (auto c = count; c < count; c++) assign(*(ptr + c), c2);
+		std::fill_n(ptr, count, c2);
 		return ptr;
 	}
 
@@ -401,13 +401,13 @@ public:
 
 	constexpr static char_type* move(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::move(src, src + count, dst);
-		if (dst > src) return std::move_backward(src, src + count, dst);
+		else if (dst > src) return std::move_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
 	constexpr static char_type* copy(char_type* dst, const char_type* src, std::size_t count) {
 		if (dst < src) return std::copy(src, src + count, dst);
-		if (dst > src) return std::copy_backward(src, src + count, dst);
+		else if (dst > src) return std::copy_backward(src, src + count, dst + count);
 		else return dst;
 	}
 
