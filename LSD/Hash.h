@@ -14,6 +14,7 @@
 #include <type_traits>
 #include <typeindex>
 #include <functional>
+#include <string>
 #include <filesystem>
 
 namespace lsd {
@@ -53,6 +54,12 @@ template <> struct Hash<std::nullptr_t> {
 template <> struct Hash<std::filesystem::path> {
 	std::size_t operator()(const std::filesystem::path& p) const noexcept {
 		return std::filesystem::hash_value(p); /// @todo implement own hash function
+	}
+};
+
+template <> struct Hash<std::string> {
+	std::size_t operator()(const std::string& p) const noexcept {
+		return std::hash<std::string>()(p); /// @todo implement own hash function
 	}
 };
 
