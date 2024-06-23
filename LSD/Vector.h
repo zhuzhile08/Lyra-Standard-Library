@@ -469,22 +469,22 @@ public:
 
 	[[nodiscard]] constexpr const_reference at(std::size_t index) const {
 		auto ptr = m_begin + index;
-		if (ptr >= m_end) throw std::out_of_range("lsd::Vector::at(): Index exceeded array bounds!");
+		if (ptr >= m_end) throw std::out_of_range("lsd::Vector::at(): Index exceded array bounds!");
 		return *ptr;
 	}
 	[[nodiscard]] constexpr reference at(std::size_t index) {
 		auto ptr = m_begin + index;
-		if (ptr >= m_end) throw std::out_of_range("lsd::Vector::at(): Index exceeded array bounds!");
+		if (ptr >= m_end) throw std::out_of_range("lsd::Vector::at(): Index exceded array bounds!");
 		return *ptr;
 	}
 	[[nodiscard]] constexpr const_reference operator[](std::size_t index) const {
 		auto ptr = m_begin + index;
-		assert((ptr < m_end) && "lsd::Vector::operator[]: Index exceeded array bounds!");
+		assert((ptr < m_end) && "lsd::Vector::operator[]: Index exceded array bounds!");
 		return *ptr;
 	}
 	[[nodiscard]] constexpr reference operator[](std::size_t index) {
 		auto ptr = m_begin + index;
-		assert((ptr < m_end) && "lsd::Vector::operator[]: Index exceeded array bounds!");
+		assert((ptr < m_end) && "lsd::Vector::operator[]: Index exceded array bounds!");
 		return *ptr;
 	}
 
