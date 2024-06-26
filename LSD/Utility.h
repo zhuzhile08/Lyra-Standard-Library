@@ -58,55 +58,6 @@ template <template <class...> class Container> [[nodiscard]] inline constexpr Co
 }
 
 
-// prime number utility
-
-template <class Integer> inline constexpr bool isPrime(Integer n) noexcept requires std::is_integral_v<Integer> {
-	if (n == 2 || n == 3)
-		return true;
-	else if (n <= 1 || n % 2 == 0 || n % 3 == 0)
-		return false;
-	else for (Integer i = 5; i * i <= n; i += 6)
-		if (n % i == 0 || n % (i + 2) == 0)
-			return false;
-	return true;
-};
-
-template <class Integer> inline constexpr Integer nextPrime(Integer n) noexcept requires std::is_integral_v<Integer> {
-	if (n % 2 == 0)
-		--n;
-
-	while (true) {
-		n += 2;
-		if (isPrime(n)) {
-			return n;
-		}
-	}
-};
-
-template <class Integer> inline constexpr Integer lastPrime(Integer n) noexcept requires std::is_integral_v<Integer> {
-	if (n % 2 == 0)
-		++n;
-
-	while (true) {
-		n -= 2;
-		if (isPrime(n)) {
-			return n;
-		}
-	}
-};
-
-
-// hash map utility
-
-inline constexpr std::size_t hashmapBucketSizeCheck(std::size_t requested, std::size_t required) noexcept {
-	return (requested < required) ? nextPrime(required) : nextPrime(requested);
-}
-
-template <class Integer> inline constexpr Integer sizeToIndex(Integer size) noexcept requires std::is_integral_v<Integer> {
-	return (size == 0) ? 0 : size - 1;
-}
-
-
 // compile time type id generator
 
 using type_id = const void*;
