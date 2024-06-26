@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "Utility.h"
+#include "CoreUtility.h"
 #include "Iterators.h"
 #include "Vector.h"
 #include "Hash.h"
@@ -73,13 +73,13 @@ public:
 		const key_equal& keyEqual = key_equal(), 
 		const allocator_type& alloc = allocator_type()) noexcept : 
 		m_array(alloc),
-		m_buckets(hashmapBucketSizeCheck(bucketCount, 2)), 
+		m_buckets(detail::hashmapBucketSizeCheck(bucketCount, 2)), 
 		m_hasher(hash), 
 		m_equal(keyEqual) { } 
 	constexpr UnorderedSparseMap(size_type bucketCount, const allocator_type& alloc) noexcept : 
-		m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, 2)) { } 
+		m_array(alloc), m_buckets(detail::hashmapBucketSizeCheck(bucketCount, 2)) { } 
 	constexpr UnorderedSparseMap(size_type bucketCount, const hasher& hasher, const allocator_type& alloc) noexcept : 
-		m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, 2)), m_hasher(hasher) { } 
+		m_array(alloc), m_buckets(detail::hashmapBucketSizeCheck(bucketCount, 2)), m_hasher(hasher) { } 
 	explicit constexpr UnorderedSparseMap(const allocator_type& alloc) noexcept : 
 		m_array(alloc), m_buckets(2) { } 
 	template <class It> constexpr UnorderedSparseMap(
@@ -89,14 +89,14 @@ public:
 		const key_equal& keyEqual = key_equal(), 
 		const allocator_type& alloc = allocator_type()) noexcept requires isIteratorValue<It> : 
 		m_array(alloc),
-		m_buckets(hashmapBucketSizeCheck(bucketCount, last - first)), 
+		m_buckets(detail::hashmapBucketSizeCheck(bucketCount, last - first)), 
 		m_hasher(hash), 
 		m_equal(keyEqual) {
 		insert(first, last);
 	}
 	template <class It> constexpr UnorderedSparseMap(
 		It first, It last, size_type bucketCount, const allocator_type& alloc) noexcept 
-		requires isIteratorValue<It> : m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, last - first)) {
+		requires isIteratorValue<It> : m_array(alloc), m_buckets(detail::hashmapBucketSizeCheck(bucketCount, last - first)) {
 		insert(first, last);
 	}
 	template <class It> constexpr UnorderedSparseMap(
@@ -105,7 +105,7 @@ public:
 		const hasher& hasher,
 		const allocator_type& alloc) noexcept requires isIteratorValue<It> : 
 		m_array(alloc),
-		m_buckets(hashmapBucketSizeCheck(bucketCount, last - first)), 
+		m_buckets(detail::hashmapBucketSizeCheck(bucketCount, last - first)), 
 		m_hasher(hasher) {
 		insert(first, last);
 	}
@@ -124,18 +124,18 @@ public:
 		const key_equal& keyEqual = key_equal(), 
 		const allocator_type& alloc = allocator_type()) noexcept : 
 		m_array(alloc),
-		m_buckets(hashmapBucketSizeCheck(bucketCount, ilist.size())), 
+		m_buckets(detail::hashmapBucketSizeCheck(bucketCount, ilist.size())), 
 		m_hasher(hash), 
 		m_equal(keyEqual) {
 		insert(ilist.begin(), ilist.end());
 	} 
 	constexpr UnorderedSparseMap(std::initializer_list<value_type> ilist, size_type bucketCount, const allocator_type& alloc) noexcept : 
-		m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, ilist.size())) {
+		m_array(alloc), m_buckets(detail::hashmapBucketSizeCheck(bucketCount, ilist.size())) {
 		insert(ilist.begin(), ilist.end());
 	} 
 	constexpr UnorderedSparseMap(
 		std::initializer_list<value_type> ilist, size_type bucketCount, const hasher& hasher, const allocator_type& alloc) noexcept : 
-		m_array(alloc), m_buckets(hashmapBucketSizeCheck(bucketCount, ilist.size())), m_hasher(hasher) {
+		m_array(alloc), m_buckets(detail::hashmapBucketSizeCheck(bucketCount, ilist.size())), m_hasher(hasher) {
 		insert(ilist.begin(), ilist.end());
 	}
 	constexpr ~UnorderedSparseMap() = default;
@@ -241,7 +241,8 @@ public:
 	}
 
 	void rehash(size_type count) noexcept {
-		m_buckets.resizeAndClear(count);
+		m_buckets.clear();
+		m_buckets.resize(count);
 
 		size_type i = 0;
 		for (auto it = m_array.begin(); it != m_array.end(); it++, i++)
@@ -359,7 +360,7 @@ public:
 			auto& bucketList = m_buckets[keyToBucket(m_array.back().first)];
 
 			for (auto bucketIt = bucketList.begin(); bucketIt != bucketList.end(); bucketIt++) {
-				if (*bucketIt == sizeToIndex(m_array.size())) {
+				if (*bucketIt == detail::sizeToIndex(m_array.size())) {
 					*bucketIt = index;
 					break;
 				}
@@ -559,7 +560,7 @@ private:
 	[[no_unique_address]] key_equal m_equal { };
 
 	constexpr void rehashIfNecessary() noexcept {
-		if (m_array.size() >= m_buckets.size() * maxLoadFactor) rehash(nextPrime(m_array.size()));
+		if (m_array.size() >= m_buckets.size() * maxLoadFactor) rehash(detail::nextPrime(m_array.size()));
 	}
 	template <class K> constexpr size_type keyToBucket(const K& key) const noexcept
 		requires(!std::is_convertible_v<K, iterator> && !std::is_convertible_v<K, const_iterator>) {

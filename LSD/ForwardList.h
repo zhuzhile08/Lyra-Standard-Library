@@ -11,7 +11,6 @@
 
 #pragma once
 
-#include "Utility.h"
 #include "Iterators.h"
 #include "ForwardListNode.h"
 

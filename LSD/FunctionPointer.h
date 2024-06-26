@@ -11,8 +11,8 @@
 
 #pragma once
 
-#include "UniquePointer.h"
 #include "Utility.h"
+#include "UniquePointer.h"
 
 #include <utility>
 
