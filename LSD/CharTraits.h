@@ -200,7 +200,7 @@ public:
 
 template <> class CharTraits<char8_t> {
 public:
-	using char_type = wchar_t;
+	using char_type = char8_t;
 	using int_type = unsigned int;
 	using off_type = std::streamoff;
 	using pos_type = std::u8streampos;
@@ -289,7 +289,7 @@ public:
 
 template <> class CharTraits<char16_t> {
 public:
-	using char_type = wchar_t;
+	using char_type = char16_t;
 	using int_type = std::uint_least16_t;
 	using off_type = std::streamoff;
 	using pos_type = std::u16streampos;
@@ -378,7 +378,7 @@ public:
 
 template <> class CharTraits<char32_t> {
 public:
-	using char_type = wchar_t;
+	using char_type = char32_t;
 	using int_type = std::uint_least32_t;
 	using off_type = std::streamoff;
 	using pos_type = std::u32streampos;
