@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "Utility.h"
+#include "CoreUtility.h"
 #include "Iterators.h"
 
 #include <cstdlib>
@@ -24,6 +24,9 @@ namespace lsd {
 
 template <class Ty, class Alloc = std::allocator<Ty>> class Vector { // @todo custom compile time allocator implementation
 public:
+	using size_type = std::size_t;
+	using difference_type = std::ptrdiff_t;
+
 	using allocator_type = Alloc;
 	using const_alloc_reference = const allocator_type&;
 	using allocator_traits = std::allocator_traits<allocator_type>;
@@ -49,13 +52,13 @@ public:
 
 	constexpr Vector() noexcept { }
 	constexpr explicit Vector(const_alloc_reference alloc) : m_alloc(alloc) { }
-	constexpr explicit Vector(std::size_t count, const_alloc_reference alloc = allocator_type()) : 
-		m_alloc(alloc) {
-		resize(count);
-	}
-	constexpr Vector(std::size_t count, const_reference value, const_alloc_reference alloc = allocator_type()) : 
+	constexpr Vector(size_type count, const_reference value, const_alloc_reference alloc = allocator_type()) : 
 		m_alloc(alloc) {
 		resize(count, value);
+	}
+	constexpr explicit Vector(size_type count, const_alloc_reference alloc = allocator_type()) : 
+		m_alloc(alloc) {
+		resize(count);
 	}
 	template <class It> constexpr Vector(It first, It last, const_alloc_reference alloc = allocator_type()) requires isIteratorValue<It> : 
 		m_alloc(alloc) {
@@ -63,46 +66,55 @@ public:
 			auto count = last - first;
 			smartReserve(count);
 
-			while (first != last) 
-				allocator_traits::construct(m_alloc, m_end++, *(first++));
+			for (; first != last; first++, m_end++) allocator_traits::construct(m_alloc, m_end, *first);
 		}
 	}
-	constexpr Vector(const_container_reference other) : 
-		Vector(other.m_begin, other.m_end) { }
-	constexpr Vector(const_container_reference other, const_alloc_reference alloc) : 
-		Vector(other.m_begin, other.m_end, alloc) { }
+	constexpr Vector(const_container_reference other) : Vector(other.m_begin, other.m_end) { }
+	constexpr Vector(const_container_reference other, const_alloc_reference alloc) : Vector(other.m_begin, other.m_end, alloc) { }
 	constexpr Vector(container_rvreference other) noexcept :
 		m_alloc(std::exchange(other.m_alloc, m_alloc)), 
 		m_begin(std::exchange(other.m_begin, pointer { })),
 		m_end(std::exchange(other.m_end, pointer { })),
 		m_cap(std::exchange(other.m_cap, pointer { })) { }
-	constexpr Vector(container_rvreference other, const_alloc_reference alloc) : 
-		m_alloc(alloc),
-		m_begin(std::exchange(other.m_begin, pointer { })),
-		m_end(std::exchange(other.m_end, pointer { })),
-		m_cap(std::exchange(other.m_cap, pointer { }))  { }
-	constexpr Vector(init_list ilist, const_alloc_reference alloc = allocator_type()) :
-		Vector(ilist.begin(), ilist.end(), alloc) { }
+	constexpr Vector(container_rvreference other, const_alloc_reference alloc) {
+		if (detail::allocatorPropagationNecessary(other.m_alloc, alloc))
+			moveAssign(other.m_begin, other.m_end, other.m_alloc);
+		else {
+			m_alloc = alloc;
+			std::swap(other.m_begin, m_begin);
+			std::swap(other.m_end, m_end);
+			std::swap(other.m_cap, m_cap);
+		}
+	}
+	constexpr Vector(init_list ilist, const_alloc_reference alloc = allocator_type()) : Vector(ilist.begin(), ilist.end(), alloc) { }
 
 	constexpr ~Vector() {
-		destructBehind(m_begin);
-		allocator_traits::deallocate(m_alloc, m_begin, m_cap - m_begin);
-		
-		m_begin = nullptr;
-		m_end = nullptr;
-		m_cap = nullptr;
+		if (m_begin) {
+			for (auto it = m_begin; it != m_end; it++) allocator_traits::destroy(m_alloc, m_begin);
+			allocator_traits::deallocate(m_alloc, m_begin, m_cap - m_begin);
+			
+			m_begin = nullptr;
+			m_end = nullptr;
+			m_cap = nullptr;
+		}
 	}
 
 	constexpr container_reference operator=(const_container_reference other) {
-		m_alloc = other.m_alloc;
-		assign(other.begin(), other.end());
+		clear();
+		moveAssign(other.m_begin, other.m_end, other.m_alloc);
 		return *this;
 	}
 	constexpr container_reference operator=(container_rvreference other) noexcept {
-		std::swap(other.m_alloc, m_alloc);
-		std::swap(other.m_begin, m_begin);
-		std::swap(other.m_end, m_end);
-		std::swap(other.m_cap, m_cap);
+		if (detail::allocatorPropagationNecessary(other.m_alloc, m_alloc)) {
+			clear();
+			moveAssign(other.m_begin, other.m_end, other.m_alloc);
+		} else {
+			std::swap(other.m_alloc, m_alloc);
+			std::swap(other.m_begin, m_begin);
+			std::swap(other.m_end, m_end);
+			std::swap(other.m_cap, m_cap);
+		}
+
 		return *this;
 	}
 	constexpr container_reference operator=(init_list ilist) {
@@ -110,7 +122,7 @@ public:
 		return *this;
 	}
 
-	constexpr void assign(std::size_t count, const_reference value) {
+	constexpr void assign(size_type count, const_reference value) {
 		clear();
 		resize(count, value);
 	}
@@ -121,8 +133,7 @@ public:
 			auto count = last - first;
 			smartReserve(count);
 
-			while (first != last) 
-				allocator_traits::construct(m_alloc, m_end++, *(first++));
+			for (; first != last; m_end++, first++) allocator_traits::construct(m_alloc, m_end, *first);
 		}
 	}
 	constexpr void assign(init_list ilist) {
@@ -185,39 +196,47 @@ public:
 		return *(m_end - 1);
 	}
 	
-	constexpr void resize(std::size_t count) {
+	constexpr void resize(size_type count) {
 		auto s = size();
-		if (count > s)
-			append(count - s);
-		else if (count < s) 
-			destructBehind(m_begin + count);
+		if (count > s) {
+			smartReserve(size() + count);
+
+			for (; count > 0; count--, m_end++) allocator_traits::construct(m_alloc, m_end);
+		} else if (count < s) {
+			auto pos = m_begin + count + 1;
+			for (auto it = pos; it != m_end; it++) allocator_traits::destroy(m_alloc, m_begin);
+			m_end = pos;
+		}
 	}
-	constexpr void resize(std::size_t count, const_reference value) {
+	constexpr void resize(size_type count, const_reference value) {
 		auto s = size();
 		if (count > s)
 			append(count - s, value);
-		else if (count < s) 
-			destructBehind(m_begin + count);
+		else if (count < s) {
+			auto pos = m_begin + count + 1;
+			for (auto it = pos; it != m_end; it++) allocator_traits::destroy(m_alloc, m_begin);
+			m_end = pos;
+		};
 	}
-	constexpr void reserve(std::size_t count) {
+	constexpr void reserve(size_type count) {
 		auto cap = capacity();
 
 		if (count > cap) {
-			auto s = size();
-			auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, count));
+			if (count > maxSize()) throw std::length_error("lsd::BasicString::reserve(): Count exceded maximum allocation size");
+			else {
+				auto s = size();
+				auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, count));
 
-			if (oldBegin) {
-				auto beginIt = m_begin;
-				auto oldBeginIt = oldBegin;
+				if (oldBegin) {
+					for (auto beginIt = m_begin, oldBeginIt = oldBegin; oldBeginIt != m_end; beginIt++, oldBeginIt++)
+						allocator_traits::construct(m_alloc, beginIt, std::move(*oldBeginIt));
 
-				while (oldBeginIt != m_end)
-					allocator_traits::construct(m_alloc, beginIt++, std::move(*(oldBeginIt++)));
+					allocator_traits::deallocate(m_alloc, oldBegin, cap);
+				}
 
-				allocator_traits::deallocate(m_alloc, oldBegin, cap);
+				m_end = m_begin + s;
+				m_cap = m_begin + count;
 			}
-
-			m_cap = m_begin + count;
-			m_end = m_begin + s;
 		}
 	}
 	constexpr void shrinkToFit() {
@@ -228,11 +247,8 @@ public:
 			auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, s));
 
 			if (oldBegin) {
-				auto beginIt = m_begin;
-				auto oldBeginIt = oldBegin;
-
-				while (oldBeginIt != m_end)
-					allocator_traits::construct(m_alloc, beginIt++, std::move(*(oldBeginIt++)));
+				for (auto beginIt = m_begin, oldBeginIt = oldBegin; oldBeginIt != m_end; beginIt++, oldBeginIt++)
+					allocator_traits::construct(m_alloc, beginIt, std::move(*oldBeginIt));
 
 				allocator_traits::deallocate(m_alloc, oldBegin, cap);
 			}
@@ -246,122 +262,47 @@ public:
 	}
 
 	constexpr iterator insert(const_iterator position, const_reference value) {
-		return constructBehind(position, value);
+		return insert(position, 1, value);
 	}
 	constexpr iterator insert(const_iterator position, rvreference value) {
-		return constructBehind(position, std::move(value));
+		auto pos = const_cast<pointer>(position.get());
+
+		auto ptr = eraseAndInsertGap(pos, 0, 1);
+		allocator_traits::construct(m_alloc, ptr, std::move(value));
+		
+		return ptr;
 	}
-	constexpr iterator insert(const_iterator position, std::size_t count, const_reference value) {
+	constexpr iterator insert(const_iterator position, size_type count, const_reference value) {
+		auto pos = const_cast<pointer>(position.get());
+
 		if (count != 0) {
-			// calculate general size and capacity information
-			auto minReserveCount = size() + count;
-			auto cap = capacity();
+			auto ptr = eraseAndInsertGap(pos, 0, count);
+			for (auto it = ptr; count != 0; count--, it++) allocator_traits::construct(m_alloc, it, value);
 
-			// convert position iterator to index
-			auto index = position - m_begin;
-
-			if (minReserveCount > cap) {
-				// reserve memory without constructing new memory, similar to smartReserve()
-				auto doubleCap = cap * 2;
-				auto reserveCount = (minReserveCount > doubleCap) ? minReserveCount : doubleCap;
-				auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, reserveCount));
-				
-				// calculate new iterators
-				m_end = m_begin + minReserveCount;
-				m_cap = m_begin + reserveCount;
-
-				// prepare some iterators for the following parts
-				auto pos = m_begin + index; // can't use position due to memory invalidation
-				auto it = m_begin;
-
-				// re-construct the vector in front of pos/position
-				while (it < pos && oldBegin)
-					allocator_traits::construct(m_alloc, it++, std::move(*(oldBegin++)));
-
-				// construct the in-between section from begin and end
-				for (; count > 0; count--)
-					allocator_traits::construct(m_alloc, it++, value);
-
-				// reconstruct the remaining parts of the vector
-				while (it < m_end && oldBegin)
-					allocator_traits::construct(m_alloc, it++, std::move(*(oldBegin++)));
-				
-				return pos;
-			} else {
-				auto oldEnd = std::exchange(m_end, m_end + count);
-				auto endIt = m_end;
-				auto pos = m_begin + index; // convert to non-const iterator
-
-				for (auto c = count; c > 0; c--) 
-					allocator_traits::construct(m_alloc, --endIt, std::move(*(--oldEnd)));
-
-				std::move_backward(pos, oldEnd, endIt);
-
-				std::fill_n(pos, count, value);
-				
-				return pos;
-			}
-		} else return const_cast<pointer>(position.get());
+			return ptr;
+		} else return pos;
 	}
 	template <class It> constexpr iterator insert(const_iterator position, It first, It last) requires isIteratorValue<It> {
+		auto pos = const_cast<pointer>(position.get());
+		
 		if (first != last) {
-			// calculate general size and capacity information
-			auto count = last - first;
-			auto minReserveCount = size() + count;
-			auto cap = capacity();
+			auto ptr = eraseAndInsertGap(pos, 0, last - first);
+			for (auto it = ptr; first != last; first++, it++) allocator_traits::construct(m_alloc, it, *first);
 
-			// convert position iterator to index
-			auto index = position - m_begin;
-
-			if (minReserveCount > cap) {
-				// reserve memory without constructing new memory, similar to smartReserve()
-				auto doubleCap = cap * 2;
-				auto reserveCount = (minReserveCount > doubleCap) ? minReserveCount : doubleCap;
-				auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, reserveCount));
-				
-				// calculate new iterators
-				m_end = m_begin + minReserveCount;
-				m_cap = m_begin + reserveCount;
-
-				// prepare some iterators for the following parts
-				auto pos = m_begin + index; // can't use position due to memory invalidation
-				auto it = m_begin;
-
-				// re-construct the vector in front of pos/position
-				while (it < pos && oldBegin)
-					allocator_traits::construct(m_alloc, it++, std::move(*(oldBegin++)));
-
-				// construct the in-between section from begin and end
-				while (first != last)
-					allocator_traits::construct(m_alloc, it++, std::move(*(first++)));
-
-				// reconstruct the remaining parts of the vector
-				while (it < m_end && oldBegin)
-					allocator_traits::construct(m_alloc, it++, std::move(*(oldBegin++)));
-
-				return pos;
-			} else {
-				auto oldEnd = std::exchange(m_end, m_end + count);
-				auto endIt = m_end;
-				auto pos = m_begin + index; // convert to non-const iterator
-
-				for (; count > 0; count--)
-					allocator_traits::construct(m_alloc, --endIt, std::move(*(--oldEnd)));
-
-				std::move_backward(pos, oldEnd, endIt);
-
-				std::copy(first, last, pos);
-
-				return pos;
-			}
-		} else return const_cast<pointer>(position.get());
+			return ptr;
+		} else return pos;
 	}
-	constexpr iterator insert(const_iterator pos, init_list ilist) {
-		return insert(pos, ilist.begin(), ilist.end());
+	constexpr iterator insert(const_iterator position, init_list ilist) {
+		return insert(position, ilist.begin(), ilist.end());
 	}
 
-	template <class... Args> constexpr iterator emplace(const_iterator pos, Args&&... args) {
-		return constructBehind(pos, std::forward<Args>(args)...);
+	template <class... Args> constexpr iterator emplace(const_iterator position, Args&&... args) {
+		auto pos = const_cast<pointer>(position.get());
+		
+		auto ptr = eraseAndInsertGap(pos, 0, 1);
+		allocator_traits::construct(m_alloc, ptr, std::forward<Args>(args)...);
+
+		return ptr;
 	}
 	template <class... Args> constexpr reference emplaceBack(Args&&... args) {
 		smartReserve(size() + 1);
@@ -390,10 +331,11 @@ public:
 		assert((pos < end()) && "lsd::Vector::erase: past-end iterator passed to erase!");
 
 		auto it = m_begin + (pos - m_begin);
-		allocator_traits::destroy(m_alloc, &*it);
 
-		allocator_traits::construct(m_alloc, &*it++, std::move(*it)); // weird bit here because it needs to reconstruct the previously destroyed element
-		std::move(it + 1, m_end, it);
+		allocator_traits::destroy(m_alloc, it);
+		allocator_traits::construct(m_alloc, it, std::move(*(it + 1))); // weird bit here because it needs to reconstruct the previously destroyed piece of memory
+
+		std::move(it + 2, m_end, it + 1); // move the other elements normally
 
 		popBack();
 
@@ -402,51 +344,32 @@ public:
 	constexpr iterator erase(const_iterator first, const_iterator last) {
 		auto it = m_begin + (first - m_begin);
 
-		if (first != last) {
-			auto distance = last - first;
-			auto lastIt = it + distance;
-
-			if (distance >= (m_end - last)) { // if there are more deleted elements than elements at the end, the while loop is centered around moving the end into the deleted section
-				while (lastIt != m_end) {
-					allocator_traits::destroy(m_alloc, it);
-					allocator_traits::construct(m_alloc, it++, std::move(*(lastIt++)));
-				}
-			} else { // otherwise focus on getting the entire section deleted first, then move the remaining elements at the end
-				while (it != last) {
-					allocator_traits::destroy(m_alloc, it);
-					allocator_traits::construct(m_alloc, it++, std::move(*(lastIt++)));
-				}
-
-				it = std::move(lastIt, m_end, it);
-			}
-
-			destructBehind(it);
-		}
-
-		return it;
+		if (first != last) return eraseAndInsertGap(it, last - first, 0);
+		else return it;
 	}
 
 	constexpr void popBack() {
-		destructBehind(m_end - 1);
+		allocator_traits::destroy(m_alloc, --m_end);
 	}
 	[[deprecated]] constexpr void pop_back() {
 		popBack();
 	}
 
 	constexpr void clear() {
-		destructBehind(m_begin);
+		for (auto it = m_begin; it != m_end; it++) allocator_traits::destroy(m_alloc, m_begin);
+		m_end = m_begin;
 	}
 
-	[[nodiscard]] constexpr std::size_t size() const noexcept {
+	[[nodiscard]] constexpr size_type size() const noexcept {
 		return m_end - m_begin;
 	}
-	[[nodiscard]] constexpr std::size_t maxSize() const noexcept {
-		return std::min<std::size_t>(-1, allocator_traits::max_size(m_alloc));
+	[[nodiscard]] constexpr size_type maxSize() const noexcept {
+		return std::min<size_type>(-1, allocator_traits::max_size(m_alloc));
 	}
-	[[deprecated]] [[nodiscard]] constexpr std::size_t max_size() const noexcept {
+	[[deprecated]] [[nodiscard]] constexpr size_type max_size() const noexcept {
 		return maxSize();
 	}
-	[[nodiscard]] constexpr std::size_t capacity() const noexcept {
+	[[nodiscard]] constexpr size_type capacity() const noexcept {
 		return m_cap - m_begin;
 	}
 	[[nodiscard]] constexpr bool empty() const noexcept {
@@ -467,22 +390,22 @@ public:
 		return allocator();
 	}
 
-	[[nodiscard]] constexpr const_reference at(std::size_t index) const {
+	[[nodiscard]] constexpr const_reference at(size_type index) const {
 		auto ptr = m_begin + index;
 		if (ptr >= m_end) throw std::out_of_range("lsd::Vector::at(): Index exceded array bounds!");
 		return *ptr;
 	}
-	[[nodiscard]] constexpr reference at(std::size_t index) {
+	[[nodiscard]] constexpr reference at(size_type index) {
 		auto ptr = m_begin + index;
 		if (ptr >= m_end) throw std::out_of_range("lsd::Vector::at(): Index exceded array bounds!");
 		return *ptr;
 	}
-	[[nodiscard]] constexpr const_reference operator[](std::size_t index) const {
+	[[nodiscard]] constexpr const_reference operator[](size_type index) const {
 		auto ptr = m_begin + index;
 		assert((ptr < m_end) && "lsd::Vector::operator[]: Index exceded array bounds!");
 		return *ptr;
 	}
-	[[nodiscard]] constexpr reference operator[](std::size_t index) {
+	[[nodiscard]] constexpr reference operator[](size_type index) {
 		auto ptr = m_begin + index;
 		assert((ptr < m_end) && "lsd::Vector::operator[]: Index exceded array bounds!");
 		return *ptr;
@@ -495,7 +418,7 @@ private:
 	pointer m_end { };
 	pointer m_cap { };
 
-	constexpr void smartReserve(std::size_t size) noexcept {
+	constexpr void smartReserve(size_type size) noexcept {
 		auto cap = capacity();
 
 		if (size > cap) {
@@ -503,73 +426,84 @@ private:
 			reserve((newCap < size) ? size : newCap);
 		}
 	}
-	constexpr void resizeAndClear(std::size_t size) noexcept { // exclusively for hashmap utility
-		clear();
-		resize(size);
-	}
 	
-	constexpr void append(std::size_t count) noexcept {
-		smartReserve(size() + count);
+	template <class It> constexpr void moveAssign(It first, It last, const_alloc_reference alloc) requires isIteratorValue<It> {
+		m_alloc = alloc;
 
-		for (; count > 0; count--) allocator_traits::construct(m_alloc, m_end++);
-	}
-	constexpr void append(std::size_t count, const_reference value) noexcept {
-		smartReserve(size() + count);
-		
-		for (; count > 0; count--) allocator_traits::construct(m_alloc, m_end++, value);
-	}
+		if (first != last) {
+			auto count = last - first;
+			smartReserve(count);
 
-	template <class... Args, class DstIt> constexpr iterator constructBehind(DstIt position, Args&&... args) noexcept requires isIteratorValue<DstIt> {
-		// calculate general size and capacity information
-		auto minReserveCount = size() + 1;
-		auto cap = capacity();
-
-		// convert position iterator to index
-		auto index = position - m_begin;
-
-		if (minReserveCount > cap) {
-			// reserve memory without constructing new memory, similar to smartReserve()
-			auto reserveCount = std::max(cap * 2, std::size_t(1));
-			auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, reserveCount));
-			
-			// calculate new iterators
-			m_end = m_begin + minReserveCount;
-			m_cap = m_begin + reserveCount;
-
-			// prepare some iterators for the following parts
-			auto pos = m_begin + index; // can't use position due to memory invalidation
-			auto it = m_begin;
-
-			// re-construct the vector in front of pos/position
-			while (it < pos && oldBegin)
-				allocator_traits::construct(m_alloc, it++, std::move(*(oldBegin++)));
-
-			// construct the in-between element from begin and end
-			allocator_traits::construct(m_alloc, it++, std::forward<Args>(args)...);
-
-			// reconstruct the remaining parts of the vector
-			while (it < m_end && oldBegin)
-				allocator_traits::construct(m_alloc, it++, std::move(*(oldBegin++)));
-			
-			return pos;
-		} else {
-			auto oldEnd = m_end++;
-			auto pos = m_begin + index; // convert to non-const iterator
-
-			if (pos < oldEnd || m_end > m_begin) { // edge case, there is probably a better way to do this
-				allocator_traits::construct(m_alloc, oldEnd, std::move(*oldEnd));
-				--oldEnd;
-				std::move_backward(pos, oldEnd, oldEnd + 1);
-			}
-
-			allocator_traits::construct(m_alloc, pos, std::forward<Args>(args)...);
-
-			return pos;
+			for (; first != last; first++, m_end++) allocator_traits::construct(m_alloc, m_end, std::move(*first));
 		}
 	}
+	constexpr void append(size_type count, const_reference value) noexcept {
+		smartReserve(size() + count);
+		for (; count > 0; count--, m_end++) allocator_traits::construct(m_alloc, m_end, value);
+	}
 
-	template <class It> constexpr void destructBehind(It position) requires isIteratorValue<It> {
-		while (m_end != position) allocator_traits::destroy(m_alloc, --m_end);
+	constexpr pointer eraseAndInsertGap(pointer position, size_type eraseCount, size_type gapSize) { // does not check for validity of eraseCount or gapSize
+		auto oldSize = size();
+		auto oldCap = capacity();
+
+		auto newSize = oldSize + gapSize - eraseCount;
+
+		if (newSize > oldCap) {
+			// convert position to index
+			auto index = position - m_begin;
+
+			// reserve memory without constructing new memory, similar to smartReserve()
+			auto doubleCap = oldCap * 2;
+			auto reserveCount = (newSize > doubleCap) ?newSize : doubleCap;
+			auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, reserveCount));
+			
+			// calculate new pointers
+			m_end = m_begin + newSize;
+			m_cap = m_begin + reserveCount;
+
+			if (oldBegin) {
+				// prepare some iterators for the following parts
+				auto it = m_begin;
+				auto begIt = oldBegin;
+
+				// re-construct the vector in front of pos/position
+				for (; it < (m_begin + index); it++, begIt++)
+					allocator_traits::construct(m_alloc, it, *begIt);
+				
+				it += gapSize;
+				begIt += eraseCount;
+
+				// reconstruct the remaining parts of the vector
+				for (; it <= m_end; it++, begIt++)
+					allocator_traits::construct(m_alloc, it, *begIt);
+
+				allocator_traits::deallocate(m_alloc, oldBegin, oldCap);
+			}
+
+			return m_begin + index;
+		} else {
+			auto oldEnd = std::exchange(m_end, m_end + gapSize - eraseCount);	
+
+			if (oldSize != 0) {
+				auto endIt = m_end;
+				auto oldEndIt = oldEnd;
+				auto moveBegin = position + std::min(eraseCount, gapSize);
+
+				for (auto count = m_end - oldEnd; count > 0 && oldEndIt > moveBegin; --oldEndIt, --endIt, count--) {
+					allocator_traits::construct(m_alloc, endIt, std::move(*oldEndIt));
+					allocator_traits::destroy(m_alloc, oldEndIt);
+				}
+
+				std::move_backward(moveBegin, oldEndIt, endIt);
+
+				for (; oldEndIt != moveBegin; --endIt, --oldEndIt) { // custom std::move_backward
+					*endIt = std::move(*oldEndIt);
+					allocator_traits::destroy(m_alloc, oldEndIt);
+				}
+			}
+			
+			return position;
+		}
 	}
 
 	template <class, class, class, class, class> friend class UnorderedSparseMap;
