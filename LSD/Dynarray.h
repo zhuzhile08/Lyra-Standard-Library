@@ -11,7 +11,6 @@
 
 #pragma once
 
-#include "Utility.h"
 #include "Array.h"
 #include "Iterators.h"
 
@@ -108,64 +107,63 @@ template <DynarrayValueType Ty, std::size_t Capacity> struct Dynarray {
 
 
 	[[nodiscard]] constexpr reference front() {
-		return m_array[0];
+		return *m_array.m_array;
 	}
 	[[nodiscard]] constexpr const_reference front() const {
-		return m_array[0];
+		return *m_array.m_array;
 	}
 	[[nodiscard]] constexpr reference back() {
-		return m_array[sizeToIndex(m_size)];
+		return *((m_array.m_array + m_size) - 1);
 	}
 	[[nodiscard]] constexpr const_reference back() const {
-		return m_array[sizeToIndex(m_size)];
+		return *((m_array.m_array + m_size) - 1);
 	}
 
 	[[nodiscard]] constexpr iterator begin() noexcept {
-		return m_array.begin();
+		return m_array.m_array;
 	}
 	[[nodiscard]] constexpr const_iterator begin() const noexcept {
-		return m_array.begin();
+		return m_array.m_array;
 	}
 	[[nodiscard]] constexpr const_iterator cbegin() const noexcept {
-		return m_array.begin();
+		return m_array.m_array;
 	}
 	[[nodiscard]] constexpr iterator end() noexcept {
-		return &m_array.m_array[m_size];
+		return m_array.m_array + m_size;
 	}
 	[[nodiscard]] constexpr const_iterator end() const noexcept {
-		return &m_array.m_array[m_size];
+		return m_array.m_array + m_size;
 	}
 	[[nodiscard]] constexpr const_iterator cend() const noexcept {
-		return &m_array.m_array[m_size];
+		return m_array.m_array + m_size;
 	}
 	[[nodiscard]] constexpr iterator arrayEnd() noexcept {
-		return m_array.end();
+		return m_array.m_array + Capacity;
 	}
 	[[nodiscard]] constexpr const_iterator arrayEnd() const noexcept {
-		return m_array.end();
+		return m_array.m_array + Capacity;
 	}
 	[[nodiscard]] constexpr const_iterator carrayEnd() const noexcept {
-		return m_array.cend();
+		return m_array.m_array + Capacity;
 	}
 	[[nodiscard]] constexpr reverse_iterator rbegin() noexcept {
-		return &m_array.m_array[sizeToIndex(m_size)];
+		return m_array.m_array + std::max(m_size, 1) - 1;
 	}
 	[[nodiscard]] constexpr const_iterator rbegin() const noexcept {
-		return &m_array.m_array[sizeToIndex(m_size)];
+		return m_array.m_array + std::max(m_size, 1) - 1;
 	}
 	[[nodiscard]] constexpr const_iterator crbegin() const noexcept {
-		return &m_array.m_array[sizeToIndex(m_size)];
+		return m_array.m_array + std::max(m_size, 1) - 1;
 	}
 	[[nodiscard]] constexpr iterator rend() noexcept {
-		return m_array.rend();
+		return m_array.m_array - 1;
 	}
 	[[nodiscard]] constexpr const_iterator rend() const noexcept {
-		return m_array.rend();
+		return m_array.m_array - 1;
 	}
 	[[nodiscard]] constexpr const_iterator crend() const noexcept {
-		return m_array.rend();
+		return m_array.m_array - 1;
 	}
-
 
 	constexpr void resize(size_type size) noexcept {
 		if (m_size < size) m_size = size;

@@ -45,53 +45,53 @@ template <class Ty, std::size_t Size> struct Array {
 	}
 
 	[[nodiscard]] constexpr reference front() {
-		return m_array[0];
+		return *m_array;
 	}
 	[[nodiscard]] constexpr const_reference front() const {
-		return m_array[0];
+		return *m_array;
 	}
 	[[nodiscard]] constexpr reference back() {
-		return m_array[Size - 1];
+		return *--(m_array + Size);
 	}
 	[[nodiscard]] constexpr const_reference back() const {
-		return m_array[Size - 1];
+		return *--(m_array + Size);
 	}
 
 	[[nodiscard]] constexpr iterator begin() noexcept {
-		return &m_array[0];
+		return m_array;
 	}
 	[[nodiscard]] constexpr const_iterator begin() const noexcept {
-		return &m_array[0];
+		return m_array;
 	}
 	[[nodiscard]] constexpr const_iterator cbegin() const noexcept {
-		return &m_array[0];
+		return m_array;
 	}
 	[[nodiscard]] constexpr iterator end() noexcept {
-		return &m_array[Size];
+		return m_array + Size;
 	}
 	[[nodiscard]] constexpr const_iterator end() const noexcept {
-		return &m_array[Size];
+		return m_array + Size;
 	}
 	[[nodiscard]] constexpr const_iterator cend() const noexcept {
-		return &m_array[Size];
+		return m_array + Size;
 	}
 	[[nodiscard]] constexpr reverse_iterator rbegin() noexcept {
-		return (&m_array[Size]) - 1;
+		return (m_array + Size) - 1;
 	}
 	[[nodiscard]] constexpr const_reverse_iterator rbegin() const noexcept {
-		return (&m_array[Size]) - 1;
+		return (m_array + Size) - 1;
 	}
 	[[nodiscard]] constexpr const_reverse_iterator crbegin() const noexcept {
-		return (&m_array[Size]) - 1;
+		return (m_array + Size) - 1;
 	}
 	[[nodiscard]] constexpr reverse_iterator rend() noexcept {
-		return (&m_array[0]) - 1;
+		return m_array - 1;
 	}
 	[[nodiscard]] constexpr const_reverse_iterator rend() const noexcept {
-		return (&m_array[0]) - 1;
+		return m_array - 1;
 	}
 	[[nodiscard]] constexpr const_iterator crend() const noexcept {
-		return (&m_array[0]) - 1;
+		return m_array - 1;
 	}
 
 	[[nodiscard]] constexpr reference operator[](size_type index) noexcept {
