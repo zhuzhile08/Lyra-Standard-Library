@@ -437,6 +437,31 @@ using U16StringView = BasicStringView<char16_t>;
 using U32StringView = BasicStringView<char32_t>;
 
 
+inline namespace literals {
+
+inline namespace string_literals {
+
+constexpr StringView operator""_sv(const char* str, std::size_t len) {
+	return StringView { str, len };
+}
+constexpr U8StringView operator""_sv(const char8_t* str, std::size_t len) {
+	return U8StringView { str, len };
+}
+constexpr U16StringView operator""_sv(const char16_t* str, std::size_t len) {
+	return U16StringView { str, len };
+}
+constexpr U32StringView operator""_sv(const char32_t* str, std::size_t len) {
+	return U32StringView { str, len };
+}
+constexpr WStringView operator""_sv(const wchar_t* str, std::size_t len) {
+	return WStringView { str, len };
+}
+
+} // inline namespace literals
+
+} // inline namespace string_literals
+
+
 template <class C> struct Hash<BasicStringView<C>> {
 	using view_type = BasicStringView<C>;
 
@@ -460,5 +485,10 @@ template <class C> struct Hash<BasicStringView<C>> {
 		return hash;
 	}
 };
+
+
+template <class CharTy, class Traits> auto quoted(const lsd::BasicStringView<CharTy, Traits>& str, CharTy delim = CharTy('"'), CharTy escape = CharTy('\\')) {
+	return quoted(str.data(), delim, escape);
+}
 
 } // namespace lsd
