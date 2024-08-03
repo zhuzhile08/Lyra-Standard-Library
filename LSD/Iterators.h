@@ -266,6 +266,42 @@ private:
 	node_base* m_pointer;
 };
 
+
+template <class Ty> concept AppendableContainer = requires(Ty c, Ty::value_type v) {
+	typename Ty::value_type;
+	c.push_back(v);
+	c.push_back(std::move(v));
+};
+
+template <AppendableContainer Ty> class BackInsertIterator {
+public:
+	using iterator_category = std::output_iterator_tag;
+	using value_type = void;
+	using difference_type = std::ptrdiff_t;
+	using pointer = void;
+	using reference = void;
+	using container_type = Ty;
+
+	constexpr explicit BackInsertIterator(container_type& c) : m_container(&c) { }
+
+	constexpr BackInsertIterator& operator=(const typename container_type::value_type& value) {
+		m_container->push_back(value);
+		return *this;
+	}
+	constexpr BackInsertIterator& operator=(typename container_type::value_type&& value) {
+		m_container->push_back(std::move(value));
+		return *this;
+	}
+
+	constexpr BackInsertIterator& operator*() { return *this; }
+	constexpr BackInsertIterator& operator++() { return *this; }
+	constexpr BackInsertIterator& operator++(int) { return *this; }
+
+private:
+	container_type* m_container;
+};
+
+
 template <class, class = void> struct IsIterator : public std::false_type { };
 template <class Ty> struct IsIterator<Ty, std::void_t<
 	typename std::iterator_traits<Ty>::difference_type,
