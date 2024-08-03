@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include "Utility.h"
+
 #include <type_traits>
 #include <typeindex>
 #include <functional>
@@ -60,6 +62,12 @@ template <> struct Hash<std::filesystem::path> {
 template <> struct Hash<std::string> {
 	std::size_t operator()(const std::string& p) const noexcept {
 		return std::hash<std::string>()(p); /// @todo implement own hash function
+	}
+};
+
+template <EnumType Enum> struct Hash<Enum> {
+	constexpr std::size_t operator()(Enum e) const noexcept {
+		return static_cast<std::size_t>(e);
 	}
 };
 
