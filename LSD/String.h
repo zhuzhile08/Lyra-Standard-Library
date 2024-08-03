@@ -12,6 +12,7 @@
 #pragma once
 
 #include "CoreUtility.h"
+#include "Utility.h"
 #include "Hash.h"
 #include "Iterators.h"
 #include "CharTraits.h"
@@ -1096,16 +1097,17 @@ public:
 
 	template <class ReturnType, class Caster, class... Args> [[nodiscard]] ReturnType castTo(Caster caster, std::size_t* pos, Args&&... args) const {
 		auto it = pBegin();
-		for (; !std::isspace(*it); it++) { }
+		pointer endPtr = { };
 
-		if (pos) {
-			value_type c { };
-			auto cPtr = &c;
-			auto res = caster(it, &cPtr, std::forward<Args>(args)...);
+		errno = 0;
+		auto res = caster(it, &endPtr, std::forward<Args>(args)...);
 
-			*pos = c;
-			return res;
-		} else return caster(it, nullptr, std::forward<Args>(args)...);
+		if (errno == ERANGE) throw std::out_of_range("lsd::BasicString::castTo: Number exceeded type limits!");
+		if (endPtr == it) throw std::invalid_argument("lsd::BasicString::castTo: No valid conversion!"); ///@todo may need more checks
+
+		if (pos) *pos = endPtr - it;
+		
+		return res;
 	}
 	template <class CastType, std::size_t Count> [[nodiscard]] static container castFrom(CastType value, const_pointer format) requires(std::is_arithmetic_v<CastType> && (std::is_same_v<value_type, char> || std::is_same_v<value_type, wchar_t>)) {
 		value_type buf[Count] = { };
@@ -1605,6 +1607,17 @@ template <class C> struct Hash<BasicString<C>> {
 }
 [[nodiscard]] inline WString toWString(long double value) {
 	return WString::castFrom<long double, sizeof(long double) * 8 + 1>(value, L"%g");
+}
+template <EnumType Enum> [[nodiscard]] inline String toString(Enum e) {
+	return lsd::toString(static_cast<std::underlying_type_t<Enum>>(e));
+}
+template <EnumType Enum> [[nodiscard]] inline WString toWString(Enum e) {
+	return lsd::toString(static_cast<std::underlying_type_t<Enum>>(e));
+}
+
+
+template <class CharTy, class Traits, class Alloc> auto quoted(const lsd::BasicString<CharTy, Traits, Alloc>& str, CharTy delim = CharTy('"'), CharTy escape = CharTy('\\')) {
+	return quoted(str.data(), delim, escape);
 }
 
 } // namespace lsd
