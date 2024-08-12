@@ -67,6 +67,8 @@ public:
 	constexpr BasicStringView(std::nullptr_t) = delete;
 	constexpr BasicStringView(const_container_reference) noexcept = default;
 
+	constexpr container_reference& operator=(const_container_reference) noexcept = default;
+
 	constexpr void swap(container_reference other) noexcept {
 		std::swap(m_begin, other.m_begin);
 		std::swap(m_end, other.m_end);
