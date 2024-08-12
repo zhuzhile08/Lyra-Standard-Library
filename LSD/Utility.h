@@ -43,10 +43,10 @@ template <class Ty> [[nodiscard]] constexpr inline const void* getAddress(const 
 
 // implicit cast
 
-template <class To, class From, std::enable_if_t<std::is_convertible_v<From, To>, int> = 0> [[nodiscard]] constexpr inline To implicitCast(const From& arg) {
+template <class Ty> [[nodiscard]] constexpr inline Ty implicitCast(std::type_identity_t<Ty> arg) noexcept(std::is_nothrow_constructible_v<Ty>) {
 	return arg;
 }
-template <class To, class From, std::enable_if_t<std::is_convertible_v<From, To>, int> = 0> [[deprecated]] [[nodiscard]] constexpr inline To implicit_cast(const From& arg) {
+template <class Ty> [[deprecated]] [[nodiscard]] constexpr inline Ty implicit_cast(std::type_identity_t<Ty> arg) noexcept(std::is_nothrow_constructible_v<Ty>) {
 	return arg;
 }
 
