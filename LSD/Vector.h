@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "CoreUtility.h"
+#include "Detail/CoreUtility.h"
 #include "Iterators.h"
 
 #include <cstdlib>
