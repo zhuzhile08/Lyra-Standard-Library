@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <concepts>
 #include <type_traits>
 
 namespace lsd {
@@ -32,8 +33,20 @@ template <EnumType Enum> constexpr inline Enum operator|(Enum first, Enum second
 		static_cast<std::underlying_type_t<Enum>>(second)
 	);
 }
+template <EnumType Enum, std::integral Num> constexpr inline Enum operator|(Enum first, Enum second) noexcept {
+	return static_cast<Enum>(
+		static_cast<std::underlying_type_t<Enum>>(first) |
+		static_cast<std::underlying_type_t<Enum>>(second)
+	);
+}
 
 template <EnumType Enum> Enum constexpr inline operator&(Enum first, Enum second) noexcept {
+	return static_cast<Enum>(
+		static_cast<std::underlying_type_t<Enum>>(first) &
+		static_cast<std::underlying_type_t<Enum>>(second)
+	);
+}
+template <EnumType Enum, std::integral Num> Enum constexpr inline operator&(Enum first, Num second) noexcept {
 	return static_cast<Enum>(
 		static_cast<std::underlying_type_t<Enum>>(first) &
 		static_cast<std::underlying_type_t<Enum>>(second)
@@ -46,6 +59,12 @@ template <EnumType Enum> Enum constexpr inline operator^(Enum first, Enum second
 		static_cast<std::underlying_type_t<Enum>>(second)
 	);
 }
+template <EnumType Enum, std::integral Num> Enum constexpr inline operator^(Enum first, Num second) noexcept {
+	return static_cast<Enum>(
+		static_cast<std::underlying_type_t<Enum>>(first) ^
+		static_cast<std::underlying_type_t<Enum>>(second)
+	);
+}
 
 template <EnumType Enum> Enum constexpr inline operator~(Enum first) noexcept {
 	return static_cast<Enum>(
@@ -53,7 +72,14 @@ template <EnumType Enum> Enum constexpr inline operator~(Enum first) noexcept {
 	);
 }
 
+
 template <EnumType Enum> Enum constexpr inline operator|=(Enum& first, Enum second) noexcept {
+	return (first = static_cast<Enum>(
+		static_cast<std::underlying_type_t<Enum>>(first) |
+		static_cast<std::underlying_type_t<Enum>>(second)
+	));
+}
+template <EnumType Enum, std::integral Num> Enum constexpr inline operator|=(Enum& first, Num second) noexcept {
 	return (first = static_cast<Enum>(
 		static_cast<std::underlying_type_t<Enum>>(first) |
 		static_cast<std::underlying_type_t<Enum>>(second)
@@ -66,12 +92,28 @@ template <EnumType Enum> Enum constexpr inline operator&=(Enum& first, Enum seco
 		static_cast<std::underlying_type_t<Enum>>(second)
 	));
 }
+template <EnumType Enum, std::integral Num> Enum constexpr inline operator&=(Enum& first, Num second) noexcept {
+	return (first = static_cast<Enum>(
+		static_cast<std::underlying_type_t<Enum>>(first) &
+		static_cast<std::underlying_type_t<Enum>>(second)
+	));
+}
 
 template <EnumType Enum> Enum constexpr inline operator^=(Enum& first, Enum second) noexcept {
 	return (first = static_cast<Enum>(
 		static_cast<std::underlying_type_t<Enum>>(first) ^
 		static_cast<std::underlying_type_t<Enum>>(second)
 	));
+}
+template <EnumType Enum, std::integral Num> Enum constexpr inline operator^=(Enum& first, Num second) noexcept {
+	return (first = static_cast<Enum>(
+		static_cast<std::underlying_type_t<Enum>>(first) ^
+		static_cast<std::underlying_type_t<Enum>>(second)
+	));
+}
+
+template <EnumType Enum, std::integral Num> bool constexpr inline operator==(Enum first, Num second) noexcept {
+	return first == static_cast<Enum>(second);
 }
 
 } // inline namespace enum_operators
