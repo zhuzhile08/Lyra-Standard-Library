@@ -50,6 +50,17 @@ bool caselessStrNCmp(Iterator lhs, Iterator lcrhs, std::size_t count) {
 	} return true;
 }
 
+
+// digit validity checks
+
+constexpr inline std::size_t isHexDigit(int digit) noexcept {
+    return (digit >= '0' && digit <= '9') || (digit >= 'A' && digit <= 'F') || (digit >= 'a' && digit <= 'f');
+}
+
+constexpr inline std::size_t isDecDigit(int digit) noexcept {
+    return digit >= '0' && digit <= '9';
+}
+
 } // namespace detail
 
 } // namespace lsd
