@@ -17,56 +17,37 @@
 #include <type_traits>
 #include <system_error>
 #include <cctype>
+#include <bit>
 
 namespace lsd {
 
 namespace detail {
 
-// floating point internal data
+// floating point internal data conversion
 
-template <std::size_t> struct FloatingPointData { };
-template <> struct FloatingPointData<4> {
-public:
-	std::uint32_t val;
-};
-template <> struct FloatingPointData<8> {
-public:
-	std::uint64_t val;
-};
+template <std::size_t Size, std::enable_if_t<Size == 4 || Size == 8, int> = 0>
+auto writeToFloatingPointBits(bool negative, std::uint64_t mant, std::uint64_t exp) {
+    if constexpr (Size == 8) {
+        std::uint64_t res { };
+        std::size_t digitCount = std::bit_width(mant) - 1;
 
+        if (negative) res += (std::uint64_t(1) << 63); // set sign if negative
+		res += (exp + 1023) << 52; // set exponent
+        res += (mant & ~(1 << digitCount) << (52 - digitCount)); // set mantissa
 
-template <std::size_t Size> constexpr void makeFloatingPointNegative(FloatingPointData<Size>& data) noexcept {
-    data.val += (decltype(data.val)(1) << Size * 8 - 1);
-}
-
-template <std::size_t Size> constexpr bool setFloatingPointExponent(FloatingPointData<Size>& data, std::int64_t exp) noexcept {
-	if constexpr (Size == 8) {
-		if (exp > 1023 || exp < -1022) return false;
-        else data.val += (exp + 1023) << 52;
+        return res;
 	} else {
-        if (exp > 127 || exp < -126) return false;
-        else data.val += (exp + 127) << 23;
+        std::uint32_t res { };
+        std::size_t digitCount = std::bit_width(mant) - 1;
+        
+        if (negative) res += (std::uint32_t(1) << 31);  // set sign if negativ
+        res += (exp + 127) << 23; // set exponent
+        res += (mant << (23 - digitCount)) & ~(1 << 23); // set mantissa
+
+        printf("%u\n", res);
+
+        return res;
     }
-
-    return true;
-}
-
-template <std::size_t Size> constexpr void setFloatingPointMantissa(FloatingPointData<Size>& data, std::uint64_t mantissa) noexcept {
-    std::size_t digitCount { };
-
-    for (auto m = mantissa; m > 1; m >>= 1, ++digitCount)
-    ;
-    mantissa &= ~(1 << digitCount);
-
-    if constexpr (Size == 8) data.val += (mantissa << (52 - digitCount));
-    else data.val += (mantissa << (23 - digitCount));
-}
-
-
-// digit validity checks
-
-constexpr inline std::size_t isHexDigit(int digit) noexcept {
-    return (digit >= '0' && digit <= '9') || (digit >= 'A' && digit <= 'F') || (digit >= 'a' && digit <= 'f');
 }
 
 
@@ -87,134 +68,20 @@ constexpr inline std::size_t decDigitToRequiredBits(int digit) noexcept {
 }
 
 
-// floating point parser
+// fast integer power
+constexpr inline std::uint64_t fastUIntPow(std::uint64_t n, std::uint64_t exp) noexcept {
+    if (exp == 0) return 1;
 
-template <class Literal> struct FloatingPointParseResult {
-public:
-	BasicStringView<Literal> whole { };
-	BasicStringView<Literal> frac { };
-	std::int64_t exp { };
-};
-
-template <class Iterator, typename std::enable_if_t<isIteratorValue<Iterator> && std::is_integral_v<typename std::iterator_traits<Iterator>::value_type>, int> = 0> 
-constexpr bool parseFloatingPoint(Iterator begin, Iterator end, CharsFormat fmt, FloatingPointParseResult<typename std::iterator_traits<Iterator>::value_type>& res) {
-    using view_type = BasicStringView<typename std::iterator_traits<Iterator>::value_type>;
-
-    Iterator it = begin;
-    Iterator begIt = begin;
-
-    bool isWholeZero = true;
-
-    if (fmt == CharsFormat::hex) {
-        for (; it != end && isHexDigit(*it); it++) { 
-            if (isWholeZero && *it != '0') { // checks for leading zeros
-				isWholeZero = false;
-				begIt = it;
-			}
-        }
-
-        if (begin != it) {
-            res.whole = view_type(begIt, it);
-            ++(begIt = it);
-
-            if (it != end && *it == '.') {
-                ++it;
-
-                for (; it != end && isHexDigit(*it); it++);
-                
-                if (it != begIt) res.frac = view_type(begIt, it);
-                else return false;
-            }
-            
-            if (it != end && *it++ == 'p' && it != end) {
-                if (*it == '+') ++it;
-                
-                if (fromChars(it, end, res.exp, 16).ptr != it && res.exp <= std::numeric_limits<std::int64_t>::max() / 4) {
-                    res.exp *= 4;
-                    /*
-                    The following calculations are hard to understand, so here is a brief explaination:
-            
-                    The mantissa needs to be in the binary scientific format
-                    This is to calculate the additional amount needed in the exponent to make that possible
-
-                    If the number > 1, i.e. the whole part is equal to zero:
-
-                    We will need to add a number to the exponent
-
-                    If the number < 1, i.e. the whole part is greater than zero:
-
-                    We will need to subtract a number from the exponent
-                    
-                    */
-
-                    if (isWholeZero) {
-                        auto firstNonZero = res.frac.findFirstNotOf('0');
-                        std::int64_t expDiff = firstNonZero * 4 + 4 - ((firstNonZero < res.frac.size()) ? hexDigitToRequiredBits(res.frac[firstNonZero]) : 4);
-
-                        if (res.exp >= std::numeric_limits<std::int64_t>::min() + expDiff) {
-                            res.exp -= expDiff;
-                            return true;
-                        } else return false;
-                    } else {
-                        std::int64_t expDiff = res.whole.size() * 4 - 4 + hexDigitToRequiredBits(res.whole.front()) - 1;
-
-                        if (res.exp <= std::numeric_limits<std::int64_t>::max() - expDiff) {
-                            res.exp += expDiff;
-                            return true;
-                        } else return false;
-                    }
-                } else return false;
-            } else return false;
-        } else return false;
-    } else {
-        for (; it != end && *it >= '0' && *it <= '9'; it++) { 
-            isWholeZero = false;
-				begIt = it;
-        }
-
-        if (begin != it) {
-            res.whole = view_type(begIt, it);
-            ++(begIt = it);
-
-            if (*it == '.') {
-                ++it;
-
-                for (; it != end && *it >= '0' && *it <= '9'; it++);
-
-                if (it == begIt) return false;
-                else res.frac = view_type(begIt, it);
-            }
-            
-            if (*it == 'e') {
-                if (*++it == '+') ++it;
-                
-                if (fromChars(it, end, res.exp, 10).ptr != it) {
-                    /*
-                    if (isWholeZero) {
-                        auto exp = res.exp;
-                        res.exp += res.whole.size() * 4 - 4 + decDigitToRequiredBits(res.whole.front());
-
-                        if (res.exp <= exp) return false;
-                        else return true;
-                    } else {
-                        auto exp = res.exp;
-                        auto firstNonZero = res.frac.find_first_not_of('0');
-                        res.exp -= firstNonZero * 4 + decDigitToRequiredBits(res.frac[firstNonZero]);
-
-                        if (res.exp <= exp) return false;
-                        else return true;
-                    }
-                    */
-                    return true;
-                } else return false;
-            } else return false;
-        } else return false;
-    }
+    std::uint64_t res = n;
+    for (; exp > 0; exp--, res *= n) 
+    ;
+    return res;
 }
 
 } // namespace detail
 
 
+// iterator range to floating point parser
 template <class Numerical, class Iterator, typename std::enable_if_t<
 	(std::is_same_v<Numerical, float> ||
 	std::is_same_v<Numerical, double>) &&
@@ -223,70 +90,194 @@ template <class Numerical, class Iterator, typename std::enable_if_t<
 int> = 0> 
 constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Numerical& result, CharsFormat fmt = CharsFormat::general) {
 	using namespace operators;
+    using view_type = std::basic_string_view<typename std::iterator_traits<Iterator>::value_type>;
 
-	auto beginCopy = begin;
+    constexpr static auto maxBinDigits = ValueConditional<sizeof(Numerical) == 8, std::size_t>::template get<52, 23>();
+    constexpr static auto maxHexDigits = ValueConditional<sizeof(Numerical) == 8, std::size_t>::template get<14, 7>();
+    constexpr static auto maxDecDigits = ValueConditional<sizeof(Numerical) == 8, std::size_t>::template get<17, 8>();
+
+    constexpr static auto minExponent = ValueConditional<sizeof(Numerical) == 8, std::int64_t>::template get<-1022, -126>();
+    constexpr static auto maxExponent = ValueConditional<sizeof(Numerical) == 8, std::int64_t>::template get<1023, 127>();
+
+
+    if (begin == end) return { begin, std::errc::invalid_argument };
+
+    auto begIt = begin;
 	
 	bool negative = true;
 
-	if ((negative = (*begin == '-'))) ++begin;
+	if ((negative = (*begin == '-')) && (++begIt == end)) return { begin, std::errc::invalid_argument };
 
-	switch (*begin) {
+	switch (*begIt) {
 		case 'i': 
 		case 'I':
-			if (begin != end && (end - ++begin) >= 2 && detail::caselessStrNCmp(&*begin, "nf", 2)) {
+			if ((end - ++begIt) >= 2 && detail::caselessStrNCmp(&*begIt, "NF", 2)) {
                 result = negative ? -std::numeric_limits<Numerical>::infinity() : std::numeric_limits<Numerical>::infinity();
 
-                begin += 2;
-                if ((end - begin) >= 5 && detail::caselessStrNCmp(&*begin, "inity", 5)) return { begin + 5, std::errc { } };
-                else return { begin, std::errc { } };
-            } else return { beginCopy, std::errc::invalid_argument };
+                if ((begIt += 2) != end && (end - begIt) >= 5 && detail::caselessStrNCmp(&*begIt, "inity", 5)) return { begIt + 5, std::errc { } };
+                else return { begIt, std::errc { } };
+            } else return { begin, std::errc::invalid_argument };
 
 			break;
 
 		case 'n':
 		case 'N':
-			if (begin != end && (end - ++begin) >= 2 && detail::caselessStrNCmp(&*begin, "an", 2)) {
+			if ((end - ++begIt) >= 2 && detail::caselessStrNCmp(&*begIt, "AN", 2)) {
 				result = negative ? -std::numeric_limits<Numerical>::quiet_NaN() : std::numeric_limits<Numerical>::quiet_NaN();
 				
-				return { begin + 2, std::errc { } };
-			} else return { beginCopy, std::errc::invalid_argument };
+				return { begIt + 2, std::errc { } };
+			} else return { begin, std::errc::invalid_argument };
 
 			break;
 	}
 
-    detail::FloatingPointParseResult<typename std::iterator_traits<Iterator>::value_type> parseResult { };
+    std::uint64_t mant { };
+    std::int64_t exp { };
 
-    if (detail::parseFloatingPoint(begin, end, fmt, parseResult)) {
-        detail::FloatingPointData<sizeof(Numerical)> floatingPointData { };
+    view_type whole { };
+    view_type frac { };
 
-        detail::setFloatingPointExponent<sizeof(Numerical)>(floatingPointData, parseResult.exp);
+    std::size_t firstNonZeroDigits { };
 
-        std::uint64_t mantissa { };
+    Iterator it = begIt;
 
-        if (fmt == CharsFormat::hex) {
-            if (parseResult.whole.size() < 14) {
-                fromChars(parseResult.whole.begin(), parseResult.whole.end(), mantissa, 16);
+    if (fmt == CharsFormat::hex) {
+        for (; it != end && *it == '0'; it++) // skips leading zeros
+        ;
 
-                std::uint64_t fractionalAsInt { };
-                fromChars(parseResult.frac.begin(), parseResult.frac.begin() + std::min(14 - parseResult.whole.size(), parseResult.frac.size()), fractionalAsInt, 16);
+        begIt = it;
 
-                for (auto c = parseResult.frac.size(); c > 0; c--) mantissa *= 16;
+        it = fromChars(it, it + std::min(implicitCast<std::size_t>(end - it), maxHexDigits), mant, 16).ptr; // parse the whole part with a limit
+        for (; it != end && detail::isHexDigit(*it); it++) // skip rest of the digits
+        ;
 
-                mantissa += fractionalAsInt;
-            } else
-                fromChars(parseResult.whole.begin(), parseResult.whole.begin() + 14, mantissa, 16);
-        } else {
+        whole = view_type(begIt, it);
+        
+        if (it != end && *it++ == '.') {
+            if (it == end) return { begin, std::errc::invalid_argument };
 
+            std::uint64_t remainingDigits = maxHexDigits - (it - begIt) + 1; // + 1 to compensate for the decimal point skipped earlier
+
+            for (; it != end && *it == '0'; it++, firstNonZeroDigits++) // counts leading zeros
+            ;
+
+            begIt = it;
+
+            std::uint64_t fracAsInt { };
+            it = fromChars(it, it + std::min(implicitCast<std::uint64_t>(end - it), remainingDigits), fracAsInt, 16).ptr; // parse the fractional part with a limit and check it
+
+            if (fracAsInt == 0) {
+                if (mant == 0) { // earlist valid exit
+                    result = negative ? -0 : 0;
+                    return { it, std::errc { } };
+                }
+            } else {
+                mant <<= (it - begIt) * 4;
+                mant += fracAsInt;
+            }
+
+            for (; it != end && detail::isHexDigit(*it); it++) // skip rest of the digits
+            ;
+            frac = view_type(begIt, it);
+        } else if (mant == 0) { // repeat of the above
+            result = negative ? -0 : 0;
+            return { it, std::errc { } };
         }
 
-        detail::setFloatingPointMantissa<sizeof(Numerical)>(floatingPointData, mantissa);
+        if (it != end && *it++ == 'p' && it != end) { // parse the exponent
+            if (*it == '+') ++it;
+            auto fcPtr = fromChars(it, end, exp, 16).ptr; // no need to check again for end, since fromChars does automatically
+            
+            if (fcPtr == it || exp > maxExponent || exp < minExponent) return { begin, std::errc::invalid_argument };
 
-        if (negative) detail::makeFloatingPointNegative(floatingPointData);
+            exp *= 4;
+            it = fcPtr;
+        }
 
-        result = std::bit_cast<Numerical>(floatingPointData);
+        if (whole.size() == 0) { // calculate the exponent, no bound checks for any of the operations, since the above parts should have ruled them out
+            exp -= firstNonZeroDigits * 4 + 4 - detail::hexDigitToRequiredBits(frac[firstNonZeroDigits]);
+            begin = it;
+        } else {
+            exp += whole.size() * 4 - 4 + detail::hexDigitToRequiredBits(whole.front()) - 1;
+            begin = it;
+        }
 
-        return { begin, std::errc { } };
-    } else return { beginCopy, std::errc::invalid_argument };
+        result = std::bit_cast<Numerical>(detail::writeToFloatingPointBits<sizeof(Numerical)>(negative, mant, exp));
+    } else {
+        
+
+        /*
+        for (; it != end && *it == '0'; it++) // skips leading zeros
+        ;
+
+        begIt = it;
+
+        it = fromChars(it, it + std::min(implicitCast<std::size_t>(end - it), maxDecDigits), mant, 10).ptr; // parse the whole part with a limit
+        for (; it != end && detail::isDecDigit(*it); it++) // skip rest of the digits
+        ;
+
+        auto bitWidth = std::bit_width(mant);
+        exp = implicitCast<std::int64_t>(bitWidth) - 1;
+        whole = view_type(begIt, it);
+
+        printf("%lu\n", exp);
+        
+        if (it != end && *it++ == '.') {
+            if (it == end) return { begin, std::errc::invalid_argument };
+
+            std::uint64_t remainingDigits = maxDecDigits - (it - begIt) + 1; // + 1 to compensate for the decimal point skipped earlier
+            begIt = it;
+
+            for (; it != end && *it == '0'; it++, firstNonZeroDigits++) // counts leading zeros
+            ;
+
+            std::uint64_t fracAsInt { };
+            it = fromChars(it, it + std::min(implicitCast<std::size_t>(end - it), remainingDigits), fracAsInt, 10).ptr; // parse the fractional part with a limit and check it
+
+            if (fracAsInt == 0) {
+                if (mant == 0) { // earliest valid exit
+                    result = negative ? -0 : 0;
+                    return { it, std::errc { } };
+                }
+            } else {
+                std::int64_t remaining = maxBinDigits - bitWidth; 
+
+                if (remaining > 0) {
+                    auto powerOfTen = detail::fastUIntPow(10, it - begIt - 1);
+
+                    for (; remaining > 0 && fracAsInt != 0; fracAsInt *= 2, mant <<= 1, remaining--) {
+                        if (fracAsInt >= powerOfTen) {
+                            mant |= 1;
+                            fracAsInt -= powerOfTen;
+                        }
+                    }
+                } else mant >>= -1 * remaining;
+            }
+
+            for (; it != end && detail::isDecDigit(*it); it++) // skip rest of the digits
+            ;
+            frac = view_type(begIt, it);
+        } else if (mant == 0) { // also earliest valid exit
+            result = negative ? -0 : 0;
+            return { it, std::errc { } };
+        }
+
+        result = std::bit_cast<Numerical>(detail::writeToFloatingPointBits<sizeof(Numerical)>(negative, mant, exp));
+
+        if ((fmt & CharsFormat::scientific) != 0) {
+            if (it != end && *it++ == 'e' && it != end) {
+                if (*it == '+') ++it;
+                auto fcPtr = fromChars(it, end, exp, 10).ptr; // no need to check again for end, since fromChars does automatically
+
+                if (fcPtr == it || exp > maxExponent || exp < minExponent) return { begin, std::errc::invalid_argument };
+
+                it = fcPtr;
+            } else if ((fmt & CharsFormat::fixed) == 0) return { begin, std::errc::invalid_argument };
+        }
+        */
+    }
+
+    return { it, std::errc { } };
 }
 
 } // namespace lsd
