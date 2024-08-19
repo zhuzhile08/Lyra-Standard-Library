@@ -21,7 +21,7 @@ template <class Numerical, class Iterator, typename std::enable_if_t<
 	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type>, 
 int> = 0> 
 constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Numerical& result, int base = 10) {
-	if (base > 36) return { begin, std::errc::invalid_argument };
+	if (base > 36 || begin == end) return { begin, std::errc::invalid_argument };
 
 	auto beginCopy = begin;
 
@@ -40,10 +40,10 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
 	std::size_t iterationCount = 0;
 
 	if (base > 10) {
-		const decltype(*begin) lowercaseLimit = ('a' + base);
-		const decltype(*begin) uppercaseLimit = ('A' + base);
+		const decltype(*begin) uppercaseLimit = ('A' + base - 10);
+		const decltype(*begin) lowercaseLimit = ('a' + base - 10);
 
-		for (; begin != end; begin++) {
+		for (; begin != end; begin++, iterationCount++) {
             if (*begin >= '0' && *begin <= '9') (res *= base) += *begin - '0';
 			else if (*begin >= 'A') {
 				if (*begin < uppercaseLimit) (res *= base) += 10 + *begin - 'A';
@@ -51,18 +51,14 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
 				else break;
 			} else break;
 
-			++iterationCount;
-
 			if (prevRes > res) return { begin, std::errc::result_out_of_range };
             else prevRes = res;
 		}
 	} else {
 		const decltype(*begin) numLimit = ('0' + base);
 
-		for (; begin != end && *begin >= '0' && *begin < numLimit; begin++) {
+		for (; begin != end && *begin >= '0' && *begin < numLimit; begin++, iterationCount++) {
 			(res *= base) += *begin - '0';
-			
-			++iterationCount;
 
 			if (prevRes > res) return { begin, std::errc::result_out_of_range };
             else prevRes = res;
@@ -70,10 +66,9 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
 	}
 
 	if (iterationCount != 0) {
-		result = res * sign;
-
-		return { begin, std::errc { } };
-	} else return { beginCopy, std::errc::invalid_argument };
+        result = res * sign;
+	    return { begin, std::errc { } };
+    } else return { beginCopy, std::errc::invalid_argument };
 }
 
 } // namespace lsd
