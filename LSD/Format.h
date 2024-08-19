@@ -237,27 +237,13 @@ private:
 				return fieldOptions;
 
 				break;
-			
-			case char_type('0'):
-			case char_type('1'):
-			case char_type('2'):
-			case char_type('3'):
-			case char_type('4'):
-			case char_type('5'):
-			case char_type('6'):
-			case char_type('7'):
-			case char_type('8'):
-			case char_type('9'):
-				helper = it;
-
-				for (; it < end && std::isdigit(*it); it++);
-				if constexpr (std::is_same_v<char_type, char>) fieldOptions.argumentIndex = std::strtoull(&*it, &helper, 10);
-				else fieldOptions.argumentIndex = std::wcstoull(&*it, &helper, 10);
-
-				break;
-
 			case char_type('}'):
+				return fieldOptions;
+
 				break;
+			
+			default:
+				fromChars(it, end, fieldOptions.argumentIndex);
 		}
 
 		for (; it < end; ++it) {
