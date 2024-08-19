@@ -12,6 +12,7 @@
 #pragma once
 
 #include "Iterators.h"
+#include "Detail/CoreUtility.h"
 
 #include <limits>
 #include <functional>
@@ -38,16 +39,6 @@ template <class Ty> concept IteratableContainer = requires(Ty c1, Ty c2) {
 // address conversion
 template <class Ty> [[nodiscard]] constexpr inline const void* getAddress(const Ty& type) noexcept {
 	return static_cast<const void*>(type);
-}
-
-
-// implicit cast
-
-template <class Ty> [[nodiscard]] constexpr inline Ty implicitCast(std::type_identity_t<Ty> arg) noexcept(std::is_nothrow_constructible_v<Ty>) {
-	return arg;
-}
-template <class Ty> [[deprecated]] [[nodiscard]] constexpr inline Ty implicit_cast(std::type_identity_t<Ty> arg) noexcept(std::is_nothrow_constructible_v<Ty>) {
-	return arg;
 }
 
 
