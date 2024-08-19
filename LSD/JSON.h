@@ -422,7 +422,14 @@ private:
 						else {
 							floating_type fRes = { };
 							
+							/*
 							if (fromChars(&*begin, &*sequenceEnd, fRes).ptr == &*sequenceEnd) return fRes;
+							else throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, number could not be parsed!");
+							*/
+
+							char format[22] { }; /// @todo lsd::fromChars doesn't support decimal floating point conversion yet
+							std::snprintf(format, 22, "%%%zuf", end - begin);
+							if (sscanf(&*begin, format, &fRes) == 1) return fRes;
 							else throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, number could not be parsed!");
 						}
 					}
