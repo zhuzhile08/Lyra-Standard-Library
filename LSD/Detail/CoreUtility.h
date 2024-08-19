@@ -80,4 +80,30 @@ template <class Alloc> inline constexpr bool allocatorPropagationNecessary(const
 
 } // namespace detail
 
+
+// implicit cast
+
+template <class Ty> [[nodiscard]] constexpr inline Ty implicitCast(std::type_identity_t<Ty> arg) noexcept(std::is_nothrow_constructible_v<Ty>) {
+	return arg;
+}
+template <class Ty> [[deprecated]] [[nodiscard]] constexpr inline Ty implicit_cast(std::type_identity_t<Ty> arg) noexcept(std::is_nothrow_constructible_v<Ty>) {
+	return arg;
+}
+
+
+// value conditional
+
+template <bool Condition, class TTy, class FTy = TTy> struct ValueConditional;
+template <class TTy, class FTy> struct ValueConditional<true, TTy, FTy> {
+	template <TTy TrueVal, FTy> [[nodiscard]] consteval static auto get() noexcept {
+		return TrueVal;
+	}
+};
+template <class TTy, class FTy> struct ValueConditional<false, TTy, FTy> {
+	template <TTy, FTy FalseVal> [[nodiscard]] consteval static auto get() noexcept {
+		return FalseVal;
+	}
+};
+
+
 } // namespace lsd
