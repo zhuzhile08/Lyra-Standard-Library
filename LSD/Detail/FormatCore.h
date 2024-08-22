@@ -20,14 +20,14 @@
 namespace lsd {
 
 // forward declarations
-template <class CharTy> struct BasicFieldOptions;
+template <class> struct BasicFieldOptions;
 class FormatError;
-template <class CharTy> class BasicFormatBackInserter;
-template <class CharTy> struct BasicRuntimeFormatString;
-template <class CharTy> class BasicFormatVerifier;
-template <class CharTy> class BasicFormatArg;
+template <class> class BasicFormatBackInserter;
+template <class> struct BasicRuntimeFormatString;
+template <class> class BasicFormatVerifier;
+template <class> class BasicFormatArg;
 
-template <class CharTy, class... Args> struct BasicFormatString;
+template <class, class...> struct BasicFormatString;
 
 // formatting exception
 class FormatError : public std::runtime_error {
@@ -214,7 +214,7 @@ template <class... Args> using WFormatString = BasicFormatString<wchar_t, std::t
 
 // format argument store
 
-template <class CharTy> class BasicFormatArg {
+template <class ContextType> class BasicFormatArg {
 private:
 	class Handle {
 	private:
@@ -222,7 +222,7 @@ private:
 
 	};
 
-	using char_type = CharTy;
+	using char_type = ContextType::char_type;
 	using handle_type = Handle;
 	using variant_type = std::variant<
 		std::monostate,
@@ -243,15 +243,25 @@ private:
 
 public:
 	template <class Ty> constexpr BasicFormatArg(Ty&& value) noexcept {
-		
+		using type = std::remove_const_t<std::remove_reference_t<Ty>>;
+
+		if constexpr (std::is_same_v<bool, type> || std::is_same_v<char_type, type> || std::is_same_v<float, type> || std::is_same_v<double, type> || std::is_same_v<long double, type>) m_value = value;
+		else if constexpr (std::is_same_v<char, type> || std::is_same_v<wchar_t, char_type>) m_value = implicitCast<wchar_t>(implicitCast<unsigned char>(value));
+		else if constexpr (std::is_integral_v<type> && sizeof(type) <= sizeof(int)) m_value = implicitCast<int>(value);
+		else if constexpr (std::is_integral_v<type> && std::is_unsigned_v && sizeof(type) <= sizeof(unsigned int)) m_value = implicitCast<unsigned int>(value);
+		else if constexpr (std::is_integral_v<type> && sizeof(type) <= sizeof(long long)) m_value = implicitCast<long long>(value);
+		else if constexpr (std::is_integral_v<type> && std::is_unsigned_v && sizeof(type) <= sizeof(unsigned long long)) m_value = implicitCast<unsigned long long>(value);
+		else if constexpr (std::is_same_v<BasicStringView<char_type>, type> || std::is_same_v<BasicString<char_type>, type>) m_value = BasicStringView<char_type>(value.data(), value.size());
+		else if constexpr (std::is_same_v<std::decay_t<type>, char_type*> || std::is_same_v<std::decay_t<type>, const char_type*>) m_value = implicitCast<const char_type*>(value);
+		else if constexpr (std::is_void_v<std::remove_pointer_t<type> || std::is_null_pointer_v<type>>) m_value = implicitCast<const void*>(value);
+		else 
 	}
-	template <class Ty, std::enable_if_t<std::is_convertible_v<Ty, variant_type>, int> = 0> constexpr BasicFormatArg(Ty&& value) noexcept : m_value(value) { }
 
 	constexpr explicit operator bool() const noexcept {
 		return !std::holds_alternative<std::monostate>(m_value);
 	}
 
-	template <class FormatContext> constexpr void format(FormatContext::iterator outputIt, FormatContext::field_options options) const {
+	constexpr void format(context::iterator outputIt, context::field_options options) const {
 
 	}
 
