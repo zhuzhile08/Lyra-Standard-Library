@@ -223,6 +223,7 @@ private:
 	};
 
 	using char_type = ContextType::char_type;
+	using iterator = ContextType::iterator;
 	using handle_type = Handle;
 	using variant_type = std::variant<
 		std::monostate,
@@ -248,20 +249,20 @@ public:
 		if constexpr (std::is_same_v<bool, type> || std::is_same_v<char_type, type> || std::is_same_v<float, type> || std::is_same_v<double, type> || std::is_same_v<long double, type>) m_value = value;
 		else if constexpr (std::is_same_v<char, type> || std::is_same_v<wchar_t, char_type>) m_value = implicitCast<wchar_t>(implicitCast<unsigned char>(value));
 		else if constexpr (std::is_integral_v<type> && sizeof(type) <= sizeof(int)) m_value = implicitCast<int>(value);
-		else if constexpr (std::is_integral_v<type> && std::is_unsigned_v && sizeof(type) <= sizeof(unsigned int)) m_value = implicitCast<unsigned int>(value);
+		else if constexpr (std::is_integral_v<type> && std::is_unsigned_v<type> && sizeof(type) <= sizeof(unsigned int)) m_value = implicitCast<unsigned int>(value);
 		else if constexpr (std::is_integral_v<type> && sizeof(type) <= sizeof(long long)) m_value = implicitCast<long long>(value);
-		else if constexpr (std::is_integral_v<type> && std::is_unsigned_v && sizeof(type) <= sizeof(unsigned long long)) m_value = implicitCast<unsigned long long>(value);
+		else if constexpr (std::is_integral_v<type> && std::is_unsigned_v<type> && sizeof(type) <= sizeof(unsigned long long)) m_value = implicitCast<unsigned long long>(value);
 		else if constexpr (std::is_same_v<BasicStringView<char_type>, type> || std::is_same_v<BasicString<char_type>, type>) m_value = BasicStringView<char_type>(value.data(), value.size());
 		else if constexpr (std::is_same_v<std::decay_t<type>, char_type*> || std::is_same_v<std::decay_t<type>, const char_type*>) m_value = implicitCast<const char_type*>(value);
-		else if constexpr (std::is_void_v<std::remove_pointer_t<type> || std::is_null_pointer_v<type>>) m_value = implicitCast<const void*>(value);
-		else 
+		else if constexpr (std::is_void_v<std::remove_pointer_t<type>> || std::is_null_pointer_v<type>) m_value = implicitCast<const void*>(value);
+		// else 
 	}
 
 	constexpr explicit operator bool() const noexcept {
 		return !std::holds_alternative<std::monostate>(m_value);
 	}
 
-	constexpr void format(context::iterator outputIt, context::field_options options) const {
+	constexpr void format(iterator outputIt, detail::BasicFieldOptions<char_type> options) const {
 
 	}
 
