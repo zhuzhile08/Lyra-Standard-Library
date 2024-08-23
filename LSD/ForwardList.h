@@ -12,7 +12,7 @@
 #pragma once
 
 #include "Iterators.h"
-#include "ForwardListNode.h"
+#include "Detail/ForwardListNode.h"
 
 #include <initializer_list>
 #include <functional>
