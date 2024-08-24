@@ -28,7 +28,7 @@ private:
 			virtual constexpr void destroy(value_type*) = 0;
 		};
 
-		template <class D = detail::DefaultDeleter<value_type>> class Deleter : public DeleterBase {
+		template <class D = DefaultDelete<value_type>> class Deleter : public DeleterBase {
 		public:
 			using deleter_type = D;
 

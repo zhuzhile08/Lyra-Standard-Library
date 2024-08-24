@@ -17,33 +17,32 @@
 
 namespace lsd {
 
-namespace detail {
+// default deleters
 
-template <class Ty> struct DefaultDeleter {
+template <class Ty> struct DefaultDelete {
 	using pointer = Ty*;
 
-	constexpr DefaultDeleter() = default;
-	template <class CTy> constexpr DefaultDeleter(const DefaultDeleter<CTy>&) noexcept { }
+	constexpr DefaultDelete() = default;
+	template <class CTy> constexpr DefaultDelete(const DefaultDelete<CTy>&) noexcept { }
 
 	constexpr void operator()(pointer ptr) const noexcept {
 		delete ptr;
 	}
 };
 
-template <class Ty> struct DefaultDeleter<Ty []> {
+template <class Ty> struct DefaultDelete<Ty []> {
 	using pointer = Ty*;
 
-	constexpr DefaultDeleter() = default;
-	template <class CTy> constexpr DefaultDeleter(const DefaultDeleter<CTy>&) noexcept { }
+	constexpr DefaultDelete() = default;
+	template <class CTy> constexpr DefaultDelete(const DefaultDelete<CTy>&) noexcept { }
 
 	constexpr void operator()(pointer ptr) const noexcept {
 		delete[] ptr;
 	}
 };
 
-} // namespace detail
 
-template <class Ty, class DTy = detail::DefaultDeleter<Ty>> class UniquePointer {
+template <class Ty, class DTy = DefaultDelete<Ty>> class UniquePointer {
 public:
 	using element_type = Ty;
 	using pointer = Ty*;
@@ -132,6 +131,7 @@ private:
 	template <class, class>
 	friend class UniquePointer;
 };
+
 
 // deviates from standard implementation, acts like a runtime allocated lsd::Array/std::array
 template <class Ty, class DTy> class UniquePointer<Ty[], DTy> {
