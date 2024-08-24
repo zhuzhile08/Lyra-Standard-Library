@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "ForwardListNode.h"
+#include "Detail/ForwardListNode.h"
 
 #include <cstddef>
 #include <type_traits>
