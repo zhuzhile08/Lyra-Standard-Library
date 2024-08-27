@@ -138,7 +138,9 @@ public:
 		if (r == 0) {
 			if (size() < v.size()) return -2;
 			else if (size() > v.size()) return 2;
-		} else return r;
+		}
+		
+		return r;
 	}
 	constexpr int compare(size_type pos, size_type count, container other) const {
 		return substr(pos, count).compare(other);
@@ -215,7 +217,7 @@ public:
 		return contains(container(s));
 	}
 
-	constexpr size_type find(const_container_reference other, size_type pos = 0) const noexcept {
+	constexpr size_type find(container other, size_type pos = 0) const noexcept {
 		return find(other.data(), pos, other.size());
 	}
 	constexpr size_type find(const_pointer s, size_type pos, size_type count) const {
@@ -232,7 +234,7 @@ public:
 		return find(std::addressof(c), pos, 1);
 	}
 
-	constexpr size_type rfind(const_container_reference other, size_type pos = npos) const noexcept {
+	constexpr size_type rfind(container other, size_type pos = npos) const noexcept {
 		return rfind(other.data(), pos, other.size());
 	}
 	constexpr size_type rfind(const_pointer s, size_type pos, size_type count) const {
@@ -251,10 +253,10 @@ public:
 		return rfind(std::addressof(c), pos, 1);
 	}
 
-	constexpr size_type findFirstOf(const_container_reference other, size_type pos = 0) const noexcept {
+	constexpr size_type findFirstOf(container other, size_type pos = 0) const noexcept {
 		return findFirstOf(other.data(), pos, other.size());
 	}
-	[[deprecated]] constexpr size_type find_first_of(const_container_reference other, size_type pos = 0) const noexcept {
+	[[deprecated]] constexpr size_type find_first_of(container other, size_type pos = 0) const noexcept {
 		return findFirstOf(other.data(), pos, other.size());
 	}
 	constexpr size_type findFirstOf(const_pointer s, size_type pos, size_type count) const {
@@ -280,10 +282,10 @@ public:
 		return findFirstOf(std::addressof(c), pos, 1);
 	}
 
-	constexpr size_type findLastOf(const_container_reference other, size_type pos = npos) const noexcept {
+	constexpr size_type findLastOf(container other, size_type pos = npos) const noexcept {
 		return findLastOf(other.cStr(), pos, other.size());
 	}
-	[[deprecated]] constexpr size_type find_last_of(const_container_reference other, size_type pos = npos) const noexcept {
+	[[deprecated]] constexpr size_type find_last_of(container other, size_type pos = npos) const noexcept {
 		return findLastOf(other.cStr(), pos, other.size());
 	}
 	constexpr size_type findLastOf(const_pointer s, size_type pos, size_type count) const {
@@ -313,10 +315,10 @@ public:
 		return findLastOf(std::addressof(c), pos, 1);
 	}
 
-	constexpr size_type findFirstNotOf(const_container_reference other, size_type pos = 0) const noexcept {
+	constexpr size_type findFirstNotOf(container other, size_type pos = 0) const noexcept {
 		return findFirstNotOf(other.cStr(), pos, other.size());
 	}
-	[[deprecated]] constexpr size_type find_first_not_of(const_container_reference other, size_type pos = 0) const noexcept {
+	[[deprecated]] constexpr size_type find_first_not_of(container other, size_type pos = 0) const noexcept {
 		return findFirstNotOf(other.cStr(), pos, other.size());
 	}
 	constexpr size_type findFirstNotOf(const_pointer s, size_type pos, size_type count) const {
@@ -345,10 +347,10 @@ public:
 		return findFirstNotOf(std::addressof(c), pos, 1);
 	}
 
-	constexpr size_type findLastNotOf(const_container_reference other, size_type pos = npos) const noexcept {
+	constexpr size_type findLastNotOf(container other, size_type pos = npos) const noexcept {
 		return findLastNotOf(other.cStr(), pos, other.size());
 	}
-	[[deprecated]] constexpr size_type find_last_not_of(const_container_reference other, size_type pos = 0) const noexcept {
+	[[deprecated]] constexpr size_type find_last_not_of(container other, size_type pos = 0) const noexcept {
 		return findLastNotOf(other.cStr(), pos, other.size());
 	}
 	constexpr size_type findLastNotOf(const_pointer s, size_type pos, size_type count) const {
@@ -412,15 +414,24 @@ public:
 		return *ptr;
 	}
 
-	friend ostream_type& operator<<(ostream_type& stream, const_container_reference string) {
+	friend constexpr bool operator==(container s1, container s2) {
+		return s1.compare(s2) == 0;
+	}
+	friend constexpr bool operator==(container s1, const_pointer s2) {
+		return s1.compare(s2) == 0;
+	}
+	friend constexpr auto operator<=>(container s1, container s2) {
+		if constexpr (requires { typename traits_type::comparison_category; }) return static_cast<traits_type::comparison_category>(s1.compare(s2) <=> 0);
+		else return static_cast<std::weak_ordering>(s1.compare(s2) <=> 0);
+	}
+	friend constexpr auto operator<=>(container s1, const_pointer s2) {
+		if constexpr (requires { typename traits_type::comparison_category; }) return static_cast<traits_type::comparison_category>(s1.compare(s2) <=> 0);
+		else return static_cast<std::weak_ordering>(s1.compare(s2) <=> 0);
+	}
+
+	friend ostream_type& operator<<(ostream_type& stream, container string) {
 		for (auto it = string.m_begin; it != string.m_end; it++) {
 			stream << *it;
-		}
-		return stream;
-	}
-	friend istream_type& operator>>(istream_type& stream, const_container_reference string) {
-		for (auto it = string.m_begin; it != string.m_end; it++) {
-			stream >> *it;
 		}
 		return stream;
 	}
@@ -467,7 +478,7 @@ constexpr WStringView operator""_sv(const wchar_t* str, std::size_t len) {
 template <class C> struct Hash<BasicStringView<C>> {
 	using view_type = BasicStringView<C>;
 
-	std::size_t operator()(const view_type& s) const noexcept { // uses the djb2 instead of murmur- or CityHash
+	constexpr std::size_t operator()(view_type s) const noexcept { // uses the djb2 instead of murmur- or CityHash
 		std::size_t hash = 5381; 
 
 #ifdef DJB2_HASH_MULTIPLY_33

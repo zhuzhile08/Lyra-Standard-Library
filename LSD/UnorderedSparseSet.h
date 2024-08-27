@@ -343,7 +343,7 @@ public:
 	}
 	constexpr iterator erase(const_iterator first, const_iterator last) noexcept {
 		for (auto it = first; it != last; it++) erase(it);
-		return &*first;
+		return m_array.begin() + (m_array.end() - first);
 	}
 	constexpr size_type erase(const key_type& key) noexcept {
 		auto it = find(key);
@@ -454,7 +454,7 @@ public:
 		
 		auto found = false;
 		for (auto it = bucketList.begin(); it != bucketList.end(); it++) {
-			if (m_equal(m_array[*it].first, key)) {
+			if (m_equal(m_array[*it], key)) {
 				found = true;
 				break;
 			}
@@ -521,9 +521,7 @@ private:
 		if (m_array.size() >= m_buckets.size() * maxLoadFactor) rehash(detail::nextPrime(m_array.size()));
 	}
 	template <class K> constexpr size_type keyToBucket(const K& key) const noexcept {
-		auto s = m_buckets.size();
-		auto h = m_hasher(key);
-		return h % s;
+		return m_hasher(key) % m_buckets.size();
 	}
 	constexpr iterator basicInsert(const value_type& value) noexcept {
 		auto i = keyToBucket(value);

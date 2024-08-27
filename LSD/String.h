@@ -1004,8 +1004,9 @@ public:
 		if (r == 0) {
 			if (siz < sCount) return -2;
 			else if (siz > sCount) return 2;
-			else return r;
-		} else return r;
+		}
+		
+		return r;
 	}
 	template <class StringViewLike> constexpr int compare(const StringViewLike& sv) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
 		return compare(0, npos, sv.m_begin, sv.size());
@@ -1258,6 +1259,14 @@ public:
 	friend constexpr bool operator==(const_container_reference s1, const_pointer s2) {
 		return s1.compare(s2) == 0;
 	}
+	friend constexpr auto operator<=>(const_container_reference s1, const_container_reference s2) {
+		if constexpr (requires { typename traits_type::comparison_category; }) return static_cast<traits_type::comparison_category>(s1.compare(s2) <=> 0);
+		else return static_cast<std::weak_ordering>(s1.compare(s2) <=> 0);
+	}
+	friend constexpr auto operator<=>(const_container_reference s1, const_pointer s2) {
+		if constexpr (requires { typename traits_type::comparison_category; }) return static_cast<traits_type::comparison_category>(s1.compare(s2) <=> 0);
+		else return static_cast<std::weak_ordering>(s1.compare(s2) <=> 0);
+	}
 
 	friend ostream_type& operator<<(ostream_type& stream, const_container_reference string) {
 		stream << string.cStr();
@@ -1479,7 +1488,7 @@ constexpr WString operator""_s(const wchar_t* str, std::size_t len) {
 template <class C> struct Hash<BasicString<C>> {
 	using string_type = BasicString<C>;
 
-	std::size_t operator()(const string_type& s) const noexcept { // uses the djb2 instead of murmur- or CityHash
+	constexpr std::size_t operator()(const string_type& s) const noexcept { // uses the djb2 instead of murmur- or CityHash
 		std::size_t hash = 5381; 
 
 #ifdef DJB2_HASH_MULTIPLY_33

@@ -376,7 +376,7 @@ public:
 	}
 	constexpr iterator erase(const_iterator first, const_iterator last) noexcept {
 		for (auto it = first; it != last; it++) erase(it);
-		return &*first;
+		return m_array.begin() + (m_array.end() - first);
 	}
 	constexpr size_type erase(const key_type& key) noexcept {
 		auto it = find(key);
