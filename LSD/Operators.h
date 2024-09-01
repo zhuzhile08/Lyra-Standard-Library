@@ -155,6 +155,13 @@ template <EnumType Enum, std::integral Num> bool constexpr inline operator==(Num
 	return static_cast<Enum>(first) == second;
 }
 
+template <EnumType Enum, std::integral Num> auto constexpr inline operator<=>(Enum first, Num second) noexcept {
+	return first <=> static_cast<Enum>(second);
+}
+template <EnumType Enum, std::integral Num> auto constexpr inline operator<=>(Num first, Enum second) noexcept {
+	return static_cast<Enum>(first) <=> second;
+}
+
 } // inline namespace enum_operators
 
 } // inline namespace operators
