@@ -144,7 +144,7 @@ public:
 		else return dst;
 	}
 
-	constexpr static bool compare(const char_type* s1, const char_type* s2, std::size_t count) {
+	constexpr static int compare(const char_type* s1, const char_type* s2, std::size_t count) {
 		for (; count > 0; count--, s1++, s2++) {
 			if (lt(*s1, *s2)) return -1;
 			else if (!lt(*s1, *s2) && !eq(*s1, *s2)) return 1;
@@ -233,7 +233,7 @@ public:
 		else return dst;
 	}
 
-	constexpr static bool compare(const char_type* s1, const char_type* s2, std::size_t count) {
+	constexpr static int compare(const char_type* s1, const char_type* s2, std::size_t count) {
 		for (; count > 0; count--, s1++, s2++) {
 			if (lt(*s1, *s2)) return -1;
 			else if (!lt(*s1, *s2) && !eq(*s1, *s2)) return 1;
@@ -322,7 +322,7 @@ public:
 		else return dst;
 	}
 
-	constexpr static bool compare(const char_type* s1, const char_type* s2, std::size_t count) {
+	constexpr static int compare(const char_type* s1, const char_type* s2, std::size_t count) {
 		for (; count > 0; count--, s1++, s2++) {
 			if (lt(*s1, *s2)) return -1;
 			else if (!lt(*s1, *s2) && !eq(*s1, *s2)) return 1;
@@ -411,7 +411,7 @@ public:
 		else return dst;
 	}
 
-	constexpr static bool compare(const char_type* s1, const char_type* s2, std::size_t count) {
+	constexpr static int compare(const char_type* s1, const char_type* s2, std::size_t count) {
 		for (; count > 0; count--, s1++, s2++) {
 			if (lt(*s1, *s2)) return -1;
 			else if (!lt(*s1, *s2) && !eq(*s1, *s2)) return 1;
