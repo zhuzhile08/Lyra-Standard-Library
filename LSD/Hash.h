@@ -65,6 +65,12 @@ template <> struct Hash<std::string> {
 	}
 };
 
+template <> struct Hash<std::wstring> {
+	std::size_t operator()(const std::wstring& p) const noexcept {
+		return std::hash<std::wstring>()(p); /// @todo implement own hash function
+	}
+};
+
 template <EnumType Enum> struct Hash<Enum> {
 	constexpr std::size_t operator()(Enum e) const noexcept {
 		return static_cast<std::size_t>(e);
