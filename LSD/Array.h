@@ -12,6 +12,7 @@
 
 #include "Iterators.h"
 
+#include <cassert>
 #include <utility>
 #include <algorithm>
 
