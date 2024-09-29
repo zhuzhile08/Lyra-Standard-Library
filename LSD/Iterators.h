@@ -107,11 +107,7 @@ public:
 	}
 
 	friend constexpr bool operator==(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer == second.m_pointer; }
-	friend constexpr bool operator!=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer != second.m_pointer; }
-	friend constexpr bool operator>(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer > second.m_pointer; }
-	friend constexpr bool operator<(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer < second.m_pointer; }
-	friend constexpr bool operator>=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer >= second.m_pointer; }
-	friend constexpr bool operator<=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer <= second.m_pointer; }
+	friend constexpr auto operator<=>(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer <=> second.m_pointer; }
 
 private:
 	pointer m_pointer;
@@ -205,11 +201,7 @@ public:
 	}
 
 	friend constexpr bool operator==(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer == second.m_pointer; }
-	friend constexpr bool operator!=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer != second.m_pointer; }
-	friend constexpr bool operator>(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer < second.m_pointer; }
-	friend constexpr bool operator<(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer > second.m_pointer; }
-	friend constexpr bool operator>=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer <= second.m_pointer; }
-	friend constexpr bool operator<=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer >= second.m_pointer; }
+	friend constexpr auto operator<=>(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer <=> second.m_pointer; }
 
 private:
 	pointer m_pointer;
@@ -260,7 +252,6 @@ public:
 	}
 
 	friend constexpr bool operator==(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer == second.m_pointer; }
-	friend constexpr bool operator!=(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer != second.m_pointer; }
 
 private:
 	node_base* m_pointer;
