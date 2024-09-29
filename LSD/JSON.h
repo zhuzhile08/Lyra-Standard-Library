@@ -11,11 +11,9 @@
 
 #pragma once
 
-#include "UniquePointer.h"
-#include "SharedPointer.h"
-#include "Node.h"
 #include "Vector.h"
-#include "UnorderedSparseMap.h"
+#include "UnorderedSparseSet.h"
+#include "String.h"
 #include "FromChars.h"
 
 #include <exception>
@@ -67,15 +65,16 @@ template <
 	detail::SignedType Signed = std::int64_t,
 	detail::UnsignedType Unsigned = std::uint64_t,
 	detail::FloatingType Floating = double,
-	template <class...> class NodeContainer = UnorderedSparseSet,
-	template <class...> class SmartPointer = UniquePointer> 
-class BasicJson : public BasicNode<
-	BasicJson<Literal, ArrayContainer, Signed, Unsigned, Floating, NodeContainer, SmartPointer>, 
-	SmartPointer,
-	BasicString<Literal>, 
-	NodeContainer> {
+	template <class...> class NodeContainer = UnorderedSparseSet> 
+class BasicJson {
+private:
+	CUSTOM_HASHER(Hasher, const BasicJson&, const_key_reference, Hash<key_type>{}, .m_name)
+	CUSTOM_EQUAL(Equal, const BasicJson&, const_key_reference, .m_name)
+
 public:
 	using size_type = std::size_t;
+	using difference_type = std::ptrdiff_t;
+
 	using null_type = JsonNull;
 	using object_type = JsonObject;
 	using signed_type = Signed;
@@ -84,14 +83,17 @@ public:
 	using literal_type = Literal;
 	using string_type = BasicString<literal_type>;
 
+	using key_type = string_type;
+	using key_reference = key_type&;
+	using const_key_reference = const key_type&;
+	using key_rvreference = key_type&&;
+
 	using json_type = BasicJson;
 	using reference = json_type&;
 	using const_reference = const json_type&;
 	using rvreference = json_type&&;
-	using smart_pointer = SmartPointer<json_type>;
 
-	using array_type = ArrayContainer<smart_pointer>;
-	using node_type = BasicNode<json_type, SmartPointer, string_type, NodeContainer>;
+	using array_type = ArrayContainer<json_type>;
 	using value_type = std::variant<
 		null_type,
 		bool,
@@ -102,17 +104,24 @@ public:
 		array_type,
 		string_type
 	>;
+	
+	using container = Container<smart_pointer, Hasher, Equal>;
+
+	using iterator = typename container::iterator;
+	using const_iterator = typename container::const_iterator;
+	using iterator_pair = std::pair<iterator, bool>;
+
 
 	constexpr BasicJson() noexcept = default;
 	constexpr BasicJson(const value_type& value) noexcept requires std::is_copy_assignable_v<smart_pointer> : m_value(value) { }
 	constexpr BasicJson(value_type&& value) noexcept : m_value(std::move(value)) { }
 	template <class KeyType> 
-	constexpr BasicJson(KeyType&& key, value_type&& value) noexcept : node_type(std::forward<KeyType>(key)), m_value(std::move(value)) { }
+	constexpr BasicJson(KeyType&& key, value_type&& value) noexcept : m_name(std::forward<KeyType>(name)), m_value(std::move(value)) { }
 	template <class KeyType, class Value> 
-	constexpr BasicJson(KeyType&& key, Value&& value) noexcept : node_type(std::forward<KeyType>(key)) {
+	constexpr BasicJson(KeyType&& key, Value&& value) noexcept : m_name(std::forward<KeyType>(name)) {
 		assign(std::forward<Value>(value));
 	}
-	constexpr BasicJson(const BasicJson&) requires std::is_copy_assignable_v<smart_pointer> = default;
+	constexpr BasicJson(const BasicJson&) = default;
 	constexpr BasicJson(BasicJson&&) = default;
 	constexpr ~BasicJson() noexcept = default;
 
@@ -169,6 +178,79 @@ public:
 		rename(std::forward<KeyType>(key));
 	}
 
+	constexpr void swap(reference other) noexcept { 
+		m_children.swap(other.m_children); 
+	}
+
+
+	constexpr iterator begin() noexcept {
+		return m_children.begin();
+	}
+	constexpr const_iterator begin() const noexcept {
+		return m_children.begin();
+	}
+	constexpr const_iterator cbegin() const noexcept {
+		return m_children.cbegin();
+	}
+
+	constexpr iterator end() noexcept {
+		return m_children.end();
+	}
+	constexpr const_iterator end() const noexcept {
+		return m_children.end();
+	}
+	constexpr const_iterator cend() const noexcept {
+		return m_children.cend();
+	}
+
+	constexpr reference insert(movable child) {
+		child.m_parent = this;
+		auto& res = *m_children.emplace(std::move(child)).first->get();
+
+		
+
+		return res;
+	}
+	template <class... Args> constexpr reference emplace(Args&&... args) {
+		auto& res = *m_children.emplace(std::forward<Args>(args)...).first->get();
+		res.m_parent = *this;
+
+		
+
+		return res;
+	}
+
+
+	constexpr reference erase(iterator pos) { 
+		return m_children.erase(pos); 
+		return *dynamic_cast<pointer>(this);
+	}
+	constexpr reference erase(const_iterator pos) { 
+		return m_children.erase(pos); 
+		return *dynamic_cast<pointer>(this);
+	}
+	constexpr reference erase(const_iterator first, const_iterator last) { 
+		return m_children.erase(first, last); 
+		return *dynamic_cast<pointer>(this);
+	}
+	template <class KeyType> constexpr size_type erase(KeyType&& name) requires std::is_convertible_v<KeyType, key_type> { 
+		return m_children.erase(std::forward(name)); 
+	}
+
+	constexpr reference clear() noexcept { 
+		m_children.clear();
+		return *this;
+	}
+
+
+	template <class KeyType> constexpr reference rename(KeyType&& name) {
+		auto t = dynamic_cast<pointer>(this);
+		m_parent->m_children.extract(m_name);
+		m_name = std::forward<KeyType>(name);
+		m_parent->m_children.emplace(smart_pointer(t));
+		return *t;
+	}
+
 	template <class Iterator> NODISCARD static constexpr json_type parse(Iterator begin, Iterator end) {
 		// first node
 		json_type json;
@@ -185,10 +267,6 @@ public:
 	}
 	template <class Container> NODISCARD static constexpr json_type parse(const Container& container) {
 		return parse(container.begin(), container.end());
-	}
-
-	template <class... Args> NODISCARD static constexpr smart_pointer create(Args&&... args) {
-		return smart_pointer::create(std::forward<Args>(args)...);
 	}
 
 	constexpr string_type stringify() const {
@@ -210,6 +288,7 @@ public:
 		return r;
 	}
 	
+
 	constexpr bool isObject() const noexcept {
 		return std::holds_alternative<object_type>(m_value);
 	}
@@ -306,6 +385,62 @@ public:
 		else return (std::get<type>(m_value));
 	}
 
+
+	template <class KeyType> constexpr iterator find(KeyType&& name) { 
+		return m_children.find(std::forward<KeyType>(name)); 
+	}
+	template <class KeyType> constexpr const_iterator find(KeyType&& name) const { 
+		return m_children.find(std::forward<KeyType>(name)); 
+	}
+	template <class KeyType> constexpr bool contains(KeyType&& name) const { 
+		return m_children.contains(std::forward<KeyType>(name)); 
+	}
+
+	template <class KeyType> constexpr const_reference child(KeyType&& key) const {
+		constexpr bool stringlike = requires(const KeyType& k) {
+			key_type(key);
+			key_type().find("");
+			key_type().substr(0, 0);
+		};
+
+		if constexpr (stringlike) {
+			key_type k(key);
+			size_type beg = 0, cur;
+			pointer_const p = dynamic_cast<pointer_const>(this);
+
+			while ((cur = k.find("::", beg)) < k.size()) {
+				p = p->m_children.at(k.substr(beg, cur - beg));
+				(beg = cur) += 2;
+			}
+
+			return *p->m_children.at(k.substr(beg)).get();
+		} else {
+			return *m_children.at(key).get();
+		}
+	}
+	template <class KeyType> constexpr reference child(KeyType&& key) {
+		constexpr bool stringlike = requires(const KeyType& k) {
+			key_type(key);
+			key_type().find("");
+			key_type().substr(0, 0);
+		};
+
+		if constexpr (stringlike) {
+			key_type k(key);
+			size_type beg = 0, cur;
+			pointer p = dynamic_cast<pointer>(this);
+
+			while ((cur = k.find("::", beg)) < k.size()) {
+				p = p->m_children.at(k.substr(beg, cur - beg));
+				beg = cur + 2;
+			}
+
+			return *p->m_children.at(k.substr(beg)).get();
+		} else {
+			return *m_children.at(key).get();
+		}
+	}
+
 	const_reference at(size_type i) const {
 		return *get<array_type>().at(i);
 	}
@@ -313,10 +448,50 @@ public:
 		return *get<array_type>()[i];
 	}
 
-	using node_type::operator[];
+	template <class KeyType> constexpr const_reference at(KeyType&& name) const {
+		*m_children.at(std::forward<KeyType>(name));
+	}
+	template <class KeyType> constexpr reference at(KeyType&& name) {
+		*m_children.at(std::forward<KeyType>(name));
+	}
+	
+	template <class KeyType> constexpr const_reference operator[](KeyType&& name) const {
+		return *m_children[std::forward<KeyType>(name)];
+	}
+	template <class KeyType> constexpr reference operator[](KeyType&& name) {
+		return *m_children[std::forward<KeyType>(name)];=
+	}
+
+
+	[[nodiscard]] constexpr bool empty() const noexcept { 
+		return m_children.empty(); 
+	}
+	constexpr operator bool() const noexcept { 
+		return m_children.empty(); 
+	}
+
+	[[nodiscard]] constexpr size_type size() const noexcept {
+		return m_children.size();
+	}
+	[[nodiscard]] constexpr const_key_reference name() const noexcept {
+		return m_name;
+	}
+	[[nodiscard]] constexpr const_pointer const parent() const noexcept {
+		return dynamic_cast<pointer>(m_parent);
+	}
 
 private:
 	value_type m_value;
+
+	key_type m_name { };
+
+	json_type* m_parent = nullptr;
+	container m_children { };
+
+
+	template <class... Args> NODISCARD static constexpr smart_pointer create(Args&&... args) {
+		return smart_pointer::create(std::forward<Args>(args)...);
+	}
 
 	template <class Iterator> static constexpr int skipCharacters(Iterator& begin, Iterator& end) {
 		for (; begin != end; begin++) {
@@ -640,11 +815,12 @@ private:
 		else
 			stringifyPrimitive(t, s);
 	}
+
+	friend struct HashFunction;
+	friend struct EqualFunction;
 };
 
 using Json = BasicJson<>;
-using SharedJson = BasicJson<char, Vector, std::int64_t, std::uint64_t, double, UnorderedSparseMap, SharedPointer>;
 using WJson = BasicJson<wchar_t>;
-using WSharedJson = BasicJson<wchar_t, Vector, std::int64_t, std::uint64_t, double, UnorderedSparseMap, SharedPointer>;
 
 } // namespace lsd
