@@ -39,7 +39,7 @@ template <IntegralType Integral> struct Hash<Integral> {
 };
 
 template <PointerType Pointer> struct Hash<Pointer> {
-	constexpr std::size_t operator()(Pointer p) const noexcept {
+	std::size_t operator()(Pointer p) const noexcept {
 		auto i = reinterpret_cast<std::size_t>(p);
 		i = (i ^ (i >> 30)) * std::size_t(0xbf58476d1ce4e5b9);
 		i = (i ^ (i >> 27)) * std::size_t(0x94d049bb133111eb);
@@ -55,19 +55,19 @@ template <> struct Hash<std::nullptr_t> {
 
 template <> struct Hash<std::filesystem::path> {
 	std::size_t operator()(const std::filesystem::path& p) const noexcept {
-		return std::filesystem::hash_value(p); /// @todo implement own hash function
+		return std::filesystem::hash_value(p);
 	}
 };
 
 template <> struct Hash<std::string> {
 	std::size_t operator()(const std::string& p) const noexcept {
-		return std::hash<std::string>()(p); /// @todo implement own hash function
+		return std::hash<std::string>()(p);
 	}
 };
 
 template <> struct Hash<std::wstring> {
 	std::size_t operator()(const std::wstring& p) const noexcept {
-		return std::hash<std::wstring>()(p); /// @todo implement own hash function
+		return std::hash<std::wstring>()(p);
 	}
 };
 
