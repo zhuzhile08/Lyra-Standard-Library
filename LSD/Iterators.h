@@ -39,12 +39,9 @@ public:
 	constexpr Iterator(pointer pointer) noexcept : m_pointer(pointer) { }
 	constexpr Iterator(reference reference) noexcept : m_pointer(&reference) { }
 
-	constexpr reference operator*() { return *m_pointer; }
-	constexpr const_reference operator*() const { return *m_pointer; }
-	constexpr pointer operator->() noexcept { return m_pointer; }
-	constexpr const_pointer operator->() const noexcept { return m_pointer; }
-	constexpr pointer get() noexcept { return m_pointer; }
-	constexpr const_pointer get() const noexcept { return m_pointer; }
+	constexpr reference operator*() const { return *m_pointer; }
+	constexpr pointer operator->() const noexcept { return m_pointer; }
+	constexpr pointer get() const noexcept { return m_pointer; }
 
 	constexpr container_reference operator++() noexcept { 
 		++m_pointer; 
@@ -133,12 +130,9 @@ public:
 	constexpr ReverseIterator(pointer pointer) noexcept : m_pointer(pointer) { }
 	constexpr ReverseIterator(reference reference) noexcept : m_pointer(&reference) { }
 
-	constexpr reference operator*() { return *m_pointer; }
-	constexpr const_reference operator*() const { return *m_pointer; }
-	constexpr pointer operator->() noexcept { return m_pointer; }
-	constexpr const_pointer operator->() const noexcept { return m_pointer; }
-	constexpr pointer get() noexcept { return m_pointer; }
-	constexpr const_pointer get() const noexcept { return m_pointer; }
+	constexpr reference operator*() const { return *m_pointer; }
+	constexpr pointer operator->() const noexcept { return m_pointer; }
+	constexpr pointer get() const noexcept { return m_pointer; }
 
 	constexpr container_reference operator++() noexcept { 
 		--m_pointer; 
@@ -230,10 +224,8 @@ public:
 	constexpr ForwardListIterator() noexcept = default;
 	constexpr ForwardListIterator(node_base* pointer) noexcept : m_pointer(pointer) { }
 
-	constexpr reference operator*() { return static_cast<node_pointer>(m_pointer)->value; }
-	constexpr const_reference operator*() const { return static_cast<const node_type*>(m_pointer)->value; }
-	constexpr pointer operator->() noexcept { return &static_cast<node_pointer>(m_pointer)->value; }
-	constexpr const_pointer operator->() const noexcept { return &static_cast<const node_type*>(m_pointer)->value; }
+	constexpr reference operator*() const { return static_cast<node_pointer>(m_pointer)->value; }
+	constexpr pointer operator->() const noexcept { return &static_cast<node_pointer>(m_pointer)->value; }
 	constexpr node_base* get() noexcept { return m_pointer; }
 	constexpr const node_base* get() const noexcept { return m_pointer; }
 
