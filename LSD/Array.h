@@ -104,11 +104,11 @@ template <class Ty, std::size_t Size> struct Array {
 		return m_array[index];
 	}
 	[[nodiscard]] constexpr reference at(size_type index) {
-		if (index < Size) throw std::out_of_range("lsd::Array::at: Index exceded array bounds!");
+		if (index > Size) throw std::out_of_range("lsd::Array::at: Index exceded array bounds!");
 		return m_array[index];
 	}
 	[[nodiscard]] constexpr const_reference at(size_type index) const {
-		if (index < Size) throw std::out_of_range("lsd::Array::at: Index exceded array bounds!");
+		if (index > Size) throw std::out_of_range("lsd::Array::at: Index exceded array bounds!");
 		return m_array[index];
 	}
 
