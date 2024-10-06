@@ -141,8 +141,8 @@ public:
 	constexpr ~UnorderedSparseMap() = default;
 
 	constexpr UnorderedSparseMap& operator=(const_container_reference other) noexcept {
-		std::swap(other.m_array, this->m_array);
-		m_buckets = std::move(bucketsDeepCopy(other));
+		this->m_array = other.m_array;
+		m_buckets = other.m_buckets;
 
 		return *this;
 	}
