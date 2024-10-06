@@ -15,6 +15,7 @@
 #include "Iterators.h"
 
 #include <cstdlib>
+#include <cstdint>
 #include <cassert>
 #include <new>
 #include <utility>
@@ -66,7 +67,7 @@ public:
 			auto count = last - first;
 			smartReserve(count);
 
-			for (; first != last; first++, m_end++) allocator_traits::construct(m_alloc, m_end, *first);
+			for (; first != last; first++, m_end++) allocator_traits::construct(m_alloc, m_end, std::move(*first));
 		}
 	}
 	constexpr Vector(const_container_reference other) : Vector(other.m_begin, other.m_end) { }
