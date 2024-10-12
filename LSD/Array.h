@@ -15,6 +15,7 @@
 #include <cassert>
 #include <utility>
 #include <algorithm>
+#include <stdexcept>
 
 namespace lsd {
 

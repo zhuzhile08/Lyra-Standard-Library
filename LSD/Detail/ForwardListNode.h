@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 namespace lsd {
 
 namespace detail {

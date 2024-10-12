@@ -13,6 +13,8 @@
 
 #include <cstddef>
 
+#include <memory>
+
 namespace lsd {
 
 namespace detail {
