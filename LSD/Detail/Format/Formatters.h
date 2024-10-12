@@ -11,10 +11,11 @@
 
 #pragma once
 
-#include "../String.h"
-#include "../StringView.h"
+#include "../../String.h"
+#include "../../StringView.h"
 
 #include "FormatCore.h"
+#include "FormatArgs.h"
 
 #include <cstddef>
 
@@ -51,10 +52,6 @@ template <class CharT1, class CharT2> struct CharsFormatter {
 };
 
 } // namespace detail
-
-
-
-template <class Ty, class CharTy = char> struct Formatter;
 
 
 // character formatters
@@ -142,7 +139,7 @@ template <> struct Formatter<short int, char> {
 	}
 };
 template <> struct Formatter<unsigned short int, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
 	}
 };
@@ -152,7 +149,7 @@ template <> struct Formatter<int, char> {
 	}
 };
 template <> struct Formatter<unsigned int, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
 	}
 };
@@ -162,7 +159,7 @@ template <> struct Formatter<long int, char> {
 	}
 };
 template <> struct Formatter<unsigned long int, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
 	}
 };
@@ -172,7 +169,7 @@ template <> struct Formatter<long long int, char> {
 	}
 };
 template <> struct Formatter<unsigned long long int, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
 	}
 };
@@ -183,7 +180,7 @@ template <> struct Formatter<float, char> {
 	}
 };
 template <> struct Formatter<float, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
 	}
 };
@@ -193,7 +190,7 @@ template <> struct Formatter<double, char> {
 	}
 };
 template <> struct Formatter<double, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
 	}
 };
@@ -203,7 +200,7 @@ template <> struct Formatter<long double, char> {
 	}
 };
 template <> struct Formatter<long double, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
 	}
 };
@@ -217,7 +214,7 @@ template <> struct Formatter<std::nullptr_t, char> {
 	}
 };
 template <> struct Formatter<std::nullptr_t, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
 	}
 };
@@ -227,7 +224,7 @@ template <> struct Formatter<void*, char> {
 	}
 };
 template <> struct Formatter<void*, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
 	}
 };
@@ -237,8 +234,29 @@ template <> struct Formatter<const void*, char> {
 	}
 };
 template <> struct Formatter<const void*, wchar_t> {
-	template <class CharTy> constexpr void format(detail::WFormatBackInserter& inserter, const detail::BasicFieldOptions<CharTy>& options) {
+	constexpr void format(detail::WFormatBackInserter& inserter, const detail::WFieldOptions& options) {
 		
+	}
+};
+
+
+// special type erased argument store formatters
+
+template <> struct Formatter<detail::TypeErasedFormatArg<char, detail::WFormatBackInserter>, char> {
+	constexpr void format(
+		const detail::TypeErasedFormatArg<char, detail::FormatBackInserter>& fmtArg, 
+		detail::FormatBackInserter& inserter, 
+		const detail::FieldOptions& options) {
+		fmtArg.format(inserter, options);
+	}
+};
+
+template <> struct Formatter<detail::TypeErasedFormatArg<wchar_t, detail::WFormatBackInserter>, wchar_t> {
+	constexpr void format(
+		const detail::TypeErasedFormatArg<wchar_t, detail::WFormatBackInserter>& fmtArg, 
+		detail::WFormatBackInserter& inserter, 
+		const detail::WFieldOptions& options) {
+		fmtArg.format(inserter, options);
 	}
 };
 

@@ -24,13 +24,15 @@
 #pragma once
 
 #include "Iterators.h"
+#include "Array.h"
 #include "String.h"
 #include "StringView.h"
 #include "UniquePointer.h"
 #include "FunctionPointer.h"
 #include "Utility.h"
-#include "Detail/Formatters.h"
-#include "Detail/FormatCore.h"
+#include "Detail/Format/Formatters.h"
+#include "Detail/Format/FormatArgs.h"
+#include "Detail/Format/FormatCore.h"
 
 #include <cctype>
 #include <type_traits>
@@ -38,7 +40,7 @@
 
 namespace lsd {
 
-// formatting core class
+// formatting core context class
 template <class CharTy> class BasicFormatContext {
 public:
 	static_assert(std::is_same_v<CharTy, char> || std::is_same_v<CharTy, wchar_t>, "lsd::BasicFormatContext: Format context only accepts char and wchar_t as valid types for template argument CharTy!");
@@ -50,6 +52,8 @@ public:
 	using view_iterator = typename view_type::const_iterator;
 	using field_options = detail::BasicFieldOptions<CharTy>;
 
+	using format_args = BasicFormatArgs<BasicFormatContext>;
+
 	template <class Ty> using formatter_type = Formatter<Ty, char_type>;
 
 public:
@@ -58,7 +62,7 @@ public:
 	constexpr BasicFormatContext& operator=(BasicFormatContext&&) = delete;
 
 	template <class... Args> static void format(iterator outputIt, view_type fmt, Args&&... args) {
-		auto argList = { BasicFormatArg<char_type>(args)... };
+		auto argList = lsd::Array<BasicFormatArg<BasicFormatContext>>{ BasicFormatArg<BasicFormatContext>(std::forward<Args>(args))... };
 		field_options options { };
 
 		for (auto it = fmt.begin(); it < fmt.end() && !outputIt.done(); it++) {
@@ -71,9 +75,7 @@ public:
 						break;
 					}
 
-					(argList.begin() + options.argumentIndex)->template format<BasicFormatContext>(outputIt, options);
-
-					//Formatter<, char_type>().format(, outputIt, options);
+					argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { formatter_type<std::remove_cvref_t<decltype(value)>>::format(value, outputIt, options); });
 
 					break;
 				
@@ -205,6 +207,12 @@ using FormatContext = BasicFormatContext<char>;
 using WFormatContext = BasicFormatContext<wchar_t>;
 
 
+// format args aliases
+
+using FormatArgs = BasicFormatArgs<FormatContext>;
+using WFormatArgs = BasicFormatArgs<WFormatContext>;
+
+
 // general formatting functions
 
 template <class... Args> inline String format(FormatString<Args...> fmt, Args&&... args) {
@@ -220,7 +228,7 @@ template <class... Args> inline String format(FormatString<Args...> fmt, Args&&.
 	);
 	return out;
 }
-template <class... Args> inline  WString format(WFormatString<Args...> fmt, Args&&... args) {
+template <class... Args> inline WString format(WFormatString<Args...> fmt, Args&&... args) {
 	WString out;
 	FormatContext::format(
 		detail::FormatBackInserter(
