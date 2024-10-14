@@ -31,7 +31,7 @@
 #include "FunctionPointer.h"
 #include "Utility.h"
 
-#include "Detail/FromCharsIntegral.h"
+#include "Detail/FromChars/FromCharsIntegral.h"
 #include "Detail/Format/Formatters.h"
 #include "Detail/Format/FormatArgs.h"
 #include "Detail/Format/FormatCore.h"
