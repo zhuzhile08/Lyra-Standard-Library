@@ -132,4 +132,12 @@ template <class Ty, std::size_t Size> struct Array {
 	array m_array;
 };
 
+
+// array type trait
+
+template <class Ty> struct IsArray : std::is_array<Ty> { };
+template <class Ty, std::size_t Size> struct IsArray<Array<Ty, Size>> : std::true_type { };
+
+template <class Ty> inline constexpr bool isArrayValue = IsArray<Ty>::value;
+
 } // namespace lsd

@@ -78,11 +78,25 @@ public:
 							break;
 						}
 
-						argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
-							if constexpr (!std::is_same_v<std::remove_cvref_t<decltype(value)>, std::monostate>) 
-								formatter_type<std::remove_cvref_t<decltype(value)>>().format(value, outputIt, options);
-							else throw FormatError("lsd::BasicFormatContext()::format(): Argument index out of bounds");
-						});
+						if constexpr (!std::is_same_v<arg_type, std::monostate>) {
+							if (options.hasArrayIndex) argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
+								using arg_type = std::remove_cvref_t<decltype(value)>;
+
+								if constexpr (isArrayValue<arg_type>) 
+									formatter_type<
+										std::remove_reference_t<decltype(
+											std::declval<arg_type>()[0]
+										)>
+									>().format(value[options.arrayIndex], outputIt, options);
+								else throw FormatError("lsd::BasicFormatContext()::format(): Can't take array element from non array-like argument type");
+							});
+							else argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
+								using arg_type = std::remove_cvref_t<decltype(value)>;
+
+								formatter_type<arg_type>().format(value, outputIt, options);
+								
+							});
+						} else throw FormatError("lsd::BasicFormatContext()::format(): Argument index out of bounds");
 					} else throw FormatError("lsd::BasicFormatContext()::format(): Format field found when no arguments were provided");
 
 					break;
@@ -125,12 +139,13 @@ private:
 
 			default:
 				auto fcRes = fromChars(it, end, fieldOptions.argumentIndex);
-				if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Format parameter index overflow!");
+				if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Format parameter index not valid!");
 				it = fcRes.ptr;
 
 				if (*it == '[') {
 					fcRes = fromChars(it + 1, end, fieldOptions.arrayIndex);
-					if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Index into format parameter overflow!");
+					if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Index into format parameter not valid!");
+					fieldOptions.hasArrayIndex = true;
 					it = fcRes.ptr + 1;
 				}
 

@@ -79,23 +79,27 @@ namespace detail {
 // replacement field parsed options
 
 template <class CharTy> struct BasicFieldOptions {
+	using char_type = CharTy;
+
 	bool isReplacementField = true; // false means that the inserted character is just an escaped '{'
 	bool useDefaultFormat = false;
 
 	std::size_t fieldIndex = std::numeric_limits<std::size_t>::max(); // index of the current field in the format string
 	std::size_t argumentIndex = 0; // index of the requested formatting argument
+
+	bool hasArrayIndex = false;
 	std::size_t arrayIndex = 0;
 
-	char fillChr = ' ';
-	char align = '<';
+	char_type fillChr = ' ';
+	char_type align = '<';
 	
-	char sign = '-';
+	char_type sign = '-';
 	bool negativeZero = true; // true means the format uses negative zero
 	bool alternateForm = false;
 
 	std::size_t fillCount = 0;
 
-	BasicStringView<CharTy> typeFormat;
+	BasicStringView<char_type> typeFormat;
 };
 
 using FieldOptions = BasicFieldOptions<char>;
@@ -147,9 +151,9 @@ public:
 
 	using view_type = BasicStringView<CharTy>;
 
-	BasicFormatVerifier() = delete;
-	BasicFormatVerifier& operator=(const BasicFormatVerifier&) = delete;
-	BasicFormatVerifier& operator=(BasicFormatVerifier&&) = delete;
+	constexpr BasicFormatVerifier() = delete;
+	constexpr BasicFormatVerifier& operator=(const BasicFormatVerifier&) = delete;
+	constexpr BasicFormatVerifier& operator=(BasicFormatVerifier&&) = delete;
 
 	static void verifyRuntime(view_type fmt) {
 		
