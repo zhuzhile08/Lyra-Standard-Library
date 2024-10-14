@@ -22,15 +22,32 @@ namespace lsd {
 
 // forward declarations
 
-template <class> struct BasicFieldOptions;
 class FormatError;
+
+template <class> struct BasicFieldOptions;
 template <class> class BasicFormatBackInserter;
-template <class> struct BasicRuntimeFormatString;
+
 template <class> class BasicFormatVerifier;
 
+template <class> struct BasicRuntimeFormatString;
 template <class, class...> struct BasicFormatString;
 
-template <class Ty, class CharTy> struct Formatter;
+template <class> class BasicFormatArg;
+
+template <class, class> struct Formatter {
+	constexpr Formatter() = default;
+	constexpr Formatter(const Formatter&) = default;
+	constexpr Formatter& operator=(const Formatter&) = default;
+};
+
+
+namespace detail {
+
+template <class, class> class TypeErasedFormatArg;
+template <class> class BasicFormatArgStoreEmptyValue;
+template <class, class...> class BasicFormatArgStore;
+
+}
 
 
 // formatting exception
