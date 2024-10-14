@@ -94,10 +94,12 @@ template <class CharTy> struct BasicFieldOptions {
 	char_type align = '<';
 	
 	char_type sign = '-';
-	bool negativeZero = true; // true means the format uses negative zero
+	bool negativeZero = true;
 	bool alternateForm = false;
+	bool leadingZeros = false;
 
 	std::size_t fillCount = 0;
+	std::size_t precision = 5;
 
 	BasicStringView<char_type> typeFormat;
 };
@@ -145,7 +147,7 @@ using WFormatBackInserter = BasicFormatBackInserter<wchar_t>;
 
 // format verifier
 
-template <class CharTy> class BasicFormatVerifier {
+template <class CharTy, class... Args> class BasicFormatVerifier {
 public:
 	static_assert(std::is_same_v<CharTy, char> || std::is_same_v<CharTy, wchar_t>, "lsd::BasicRuntimeFormatString: Runtime format string only accepts char and wchar_t as valid types for template argument CharTy!");
 
@@ -156,7 +158,11 @@ public:
 	constexpr BasicFormatVerifier& operator=(BasicFormatVerifier&&) = delete;
 
 	static void verifyRuntime(view_type fmt) {
-		
+		/*
+		else throw FormatError("lsd::BasicFormatContext()::format(): Can't take array element from non array-like argument type");
+		else throw FormatError("lsd::BasicFormatContext()::format(): Argument index out of bounds");
+		else throw FormatError("lsd::BasicFormatContext()::format(): Format field found when no arguments were provided");
+		*/
 	}
 	static consteval void verifyCompileTime(view_type fmt) {
 		
@@ -222,7 +228,7 @@ public:
 
 	using view_type = BasicStringView<CharTy>;
 	using runtime_type = detail::BasicRuntimeFormatString<CharTy>;
-	using verifier_type = detail::BasicFormatVerifier<CharTy>;
+	using verifier_type = detail::BasicFormatVerifier<CharTy, Args...>;
 
 	template <class Ty> consteval BasicFormatString(const Ty& s) requires std::is_convertible_v<const Ty&, view_type> : m_view(s) {
 		verifier_type::verifyCompileTime(m_view);

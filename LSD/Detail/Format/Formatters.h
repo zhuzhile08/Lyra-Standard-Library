@@ -23,6 +23,8 @@ namespace lsd {
 
 namespace detail {
 
+// formatter implementations
+
 template <class CharT1, class CharT2> struct CharsFormatter {
 	constexpr static void format(CharT1 c, detail::BasicFormatBackInserter<CharT2>& inserter, const detail::BasicFieldOptions<CharT1>& options) {
 		switch (options.align) {
@@ -32,7 +34,6 @@ template <class CharT1, class CharT2> struct CharsFormatter {
 
 				break;
 
-			case '=':
 			case '>':
 				for (auto count = options.fillCount; !inserter.done() && count > 1; count--) inserter = options.fillChr;
 				if (!inserter.done()) inserter = c;
@@ -48,6 +49,24 @@ template <class CharT1, class CharT2> struct CharsFormatter {
 				break;
 			}
 		}
+	}
+};
+
+template <class CharTy> struct StringFormatter {
+	constexpr static void format(
+		const char* data, 
+		std::size_t length, 
+		detail::BasicFormatBackInserter<CharTy>& inserter, 
+		const detail::BasicFieldOptions<CharTy>& options) {
+
+	}
+
+	constexpr static void format(
+		char* data, 
+		std::size_t length, 
+		detail::BasicFormatBackInserter<CharTy>& inserter, 
+		const detail::BasicFieldOptions<CharTy>& options) {
+
 	}
 };
 
@@ -74,10 +93,10 @@ template <> struct Formatter<wchar_t, wchar_t> {
 // bool formatter
 template <class CharTy> struct Formatter<bool, CharTy> {
 	constexpr void format(
-		bool c, 
+		bool value, 
 		detail::BasicFormatBackInserter<CharTy>& inserter, 
 		const detail::BasicFieldOptions<CharTy>& options) {
-
+		
 	}
 };
 
@@ -89,7 +108,7 @@ template <class CharTy> struct Formatter<CharTy*, CharTy> {
 		CharTy* value, 
 		detail::BasicFormatBackInserter<CharTy>& inserter, 
 		const detail::BasicFieldOptions<CharTy>& options) {
-		
+		detail::StringFormatter<CharTy>::format(value, std::strlen(value), inserter, options);
 	}
 };
 template <class CharTy> struct Formatter<const CharTy*, CharTy> {
@@ -97,7 +116,7 @@ template <class CharTy> struct Formatter<const CharTy*, CharTy> {
 		const CharTy* value, 
 		detail::BasicFormatBackInserter<CharTy>& inserter, 
 		const detail::BasicFieldOptions<CharTy>& options) {
-		
+		detail::StringFormatter<CharTy>::format(value, std::strlen(value), inserter, options);
 	}
 };
 
@@ -106,7 +125,7 @@ template <std::size_t Count, class CharTy> struct Formatter<CharTy[Count], CharT
 		const CharTy (&value)[Count], 
 		detail::BasicFormatBackInserter<CharTy>& inserter, 
 		const detail::BasicFieldOptions<CharTy>& options) {
-		
+		detail::StringFormatter<CharTy>::format(value, Count, inserter, options);
 	}
 };
 
@@ -115,7 +134,7 @@ template <class Traits, class Alloc, class CharTy> struct Formatter<BasicString<
 		const BasicString<CharTy, Traits, Alloc>& value, 
 		detail::BasicFormatBackInserter<CharTy>& inserter, 
 		const detail::BasicFieldOptions<CharTy>& options) {
-		
+		detail::StringFormatter<CharTy>::format(value.data(), value.size(), inserter, options);
 	}
 };
 template <class Traits, class CharTy> struct Formatter<BasicStringView<CharTy, Traits>, CharTy> {
@@ -123,7 +142,7 @@ template <class Traits, class CharTy> struct Formatter<BasicStringView<CharTy, T
 		BasicStringView<CharTy, Traits> value, 
 		detail::BasicFormatBackInserter<CharTy>& inserter, 
 		const detail::BasicFieldOptions<CharTy>& options) {
-		
+		detail::StringFormatter<CharTy>::format(value.data(), value.size(), inserter, options);
 	}
 };
 

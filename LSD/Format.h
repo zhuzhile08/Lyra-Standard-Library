@@ -7,14 +7,13 @@
  * @brief Formatting specification: 
  * @brief replacementField  ::= "{" [field][":"format] "}"
  * @brief field             ::= [argumentIndex]["["elementIndex"]"]
- * @brief format            ::= [[fillCharacter]alignMode][sign]["z"]["#"][alignCount][typeFormat]
+ * @brief format            ::= [[fillCharacter]alignMode][sign]["z"]["#"]["0"][fillCount]["."precision][typeFormat]
  * @brief fillCharacter     ::= <any character except '{' and '}'>
- * @brief alignMode         ::= '<' | '>' | '=' | '^'
+ * @brief alignMode         ::= '<' | '>' | '='
  * @brief sign              ::= '+' | '-' | ' '
- * @brief alignCount        ::= <unsigned integer>
+ * @brief fillCount        ::= <unsigned integer>
+ * @brief precision			::= <unsigned integer>
  * @brief typeFormat        ::= <any valid C-formatting options accespted by the respective C-formatting function>
- * 
- * @todo The formatter lacks width and precision features
  * 
  * @date 2024-06-18
  * 
@@ -63,7 +62,7 @@ public:
 	constexpr BasicFormatContext& operator=(const BasicFormatContext&) = delete;
 	constexpr BasicFormatContext& operator=(BasicFormatContext&&) = delete;
 
-	template <class... Args> static void format(iterator outputIt, view_type fmt, Args&... args) {
+	template <class... Args> constexpr static void format(iterator outputIt, view_type fmt, Args&... args) {
 		auto argList = 	format_args<Args...>(args...);
 		field_options options { };
 
@@ -78,26 +77,21 @@ public:
 							break;
 						}
 
-						if constexpr (!std::is_same_v<arg_type, std::monostate>) {
-							if (options.hasArrayIndex) argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
-								using arg_type = std::remove_cvref_t<decltype(value)>;
+						if (options.hasArrayIndex) argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
+							using arg_type = std::remove_cvref_t<decltype(value)>;
 
-								if constexpr (isArrayValue<arg_type>) 
-									formatter_type<
-										std::remove_reference_t<decltype(
-											std::declval<arg_type>()[0]
-										)>
-									>().format(value[options.arrayIndex], outputIt, options);
-								else throw FormatError("lsd::BasicFormatContext()::format(): Can't take array element from non array-like argument type");
-							});
-							else argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
-								using arg_type = std::remove_cvref_t<decltype(value)>;
+							if constexpr (!std::is_same_v<arg_type, std::monostate> && isArrayValue<arg_type>) formatter_type<
+									std::remove_reference_t<decltype(
+										std::declval<arg_type>()[0]
+									)>
+								>().format(value[options.arrayIndex], outputIt, options);
+						});
+						else argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
+							using arg_type = std::remove_cvref_t<decltype(value)>;
 
-								formatter_type<arg_type>().format(value, outputIt, options);
-								
-							});
-						} else throw FormatError("lsd::BasicFormatContext()::format(): Argument index out of bounds");
-					} else throw FormatError("lsd::BasicFormatContext()::format(): Format field found when no arguments were provided");
+							if constexpr (!std::is_same_v<arg_type, std::monostate>) formatter_type<arg_type>().format(value, outputIt, options);
+						});
+					}
 
 					break;
 				
@@ -149,10 +143,10 @@ private:
 					it = fcRes.ptr + 1;
 				}
 
+				if (*it == ':') ++it;
+
 				break;
 		}
-
-		if (*it == ':') ++it;
 
 		switch (*it) { // parse early exit end alignment options
 			case '}':
@@ -167,7 +161,6 @@ private:
 					case '<':
 					case '>':
 					case '=':
-					case '^':
 						fieldOptions.align = *it;
 						fieldOptions.fillChr = alignFirst;
 						++it;
@@ -179,7 +172,6 @@ private:
 							case '<':
 							case '>':
 							case '=':
-							case '^':
 								fieldOptions.align = alignFirst;
 								++it;
 
@@ -216,9 +208,19 @@ private:
 			++it;
 		}
 
-		// don't check the result because it's optional anyways
+		if (*it == '0') {
+			fieldOptions.leadingZeros = true;
+			++it;
+		}
+
+		// don't check the results here because it's optional anyways
+
 		auto fcRes = fromChars(it, end, fieldOptions.fillCount);
+
+		if (*fcRes.ptr == '.') fcRes = fromChars(fcRes.ptr + 1, end, fieldOptions.precision);
 		
+		// parse the remaining formatting option
+
 		for (it = fcRes.ptr; *it != '}'; it++)
 		;
 
