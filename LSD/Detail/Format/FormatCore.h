@@ -137,7 +137,7 @@ public:
 
 private:
 	void* const m_container;
-	Function<void(void*, const char_type&)> m_pushBack;
+	void (*m_pushBack)(void*, const char_type&); // this is not a lsd::Function because it's always stateless
 	Function<bool(void*)> m_done;
 };
 

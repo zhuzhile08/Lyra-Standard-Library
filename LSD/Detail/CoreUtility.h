@@ -12,6 +12,8 @@
 #pragma once
 
 #include <cstddef>
+#include <type_traits>
+#include <concepts>
 
 #include <memory>
 
@@ -57,6 +59,46 @@ template <class Integer> inline constexpr Integer lastPrime(Integer n) noexcept 
 };
 
 
+// number digit counting utility
+
+template <std::integral Type> inline constexpr std::size_t u32LenDec(Type value) {
+	if (value >= 100000) {
+		if (x >= 10000000) {
+			if (x >= 100000000) {
+				if (x >= 1000000000) return 10;
+				else return 9;
+			} else return 8;
+		} if (x >= 1000000) return 7;
+		else return 6;
+	} else if (value >= 100) {
+		if (value >= 1000) {
+			if (value >= 10000) return 5;
+			else return 4;
+		} else return 3;
+	} else if (value >= 10) return 2;
+	else return 1;
+}
+
+template <std::integral Type> inline constexpr std::size_t i64LenDec(Type value) {
+	if (value >= 10000000000) {
+		if (x >= 100000000000000) {
+			if (x >= 10000000000000000) {
+				if (x >= 100000000000000000) {
+					if (x >= 1000000000000000000) return 19;
+					else return 18;
+				} else return 17;
+			} else if (x >= 1000000000000000) return 16;
+			else return 15;
+		} else if (x >= 1000000000000) {
+			if (x >= 10000000000000) return 14;
+			else return 13;
+		} else if (x >= 100000000000) return 12;
+		else return 11;
+	} else return u32LenDec<Type>(value);
+}
+
+
+
 // hash map utility
 
 inline constexpr std::size_t hashmapBucketSizeCheck(std::size_t requested, std::size_t required) noexcept {
@@ -93,6 +135,40 @@ template <class Ty> [[deprecated]] [[nodiscard]] constexpr inline Ty implicit_ca
 }
 
 
+// count digits of a number
+
+template <std::integral Type> inline constexpr std::size_t decNumLen(Type value) {
+	if constexpr (sizeof(Type) == 4) {
+		if (value < 0) value *= -1;
+		else return detail::u32LenDec(value);
+	} else if constexpr (sizeof(Type) == 8) {
+		if constexpr (std::is_unsigned_v<Type>) {
+			if (value >= 10000000000000000000) return 20;
+			else return detail::i64LenDec(value);
+		} else {
+			if (value < 0) value *= -1;
+			else return detail::i64LenDec(value);
+		}
+	} else {
+		if (!value) return 1;
+
+		std::size_t digits = 0;
+		for (; value; value /= 10, digits++)
+		;
+		return digits;
+	}
+}
+
+template <std::integral Type> inline constexpr std::size_t numLen(Type value, std::size_t base) {
+	if (!value) return 1;
+
+	std::size_t digits = 0;
+	for (; value; value /= base, digits++)
+	;
+	return digits;
+}
+
+
 // value conditional
 
 template <bool Condition, class TTy, class FTy = TTy> struct ValueConditional;
@@ -106,6 +182,5 @@ template <class TTy, class FTy> struct ValueConditional<false, TTy, FTy> {
 		return FalseVal;
 	}
 };
-
 
 } // namespace lsd

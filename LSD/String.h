@@ -78,7 +78,7 @@ private:
 	// aggressive small string and padding calculation
 
 	static constexpr size_type paddingSize = 
-		static_cast<size_type>(sizeof(value_type) / (sizeof(pointer) * 3 + sizeof(pointer)) + 1);
+		static_cast<size_type>(sizeof(value_type) / (sizeof(pointer) * 4) + 1);
 	static constexpr size_type smallStringCap = 
 		static_cast<size_type>((sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - 1) / sizeof(value_type));
 	static constexpr size_type smallStringPaddingSize = 
@@ -100,7 +100,7 @@ private:
 		pointer end { };
 		pointer cap { };
 
-		pointer padding[paddingSize] { }; // unused and slightly cursed, don't even know if this is necesseary
+		pointer padding[paddingSize] { }; // there has to be at least one block of padding for the tag
 	};
 
 

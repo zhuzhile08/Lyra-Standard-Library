@@ -11,9 +11,9 @@
  * @brief fillCharacter     ::= <any character except '{' and '}'>
  * @brief alignMode         ::= '<' | '>' | '='
  * @brief sign              ::= '+' | '-' | ' '
- * @brief fillCount        ::= <unsigned integer>
+ * @brief fillCount        	::= <unsigned integer>
  * @brief precision			::= <unsigned integer>
- * @brief typeFormat        ::= <any valid C-formatting options accespted by the respective C-formatting function>
+ * @brief typeFormat        ::= <extended formatting arguments, ususally used for data presentation style>
  * 
  * @date 2024-06-18
  * 
@@ -133,12 +133,12 @@ private:
 
 			default:
 				auto fcRes = fromChars(it, end, fieldOptions.argumentIndex);
-				if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Format parameter index not valid!");
+				// if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Format parameter index not valid!");
 				it = fcRes.ptr;
 
 				if (*it == '[') {
 					fcRes = fromChars(it + 1, end, fieldOptions.arrayIndex);
-					if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Index into format parameter not valid!");
+					// if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Index into format parameter not valid!");
 					fieldOptions.hasArrayIndex = true;
 					it = fcRes.ptr + 1;
 				}
