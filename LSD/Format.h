@@ -7,7 +7,7 @@
  * @brief Formatting specification: 
  * @brief replacementField  ::= "{" [field][":"format] "}"
  * @brief field             ::= [argumentIndex]["["elementIndex"]"]
- * @brief format            ::= [[fillCharacter]alignMode][sign]["z"]["#"]["0"][fillCount]["."precision][typeFormat]
+ * @brief format            ::= [[fillCharacter]alignMode][sign]["#"]["0"][fillCount]["."precision][typeFormat]
  * @brief fillCharacter     ::= <any character except '{' and '}'>
  * @brief alignMode         ::= '<' | '>' | '='
  * @brief sign              ::= '+' | '-' | ' '
@@ -128,6 +128,7 @@ private:
 
 			case ':':
 				fieldOptions.argumentIndex = fieldOptions.fieldIndex;
+				++it;
 
 				break;
 
@@ -155,26 +156,31 @@ private:
 				break;
 
 			default: {
-				auto alignFirst = *it;
+				auto alignFirst = it;
 
 				switch (*++it) {
 					case '<':
 					case '>':
-					case '=':
+					case '^':
 						fieldOptions.align = *it;
-						fieldOptions.fillChr = alignFirst;
+						fieldOptions.fillChr = *alignFirst;
 						++it;
 
 						break;
 
 					default:
-						switch (alignFirst) {
+						switch (*alignFirst) {
 							case '<':
 							case '>':
-							case '=':
-								fieldOptions.align = alignFirst;
+							case '^':
+								fieldOptions.align = *alignFirst;
 								++it;
 
+								break;
+							
+							default:
+								it = alignFirst;
+								
 								break;
 						}
 				}
