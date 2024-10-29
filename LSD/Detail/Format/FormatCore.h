@@ -99,7 +99,7 @@ template <class CharTy> struct BasicFieldOptions {
 	bool leadingZeros = false;
 
 	std::size_t fillCount = 0;
-	std::size_t precision = 5;
+	std::size_t precision = 6;
 
 	BasicStringView<char_type> typeFormat;
 };
