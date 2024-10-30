@@ -67,17 +67,6 @@ constexpr inline std::size_t decDigitToRequiredBits(int digit) noexcept {
     return lookup[digit - '1'];
 }
 
-
-// fast integer power
-constexpr inline std::uint64_t fastUIntPow(std::uint64_t n, std::uint64_t exp) noexcept {
-    if (exp == 0) return 1;
-
-    std::uint64_t res = n;
-    for (; exp > 0; exp--, res *= n) 
-    ;
-    return res;
-}
-
 } // namespace detail
 
 
@@ -243,7 +232,7 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
                 std::int64_t remaining = maxBinDigits - bitWidth; 
 
                 if (remaining > 0) {
-                    auto powerOfTen = detail::fastUIntPow(10, it - begIt - 1);
+                    auto powerOfTen = std::pow(10, it - begIt - 1);
 
                     for (; remaining > 0 && fracAsInt != 0; fracAsInt *= 2, mant <<= 1, remaining--) {
                         if (fracAsInt >= powerOfTen) {
