@@ -80,11 +80,11 @@ private:
 	static constexpr size_type paddingSize = 
 		static_cast<size_type>(sizeof(value_type) / (sizeof(pointer) * 4) + 1);
 	static constexpr size_type smallStringCap = 
-		static_cast<size_type>((sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - 1) / sizeof(value_type));
+		static_cast<size_type>((sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - 1) / sizeof(value_type)) - 1;
 	static constexpr size_type smallStringPaddingSize = 
-		sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - smallStringCap * sizeof(value_type);
+		sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - (smallStringCap + 1) * sizeof(value_type);
 
-	using small_string_type = value_type[smallStringCap];
+	using small_string_type = value_type[smallStringCap + 1];
 	using small_string_tag = unsigned char[smallStringPaddingSize];
 
 
