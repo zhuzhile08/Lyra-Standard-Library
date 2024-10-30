@@ -379,23 +379,31 @@ public:
 	}
 
 private:
+	// general calculations
+	static constexpr std::size_t sciExp(value_type value, std::size_t base) {
+		auto logAbs = logn(static_cast<value_type>(base), std::abs(value));
+
+		if (value > 1 || value < -1) return implicitCast<std::size_t>(logAbs);
+		else return implicitCast<std::size_t>(std::abs(logAbs)) + 1;
+	}
+
 	// output length calculation
 
 	static constexpr std::size_t outputLength(value_type value, const field_options& options) {
 		if (std::isinf(value) || std::isnan(value)) return 3;
 
-		if (options.typeFormat.empty()) return signLen(value, options.sign) + numLen(value, 10) + (options.alternateForm ? (options.precision + 1) : fracLength<10>(value, options.precision, false));
+		if (options.typeFormat.empty()) return signLen(value, options.sign) + numLen(value, 10) + (options.alternateForm ? (options.precision + 1) : fracLen(value, 10, options.precision, false));
 		else {
 			switch (options.typeFormat[0]) {
 				case 'a':
 				case 'A':
-					return signLen(value, options.sign) + 3 + fracLength<16>(value, options.precision + 1, options.alternateForm) + sciExpLength<2>(value);
+					return signLen(value, options.sign) + 3 + fracLen(value, 16, options.precision + 1, options.alternateForm) + sciExpLen(value, 2);
 
 					break;
 
 				case 'e':
 				case 'E':
-					return signLen(value, options.sign) + 3 + fracLength<10>(value, options.precision + 1, options.alternateForm) + sciExpLength<10>(value);
+					return signLen(value, options.sign) + 3 + fracLen(value, 10, options.precision + 1, options.alternateForm) + sciExpLen(value, 10);
 
 					break;
 				
@@ -407,7 +415,7 @@ private:
 
 				case 'g':
 				case 'G':
-					return signLen(value, options.sign) + numLen(value, 10) + (options.alternateForm ? (options.precision + 1) : fracLength<10>(value, options.precision, false));
+					return signLen(value, options.sign) + numLen(value, 10) + (options.alternateForm ? (options.precision + 1) : fracLen(value, 10, options.precision, false));
 
 					break;
 			}
@@ -432,20 +440,17 @@ private:
 
 		return 0;
 	}
-	template <std::size_t Base> static constexpr std::size_t sciExpLength(value_type value) {
-		auto logAbs = logn<Base>(std::abs(value));
-
-		if (value > 1) return implicitCast<std::size_t>(logAbs);
-		else return std::floor(std::abs(logAbs)) + 1;
+	static constexpr std::size_t sciExpLen(value_type value, std::size_t base) {
+		return logn(base, sciExp(value, base));
 	}
-	template <std::size_t Base> static constexpr std::size_t fracLength(value_type value, std::size_t precision, bool alternate) {
+	static constexpr std::size_t fracLen(value_type value, std::size_t base, std::size_t precision, bool alternate) {
 		value = std::abs(value);
 		std::size_t l { };
 
 		for (
 			value_type diff { }; 
 			diff > std::numeric_limits<value_type>::epsilon() && precision > 0;
-			l++, value *= Base, precision--) {
+			l++, value *= base, precision--) {
 			diff = value - std::floor(value);
 		}
 
@@ -565,40 +570,73 @@ private:
 		if constexpr (std::is_same_v<char_type, char>) digits = (lowerCase ? digitsLow : digitsUp);
 		else digits = (lowerCase ? wDigitsLow : wDigitsUp);
 
-		if (formatMode == FloatFormatMode::regular) {
+		if (formatMode == FloatFormatMode::scientific) {
+			// write exponent part
+
+			auto exp = sciExp(value, expBase);
+
+			if (exp > 0) {
+				while (exp > 0) {
+					num.pushBack(digits[static_cast<std::size_t>(exp % numBase)]);
+					exp /= numBase;
+				}
+			} else num.pushBack('0');
+
+			if (value < 1) num.pushBack('-');
+			else num.pushBack('+');
+
+			if (numBase == 16) num.pushBack('p');
+			else num.pushBack('e');
+
+
+			// handle the rest of the number
+
+			auto numCount = options.precision + 1;
+
+			auto sci = static_cast<std::size_t>(std::fmod(value, 1) * std::pow(10, numCount));
+
+			// skip zeros
+			for (; static_cast<std::size_t>(std::fmod(sci, numBase)) == 0; sci /= numBase, numCount--)
+			;
+
+			// write fractional part
+			for (; numCount > 1; numCount--) {
+				num.pushBack(digits[static_cast<std::size_t>(std::fmod(sci, numBase))]);
+				sci /= numBase;
+			}
+
+			// write decimal point
+			if (options.alternateForm || !num.empty()) num.pushBack('.');
+
+			// write single integer
+			if (value >= 1) num.pushBack(digits[static_cast<std::size_t>(sci)]);
+			else num.pushBack('0');
+		} else {
+			auto fractional = static_cast<std::size_t>(std::fmod(value, 1) * std::pow(10, options.precision));
+
+			if (!options.alternateForm && formatMode == FloatFormatMode::regular) for (; static_cast<std::size_t>(std::fmod(fractional, numBase)) == 0; fractional /= numBase)
+			;
+
+			// write fractional part
+			while (fractional > 0) {
+				num.pushBack(digits[static_cast<std::size_t>(std::fmod(fractional, numBase))]);
+				fractional /= numBase;
+			}
+
+			// write decimal point
+			if (options.alternateForm || !num.empty()) num.pushBack('.');
+
+			// write integer part
 			if (value >= 1) {
 				while (value > 1) {
 					num.pushBack(digits[static_cast<std::size_t>(std::fmod(value, numBase))]);
 					value /= numBase;
 				}
 			} else num.pushBack('0');
-				
-			if (options.alternateForm || value > std::numeric_limits<value_type>::epsilon()) num.pushBack('.');
-
-			auto remaining = options.precision;
-
-			for (; value > std::numeric_limits<value_type>::epsilon() && remaining > 0; remaining--) {
-
-			}
-
-			if (options.alternateForm) for (; remaining > 0; remaining--) num.pushBack('0');
-		} else if (formatMode == FloatFormatMode::fixed) {
-
-		} else {
-
 		}
 
 		// write the number to the output
 		for (auto it = num.rbegin(); it != num.rend() && !inserter.done(); it++) inserter = *it;
-
-		/*
-		if (value) {
-			while (value) {
-				num.pushBack(digits[value % base]);
-				value /= base;
-			}
-		}
-		*/
 	}
 };
 
