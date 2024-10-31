@@ -82,7 +82,6 @@ template <class CharTy> struct BasicFieldOptions {
 	using char_type = CharTy;
 
 	bool isReplacementField = true; // false means that the inserted character is just an escaped '{'
-	bool useDefaultFormat = false;
 
 	std::size_t fieldIndex = std::numeric_limits<std::size_t>::max(); // index of the current field in the format string
 	std::size_t argumentIndex = 0; // index of the requested formatting argument
@@ -90,18 +89,7 @@ template <class CharTy> struct BasicFieldOptions {
 	bool hasArrayIndex = false;
 	std::size_t arrayIndex = 0;
 
-	char_type fillChr = ' ';
-	char_type align = '<';
-	
-	char_type sign = '-';
-	bool negativeZero = true;
-	bool alternateForm = false;
-	bool leadingZeros = false;
-
-	std::size_t fillCount = 0;
-	std::size_t precision = 6;
-
-	BasicStringView<char_type> typeFormat;
+	BasicStringView<char_type> formatSpec;
 };
 
 using FieldOptions = BasicFieldOptions<char>;
@@ -200,6 +188,132 @@ private:
 
 using RuntimeFormatString = BasicRuntimeFormatString<char>;
 using WRuntimeFormatString = BasicRuntimeFormatString<wchar_t>;
+
+
+// formatter utility
+
+// utility variables
+
+static constexpr auto digitsLow = "0123456789abcdefghijklmnopqrstuvpxyz";
+static constexpr auto digitsUp = "0123456789ABCDEFGHIJKLMNOPQRSTUVPXYZ";
+
+static constexpr auto wDigitsLow = L"0123456789abcdefghijklmnopqrstuvpxyz";
+static constexpr auto wDigitsUp = L"0123456789ABCDEFGHIJKLMNOPQRSTUVPXYZ";
+
+static constexpr auto infLow = "inf";
+static constexpr auto infUp = "INF";
+
+static constexpr auto nanLow = "nan";
+static constexpr auto nanUp = "NAN";
+
+
+// basic format spec
+
+template <class CharTy> struct BasicFormatSpec {
+public:
+	using char_type = CharTy;
+
+	constexpr BasicFormatSpec(const detail::BasicFieldOptions<CharTy>& options) {
+		auto it = options.formatSpec.begin();
+		auto end = options.formatSpec.end();
+
+		switch (*it) { // parse early exit end alignment spec
+			case '}':
+				return;
+
+				break;
+
+			default: {
+				auto alignFirst = it;
+
+				switch (*++it) {
+					case '<':
+					case '>':
+					case '^':
+						align = *it;
+						fillChr = *alignFirst;
+						++it;
+
+						break;
+
+					default:
+						switch (*alignFirst) {
+							case '<':
+							case '>':
+							case '^':
+								align = *alignFirst;
+								++it;
+
+								break;
+							
+							default:
+								it = alignFirst;
+								
+								break;
+						}
+				}
+
+				break;
+			}
+		}
+		
+		switch (*it) { // parse early exit and sign spec
+			case '}':
+				return;
+
+				break;
+
+			case '+':
+			case '-':
+			case ' ':
+				sign = *it;
+				++it;
+
+				break;
+		}
+
+		if (*it == 'z') {
+			negativeZero = false;
+			++it;
+		}
+
+		if (*it == '#') {
+			alternateForm = true;
+			++it;
+		}
+
+		if (*it == '0') {
+			leadingZeros = true;
+			++it;
+		}
+
+		// don't check the results here because it's optional anyways
+
+		auto fcRes = fromChars(it, end, fillCount);
+
+		if (*fcRes.ptr == '.') fcRes = fromChars(fcRes.ptr + 1, end, precision);
+		
+		// parse the remaining formatting option
+
+		for (it = fcRes.ptr; *it != '}'; it++)
+		;
+
+		typeFormat = BasicStringView<CharTy>(fcRes.ptr, it);
+	}
+
+	char_type fillChr = ' ';
+	char_type align = '<';
+	
+	char_type sign = '-';
+	bool negativeZero = true;
+	bool alternateForm = false;
+	bool leadingZeros = false;
+
+	std::size_t fillCount = 0;
+	std::size_t precision = 6;
+
+	BasicStringView<char_type> typeFormat;
+};
 
 } // namespace detail
 

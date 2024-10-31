@@ -63,14 +63,14 @@ public:
 	constexpr BasicFormatContext& operator=(BasicFormatContext&&) = delete;
 
 	template <class... Args> constexpr static void format(iterator outputIt, view_type fmt, Args&... args) {
-		auto argList = 	format_args<Args...>(args...);
+		auto argList = format_args<Args...>(args...);
 		field_options options { };
 
 		for (auto it = fmt.begin(); it < fmt.end() && !outputIt.done(); it++) {
 			switch (*it) {
 				case '{':
 					if constexpr (sizeof...(Args) > 0) {
-						options = parseReplacementField(it, fmt.end(), options.fieldIndex);
+						options = parseReplacementField(it, fmt, options.fieldIndex);
 
 						if (!options.isReplacementField) {
 							outputIt = *it;
@@ -80,10 +80,9 @@ public:
 						if (options.hasArrayIndex) argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
 							using arg_type = std::remove_cvref_t<decltype(value)>;
 
-							if constexpr (!std::is_same_v<arg_type, std::monostate> && isArrayValue<arg_type>) formatter_type<
-									std::remove_reference_t<decltype(
-										std::declval<arg_type>()[0]
-									)>
+							if constexpr (!std::is_same_v<arg_type, std::monostate> && isArrayValue<arg_type>)
+								formatter_type<
+									std::remove_reference_t<decltype(std::declval<arg_type>()[0])>
 								>().format(value[options.arrayIndex], outputIt, options);
 						});
 						else argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
@@ -107,7 +106,7 @@ public:
 	}
 
 private:
-	constexpr static field_options parseReplacementField(view_iterator& it, view_iterator end, std::size_t prevFieldIndex) {
+	constexpr static field_options parseReplacementField(view_iterator& it, const view_type& fmt, std::size_t prevFieldIndex) {
 		field_options fieldOptions;
 		fieldOptions.fieldIndex = ++prevFieldIndex;
 
@@ -121,7 +120,6 @@ private:
 
 				break;
 			case '}':
-				fieldOptions.useDefaultFormat = true;
 				return fieldOptions;
 
 				break;
@@ -133,12 +131,12 @@ private:
 				break;
 
 			default:
-				auto fcRes = fromChars(it, end, fieldOptions.argumentIndex);
+				auto fcRes = fromChars(it, fmt.end(), fieldOptions.argumentIndex);
 				// if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Format parameter index not valid!");
 				it = fcRes.ptr;
 
 				if (*it == '[') {
-					fcRes = fromChars(it + 1, end, fieldOptions.arrayIndex);
+					fcRes = fromChars(it + 1, fmt.end(), fieldOptions.arrayIndex);
 					// if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Index into format parameter not valid!");
 					fieldOptions.hasArrayIndex = true;
 					it = fcRes.ptr + 1;
@@ -149,88 +147,7 @@ private:
 				break;
 		}
 
-		switch (*it) { // parse early exit end alignment options
-			case '}':
-				return fieldOptions;
-
-				break;
-
-			default: {
-				auto alignFirst = it;
-
-				switch (*++it) {
-					case '<':
-					case '>':
-					case '^':
-						fieldOptions.align = *it;
-						fieldOptions.fillChr = *alignFirst;
-						++it;
-
-						break;
-
-					default:
-						switch (*alignFirst) {
-							case '<':
-							case '>':
-							case '^':
-								fieldOptions.align = *alignFirst;
-								++it;
-
-								break;
-							
-							default:
-								it = alignFirst;
-								
-								break;
-						}
-				}
-
-				break;
-			}
-		}
-		
-		switch (*it) { // parse early exit and sign options
-			case '}':
-				return fieldOptions;
-
-				break;
-
-			case '+':
-			case '-':
-			case ' ':
-				fieldOptions.sign = *it;
-				++it;
-
-				break;
-		}
-
-		if (*it == 'z') {
-			fieldOptions.negativeZero = false;
-			++it;
-		}
-
-		if (*it == '#') {
-			fieldOptions.alternateForm = true;
-			++it;
-		}
-
-		if (*it == '0') {
-			fieldOptions.leadingZeros = true;
-			++it;
-		}
-
-		// don't check the results here because it's optional anyways
-
-		auto fcRes = fromChars(it, end, fieldOptions.fillCount);
-
-		if (*fcRes.ptr == '.') fcRes = fromChars(fcRes.ptr + 1, end, fieldOptions.precision);
-		
-		// parse the remaining formatting option
-
-		for (it = fcRes.ptr; *it != '}'; it++)
-		;
-
-		fieldOptions.typeFormat = view_type(fcRes.ptr, it);
+		fieldOptions.formatSpec = view_type(it, fmt.begin() + fmt.find('}', it - fmt.begin()));
 
 		return fieldOptions;
 	}
