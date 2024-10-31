@@ -23,19 +23,6 @@
 
 namespace lsd {
 
-// utility concepts
-
-namespace detail {
-
-template <class Ty> concept IteratableContainer = requires(Ty c1, Ty c2) {
-	typename Ty::size_type;
-	typename Ty::value_type;
-	c1.swap(c2);
-};
-
-} // namespace detail
-
-
 // address conversion
 template <class Ty> [[nodiscard]] constexpr inline const void* getAddress(const Ty& type) noexcept {
 	return static_cast<const void*>(type);
@@ -64,17 +51,17 @@ namespace std {
 
 // standard library function overloads for custom containers
 
-template <lsd::detail::IteratableContainer Ty> void swap(Ty& a, Ty& b) {
+template <lsd::IteratableContainer Ty> void swap(Ty& a, Ty& b) {
 	a.swap(b);
 }
 
-template <lsd::detail::IteratableContainer Ty, class Value = typename Ty::value_type> Ty::size_type erase(Ty& container, const Value& value) {
+template <lsd::IteratableContainer Ty, class Value = typename Ty::value_type> Ty::size_type erase(Ty& container, const Value& value) {
 	auto it = std::remove(container.begin(), container.end(), value);
 	auto r = container.end() - it;
 	container.erase(it, container.end());
 	return r;
 }
-template <lsd::detail::IteratableContainer Ty, class Pred> Ty::size_type erase(Ty& container, Pred pred) {
+template <lsd::IteratableContainer Ty, class Pred> Ty::size_type erase(Ty& container, Pred pred) {
 	auto it = std::remove(container.begin(), container.end(), pred);
 	auto r = container.end() - it;
 	container.erase(it, container.end());
