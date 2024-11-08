@@ -69,7 +69,7 @@ private:
 public:
 	constexpr Function() noexcept = default;
 	constexpr Function(const container& function) noexcept : m_callable(function.m_callable ? function.m_callable->clone() : nullptr) { }
-	constexpr Function(container&& function) noexcept : m_callable(std::move(function.function)) { }
+	constexpr Function(container&& function) noexcept : m_callable(std::move(function.m_callable)) { }
 	template <class Callable> constexpr Function(Callable&& callable) noexcept requires std::is_invocable_r_v<Ty, Callable, Args...> : 
 		m_callable(real_callable<Callable>::create(std::forward<Callable>(callable))) { }
 
