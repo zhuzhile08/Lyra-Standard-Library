@@ -11,11 +11,13 @@
 
 #pragma once
 
+#include "FormatCore.h"
+#include "FormatSpecs.h"
+#include "FormatContext.h"
+
 #include "../CoreUtility.h"
 #include "../../String.h"
 #include "../../StringView.h"
-
-#include "FormatCore.h"
 
 #include <cstddef>
 #include <concepts>
@@ -31,7 +33,8 @@ template <class CharTy> struct PointerFormatter {
 	using char_type = CharTy;
 	using back_inserter = detail::BasicFormatBackInserter<char_type>;
 	using field_options = detail::BasicFieldOptions<char_type>;
-	using format_spec = detail::BasicFormatSpec<char_type>;
+	using format_spec = detail::BasicGeneralFormatSpec<char_type>;
+	using context_type = BasicFormatContext<char_type>;
 
 	using string_type = lsd::BasicString<char_type>;
 	using view_type = lsd::BasicStringView<char_type>;
@@ -39,21 +42,22 @@ template <class CharTy> struct PointerFormatter {
 	static constexpr std::size_t pLength = sizeof(std::uintptr_t) * 2;
 	static constexpr std::size_t length = pLength + 2;
 
-	static void format(value_type value, back_inserter& inserter, const field_options& options) {
-		format_spec spec(options);
+	static void format(value_type value, context_type& context) {
+		auto& inserter = context.out();
+		format_spec spec(context);
 
 		switch (spec.align) {
 			case '<':
 				if (inserter.done()) return;
 				writeToOutput(value, inserter, spec);
 
-				for (auto count = spec.fillCount; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; !inserter.done() && count > length; count--) 
 					inserter = spec.fillChr;
 
 				break;
 
 			case '>':
-				for (auto count = spec.fillCount; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; !inserter.done() && count > length; count--) 
 						inserter = spec.fillChr;
 
 				if (!inserter.done()) writeToOutput(value, inserter, spec);
@@ -61,8 +65,8 @@ template <class CharTy> struct PointerFormatter {
 				break;
 
 			case '^':
-				if (spec.fillCount > length) {
-					auto fillc = spec.fillCount - length;
+				if (spec.width > length) {
+					auto fillc = spec.width - length;
 					auto half = fillc / 2;
 					
 					for (auto count = fillc - half; !inserter.done() && count > 0; count--) inserter = spec.fillChr;
@@ -146,27 +150,18 @@ private:
 // pointer formatters
 
 template <class CharTy> struct Formatter<std::nullptr_t, CharTy> {
-	void format(
-		std::nullptr_t,
-		detail::BasicFormatBackInserter<CharTy>& inserter,
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::PointerFormatter<CharTy>::format(reinterpret_cast<std::uintptr_t>(nullptr), inserter, spec);
+	void format(std::nullptr_t, BasicFormatContext<CharTy>& context) {
+		detail::PointerFormatter<CharTy>::format(reinterpret_cast<std::uintptr_t>(nullptr), context);
 	}
 };
 template <class CharTy> struct Formatter<void*, CharTy> {
-	void format(
-		void* value,
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::PointerFormatter<CharTy>::format(reinterpret_cast<std::uintptr_t>(value), inserter, spec);
+	void format(void* value, BasicFormatContext<CharTy>& context) {
+		detail::PointerFormatter<CharTy>::format(reinterpret_cast<std::uintptr_t>(value), context);
 	}
 };
 template <class CharTy> struct Formatter<const void*, CharTy> {
-	void format(
-		const void* value,
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::PointerFormatter<CharTy>::format(reinterpret_cast<std::uintptr_t>(value), inserter, spec);
+	void format(const void* value, BasicFormatContext<CharTy>& context) {
+		detail::PointerFormatter<CharTy>::format(reinterpret_cast<std::uintptr_t>(value), context);
 	}
 };
 

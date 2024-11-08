@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "../../Array.h"
 #include "../../UniquePointer.h"
 #include "../../String.h"
 #include "../../StringView.h"
@@ -26,21 +27,22 @@ namespace detail {
 
 // type erased format argument
 
-template <class CharType, class Iterator> class TypeErasedFormatArg {
+template <class Context> class TypeErasedFormatArg {
 public:
-	using char_type = CharType;
-	using iterator = Iterator;
+	using context_type = Context;
+	using char_type = Context::char_type;
+	using iterator = context_type::iterator;
 	using options_type = detail::BasicFieldOptions<char_type>;
 
 	template <class Value> constexpr TypeErasedFormatArg(Value& value) :
 		m_value(&value),
-		m_format([](const void* v, iterator& it, const options_type& options) {
-			Formatter<Value, char_type>().format(*static_cast<Value*>(v), it, options);
+		m_format([](const void* v, const context_type& context) {
+			Formatter<Value, char_type>().format(*static_cast<Value*>(v), context);
 			std::formatter<char, char>();
 		}) { }
 
-	void format(iterator& it, const options_type& options) const {
-		(*m_format)(m_value, it, options);
+	void format(const context_type& context) const {
+		(*m_format)(m_value, context);
 	}
 	constexpr explicit operator bool() const noexcept {
 		return m_value;
@@ -48,7 +50,7 @@ public:
 
 private:
 	const void*	m_value { };
-	void (*m_format) (const void*, iterator&, const options_type&);
+	void (*m_format) (const void*, const context_type&);
 };
 
 } // namespace detail
@@ -56,12 +58,12 @@ private:
 
 // format argument store
 
-template <class ContextType> class BasicFormatArg {
+template <class Context> class BasicFormatArg {
 private:
-	using context_type = ContextType;
+	using context_type = Context;
 	using char_type = context_type::char_type;
 	using iterator = context_type::iterator;
-	using handle_type = detail::TypeErasedFormatArg<char_type, iterator>;
+	using handle_type = detail::TypeErasedFormatArg<context_type>;
 	using options_type = detail::BasicFieldOptions<char_type>;
 
 	using variant_type = std::variant<
@@ -129,50 +131,96 @@ private:
 
 namespace detail {
 
-// container for the case then basic format arg store has no arguments
+// empty container mimicking an array when there are no format args
 
-template <class Context> class BasicFormatArgStoreEmptyValue {
+template <class Context> class BasicFormatArgStoreEmptyArray {
 public:
 	using context_type = Context;
 	using format_arg = BasicFormatArg<context_type>;
 
-	constexpr BasicFormatArgStoreEmptyValue() = default;
+	consteval BasicFormatArgStoreEmptyArray() = default;
 
-	constexpr std::size_t size() const noexcept { 
+	consteval std::size_t size() const noexcept { 
 		return 0;
 	}
-	constexpr format_arg operator[](std::size_t) const noexcept {
+	consteval format_arg operator[](std::size_t) const noexcept {
 		return format_arg();
 	}
 };
 
 
-// container for multiple format arguments
+// empty container mimicking a pointer when there are no format args
+
+template <class Context> class BasicFormatArgsEmptyPointer {
+public:
+	using context_type = Context;
+	using format_arg = BasicFormatArg<context_type>;
+};
+
+
+// container for format argument storage
 
 template <class Context, class... Args> class BasicFormatArgStore {
 public:
 	using context_type = Context;
 	using format_arg = BasicFormatArg<context_type>;
-	using empty_val = BasicFormatArgStoreEmptyValue<context_type>;
+	using empty_arr = BasicFormatArgStoreEmptyArray<context_type>;
 
 	constexpr BasicFormatArgStore(Args&... args) :
 		m_args({ format_arg(args)... }) { }
 
-	constexpr format_arg get(std::size_t i) const noexcept {
-		if (i < m_args.size()) return m_args[i];
-		else return format_arg();
-	}
-	constexpr std::size_t size() const noexcept {
-		return m_args.size();
-	}
-
 private:
 	[[no_unique_address]] std::conditional_t<
 		sizeof...(Args) == 0, 
-		empty_val, 
+		empty_arr,
 		lsd::Array<format_arg, sizeof...(Args)>> m_args;
+	
+	template <class> friend class ::lsd::BasicFormatArgs;
 };
 
 } // namespace detail
+
+
+// create format argument storage
+
+template <class Context = BasicFormatContext<char>, class... Args> constexpr auto makeFormatArgs(Args&... args) {
+	return detail::BasicFormatArgStore<Context, Args...>(args...);
+}
+
+template <class... Args> constexpr auto makeWFormatArgs(Args&... args) {
+	return detail::BasicFormatArgStore<BasicFormatContext<wchar_t>, Args...>(args...);
+}
+
+
+// format argument container
+
+template <class Context> class BasicFormatArgs {
+public:
+	using context_type = Context;
+	using format_arg = BasicFormatArg<context_type>;
+	using empty_ptr = detail::BasicFormatArgsEmptyPointer<context_type>;
+
+	template <class... Args> constexpr BasicFormatArgs(
+		const detail::BasicFormatArgStore<context_type, Args...>& store
+	) : m_size(sizeof...(Args)) {
+		if constexpr (sizeof...(Args) != 0) m_args = store.m_args.begin().get(); // this is usually quite bad because the args would go out of scope, but they won't since these are only going to be in the same scope
+	}
+
+	constexpr format_arg get(std::size_t i) const noexcept {
+		if (i < m_size) return m_args[i];
+		else return format_arg();
+	}
+	constexpr std::size_t size() const noexcept {
+		return m_size;
+	}
+
+private:
+	std::size_t m_size { };
+
+	const format_arg* m_args { };
+};
+
+using FormatArgs = BasicFormatArgs<BasicFormatContext<char>>;
+using WFormatArgs = BasicFormatArgs<BasicFormatContext<wchar_t>>;
 
 } // namespace lsd

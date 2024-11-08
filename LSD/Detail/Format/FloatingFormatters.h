@@ -11,6 +11,10 @@
 
 #pragma once
 
+#include "FormatCore.h"
+#include "FormatSpecs.h"
+#include "FormatContext.h"
+
 #include "../CoreUtility.h"
 #include "../../String.h"
 #include "../../StringView.h"
@@ -40,12 +44,15 @@ public:
 	using char_type = CharTy;
 	using back_inserter = detail::BasicFormatBackInserter<char_type>;
 	using field_options = detail::BasicFieldOptions<char_type>;
-	using format_spec = detail::BasicFormatSpec<char_type>;
+	using format_spec = detail::BasicGeneralFormatSpec<char_type>;
+	using context_type = BasicFormatContext<char_type>;
 
 	using string_type = lsd::BasicString<char_type>;
 
-	static void format(value_type value, back_inserter& inserter, const field_options& options) {
-		format_spec spec(options);
+	static void format(value_type value, context_type& context) {
+		format_spec spec(context);
+
+		auto& inserter = context.out();
 		auto length = outputLength(value, spec);
 
 		switch (spec.align) {
@@ -53,13 +60,13 @@ public:
 				if (inserter.done()) return;
 				writeToOutput(value, inserter, spec);
 
-				for (auto count = spec.fillCount; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; !inserter.done() && count > length; count--) 
 					inserter = spec.fillChr;
 
 				break;
 
 			case '>':
-				for (auto count = spec.fillCount; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; !inserter.done() && count > length; count--) 
 						inserter = spec.fillChr;
 
 				if (!inserter.done()) writeToOutput(value, inserter, spec);
@@ -67,8 +74,8 @@ public:
 				break;
 
 			case '^':
-				if (spec.fillCount > length) {
-					auto fillc = spec.fillCount - length;
+				if (spec.width > length) {
+					auto fillc = spec.width - length;
 					auto half = fillc / 2;
 					
 					for (auto count = fillc - half; !inserter.done() && count > 0; count--) inserter = spec.fillChr;
@@ -354,27 +361,18 @@ private:
 // floating point formatters
 
 template <class CharTy> struct Formatter<float, CharTy> {
-	void format(
-		float value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::FloatFormatter<float, CharTy>::format(value, inserter, spec);
+	void format(float value, BasicFormatContext<CharTy>& context) {
+		detail::FloatFormatter<float, CharTy>::format(value, context);
 	}
 };
 template <class CharTy> struct Formatter<double, CharTy> {	
-	void format(
-		double value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::FloatFormatter<double, CharTy>::format(value, inserter, spec);
+	void format(double value, BasicFormatContext<CharTy>& context) {
+		detail::FloatFormatter<double, CharTy>::format(value, context);
 	}
 };
 template <class CharTy> struct Formatter<long double, CharTy> {
-	void format(
-		long double value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::FloatFormatter<long double, CharTy>::format(value, inserter, spec);
+	void format(long double value, BasicFormatContext<CharTy>& context) {
+		detail::FloatFormatter<long double, CharTy>::format(value, context);
 	}
 };
 

@@ -11,11 +11,13 @@
 
 #pragma once
 
+#include "FormatCore.h"
+#include "FormatSpecs.h"
+#include "FormatContext.h"
+
 #include "../CoreUtility.h"
 #include "../../String.h"
 #include "../../StringView.h"
-
-#include "FormatCore.h"
 
 #include <cstddef>
 #include <concepts>
@@ -32,27 +34,30 @@ public:
 	using char_type = CharTy;
 	using back_inserter = detail::BasicFormatBackInserter<char_type>;
 	using field_options = detail::BasicFieldOptions<char_type>;
-	using format_spec = detail::BasicFormatSpec<char_type>;
+	using format_spec = detail::BasicGeneralFormatSpec<char_type>;
+	using context_type = BasicFormatContext<char_type>;
 
 	using string_type = lsd::BasicString<char_type>;
 	using view_type = lsd::BasicStringView<char_type>;
 
-	static void format(value_type value, back_inserter& inserter, const field_options& options) {
-		format_spec spec(options);
-		auto length = outputLength(value, spec);
+	static void format(value_type value, context_type& context) {
+		format_spec spec(context);
+
+		auto& inserter = context.out();
+		auto length = outputLen(value, spec);
 
 		switch (spec.align) {
 			case '<':
 				if (inserter.done()) return;
 				writeToOutput(value, inserter, spec);
 
-				for (auto count = spec.fillCount; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; !inserter.done() && count > length; count--) 
 					inserter = spec.fillChr;
 
 				break;
 
 			case '>':
-				for (auto count = spec.fillCount; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; !inserter.done() && count > length; count--) 
 						inserter = spec.fillChr;
 
 				if (!inserter.done()) writeToOutput(value, inserter, spec);
@@ -60,8 +65,8 @@ public:
 				break;
 
 			case '^':
-				if (spec.fillCount > length) {
-					auto fillc = spec.fillCount - length;
+				if (spec.width > length) {
+					auto fillc = spec.width - length;
 					auto half = fillc / 2;
 					
 					for (auto count = fillc - half; !inserter.done() && count > 0; count--) inserter = spec.fillChr;
@@ -82,7 +87,7 @@ public:
 private:
 	// output length calculation
 
-	static constexpr std::size_t outputLength(value_type value, const format_spec& spec) {
+	static constexpr std::size_t outputLen(value_type value, const format_spec& spec) {
 		if (spec.typeFormat.empty()) {
 			if constexpr (std::same_as<value_type, bool>) return value ? 4 : 5;
 			else if constexpr (std::same_as<value_type, char> || std::same_as<value_type, wchar_t>) return 1;
@@ -311,27 +316,21 @@ private:
 // character formatters
 
 template <class CharTy> struct Formatter<char, CharTy> {
-	void format(
-		char c, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<char, CharTy>::format(c, inserter, spec);
+	void format(char c, BasicFormatContext<CharTy>& context) {
+		// detail::IntegralFormatter<char, CharTy>::format(c, inserter, spec);
 	}
 };
 template <> struct Formatter<wchar_t, wchar_t> {
-	void format(wchar_t c, detail::WFormatBackInserter& inserter, const detail::WFieldOptions& spec) {
-		detail::IntegralFormatter<wchar_t, wchar_t>::format(c, inserter, spec);
+	void format(wchar_t c, WFormatContext& context) {
+		// detail::IntegralFormatter<wchar_t, wchar_t>::format(c, inserter, spec);
 	}
 };
 
 
 // bool formatter
 template <class CharTy> struct Formatter<bool, CharTy> {
-	void format(
-		bool value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<bool, CharTy>::format(value, inserter, spec);
+	void format(bool value, BasicFormatContext<CharTy>& context) {
+		detail::IntegralFormatter<bool, CharTy>::format(value, context);
 	}
 };
 
@@ -339,67 +338,43 @@ template <class CharTy> struct Formatter<bool, CharTy> {
 // integral formatters
 
 template <class CharTy> struct Formatter<short, CharTy> {
-	void format(
-		short value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<short, CharTy>::format(value, inserter, spec);
+	void format(short value, BasicFormatContext<CharTy>& context) {
+		detail::IntegralFormatter<short, CharTy>::format(value, context);
 	}
 };
 template <class CharTy> struct Formatter<unsigned short, CharTy> {
-	void format(
-		unsigned short value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<unsigned short, CharTy>::format(value, inserter, spec);
+	void format(unsigned short value, BasicFormatContext<CharTy>& context) {
+		detail::IntegralFormatter<unsigned short, CharTy>::format(value, context);
 	}
 };
 template <class CharTy> struct Formatter<int, CharTy> {
-	void format(
-		int value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<int, CharTy>::format(value, inserter, spec);
+	void format(int value, BasicFormatContext<CharTy>& context) {
+		detail::IntegralFormatter<int, CharTy>::format(value, context);
 	}
 };
 template <class CharTy> struct Formatter<unsigned int, CharTy> {
-	void format(
-		unsigned int value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<unsigned int, CharTy>::format(value, inserter, spec);
+	void format(unsigned int value, BasicFormatContext<CharTy>& context) {
+		detail::IntegralFormatter<unsigned int, CharTy>::format(value, context);
 	}
 };
 template <class CharTy> struct Formatter<long, CharTy> {
-	void format(
-		long value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<long, CharTy>::format(value, inserter, spec);
+	void format(long value, BasicFormatContext<CharTy>& context) {
+		detail::IntegralFormatter<long, CharTy>::format(value, context);
 	}
 };
 template <class CharTy> struct Formatter<unsigned long, CharTy> {
-	void format(
-		unsigned long value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<unsigned long, CharTy>::format(value, inserter, spec);
+	void format(unsigned long value, BasicFormatContext<CharTy>& context) {
+		detail::IntegralFormatter<unsigned long, CharTy>::format(value, context);
 	}
 };
 template <class CharTy> struct Formatter<long long, CharTy> {
-	void format(
-		long long value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<long long, CharTy>::format(value, inserter, spec);
+	void format(long long value, BasicFormatContext<CharTy>& context) {
+		detail::IntegralFormatter<long long, CharTy>::format(value, context);
 	}
 };
 template <class CharTy> struct Formatter<unsigned long long, CharTy> {
-	void format(
-		unsigned long long value, 
-		detail::BasicFormatBackInserter<CharTy>& inserter, 
-		const detail::BasicFieldOptions<CharTy>& spec) {
-		detail::IntegralFormatter<unsigned long long, CharTy>::format(value, inserter, spec);
+	void format(unsigned long long value, BasicFormatContext<CharTy>& context) {
+		detail::IntegralFormatter<unsigned long long, CharTy>::format(value, context);
 	}
 };
 

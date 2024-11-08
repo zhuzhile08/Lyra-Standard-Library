@@ -12,6 +12,7 @@
 #pragma once
 
 #include "../../UniquePointer.h"
+#include "../../FunctionPointer.h"
 #include "../../String.h"
 #include "../../StringView.h"
 
@@ -33,6 +34,9 @@ template <class> struct BasicRuntimeFormatString;
 template <class, class...> struct BasicFormatString;
 
 template <class> class BasicFormatArg;
+template <class> class BasicFormatArgs;
+
+template <class> struct BasicFormatContext;
 
 template <class, class> struct Formatter {
 	constexpr Formatter() = default;
@@ -43,7 +47,7 @@ template <class, class> struct Formatter {
 
 namespace detail {
 
-template <class, class> class TypeErasedFormatArg;
+template <class> class TypeErasedFormatArg;
 template <class> class BasicFormatArgStoreEmptyValue;
 template <class, class...> class BasicFormatArgStore;
 
@@ -109,7 +113,7 @@ public:
 		m_container(container), 
 		m_pushBack(std::forward<PushBack>(pb)), 
 		m_done(std::forward<Done>(d)) { }
-	
+	constexpr BasicFormatBackInserter(BasicFormatBackInserter&& other) : m_container(other.m_container), m_pushBack(other.m_pushBack), m_done(std::move(other.m_done)) { }
 	constexpr container& operator=(char_type value) {
 		m_pushBack(m_container, value); // do not check for doneness since the formatter and context does that
 		return *this;
@@ -205,115 +209,6 @@ static constexpr auto infUp = "INF";
 
 static constexpr auto nanLow = "nan";
 static constexpr auto nanUp = "NAN";
-
-
-// basic format spec
-
-template <class CharTy> struct BasicFormatSpec {
-public:
-	using char_type = CharTy;
-
-	constexpr BasicFormatSpec(const detail::BasicFieldOptions<CharTy>& options) {
-		auto it = options.formatSpec.begin();
-		auto end = options.formatSpec.end();
-
-		switch (*it) { // parse early exit end alignment spec
-			case '}':
-				return;
-
-				break;
-
-			default: {
-				auto alignFirst = it;
-
-				switch (*++it) {
-					case '<':
-					case '>':
-					case '^':
-						align = *it;
-						fillChr = *alignFirst;
-						++it;
-
-						break;
-
-					default:
-						switch (*alignFirst) {
-							case '<':
-							case '>':
-							case '^':
-								align = *alignFirst;
-								++it;
-
-								break;
-							
-							default:
-								it = alignFirst;
-								
-								break;
-						}
-				}
-
-				break;
-			}
-		}
-		
-		switch (*it) { // parse early exit and sign spec
-			case '}':
-				return;
-
-				break;
-
-			case '+':
-			case '-':
-			case ' ':
-				sign = *it;
-				++it;
-
-				break;
-		}
-
-		if (*it == 'z') {
-			negativeZero = false;
-			++it;
-		}
-
-		if (*it == '#') {
-			alternateForm = true;
-			++it;
-		}
-
-		if (*it == '0') {
-			leadingZeros = true;
-			++it;
-		}
-
-		// don't check the results here because it's optional anyways
-
-		auto fcRes = fromChars(it, end, fillCount);
-
-		if (*fcRes.ptr == '.') fcRes = fromChars(fcRes.ptr + 1, end, precision);
-		
-		// parse the remaining formatting option
-
-		for (it = fcRes.ptr; *it != '}'; it++)
-		;
-
-		typeFormat = BasicStringView<CharTy>(fcRes.ptr, it);
-	}
-
-	char_type fillChr = ' ';
-	char_type align = '<';
-	
-	char_type sign = '-';
-	bool negativeZero = true;
-	bool alternateForm = false;
-	bool leadingZeros = false;
-
-	std::size_t fillCount = 0;
-	std::size_t precision = 6;
-
-	BasicStringView<char_type> typeFormat;
-};
 
 } // namespace detail
 

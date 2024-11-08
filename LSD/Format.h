@@ -7,11 +7,11 @@
  * @brief Formatting specification: 
  * @brief replacementField  ::= "{" [field][":"format] "}"
  * @brief field             ::= [argumentIndex]["["elementIndex"]"]
- * @brief format            ::= [[fillCharacter]alignMode][sign]["#"]["0"][fillCount]["."precision][typeFormat]
+ * @brief format            ::= [[fillCharacter]alignMode][sign]["#"]["0"][width]["."precision][typeFormat]
  * @brief fillCharacter     ::= <any character except '{' and '}'>
  * @brief alignMode         ::= '<' | '>' | '='
  * @brief sign              ::= '+' | '-' | ' '
- * @brief fillCount        	::= <unsigned integer>
+ * @brief width        		::= <unsigned integer>
  * @brief precision			::= <unsigned integer>
  * @brief typeFormat        ::= <extended formatting arguments, ususally used for data presentation style>
  * 
@@ -22,6 +22,12 @@
 
 #pragma once
 
+#include "Detail/FromChars/FromCharsIntegral.h"
+#include "Detail/Format/FormatContext.h"
+#include "Detail/Format/Formatters.h"
+#include "Detail/Format/FormatArgs.h"
+#include "Detail/Format/FormatCore.h"
+
 #include "Iterators.h"
 #include "Array.h"
 #include "String.h"
@@ -30,159 +36,38 @@
 #include "FunctionPointer.h"
 #include "Utility.h"
 
-#include "Detail/FromChars/FromCharsIntegral.h"
-#include "Detail/Format/Formatters.h"
-#include "Detail/Format/FormatArgs.h"
-#include "Detail/Format/FormatCore.h"
-
 #include <cctype>
 #include <type_traits>
 #include <concepts>
 
 namespace lsd {
 
-// formatting core context class
-template <class CharTy> class BasicFormatContext {
-public:
-	static_assert(std::is_same_v<CharTy, char> || std::is_same_v<CharTy, wchar_t>, "lsd::BasicFormatContext: Format context only accepts char and wchar_t as valid types for template argument CharTy!");
-
-	using char_type = CharTy;
-	
-	using iterator = detail::BasicFormatBackInserter<char_type>;
-	using view_type = BasicStringView<CharTy>;
-	using view_iterator = typename view_type::const_iterator;
-	using field_options = detail::BasicFieldOptions<CharTy>;
-
-	template <class... Args> using format_args = detail::BasicFormatArgStore<BasicFormatContext, Args...>;
-
-	template <class Ty> using formatter_type = Formatter<Ty, char_type>;
-
-public:
-	constexpr BasicFormatContext() = delete;
-	constexpr BasicFormatContext& operator=(const BasicFormatContext&) = delete;
-	constexpr BasicFormatContext& operator=(BasicFormatContext&&) = delete;
-
-	template <class... Args> constexpr static void format(iterator outputIt, view_type fmt, Args&... args) {
-		auto argList = format_args<Args...>(args...);
-		field_options options { };
-
-		for (auto it = fmt.begin(); it < fmt.end() && !outputIt.done(); it++) {
-			switch (*it) {
-				case '{':
-					if constexpr (sizeof...(Args) > 0) {
-						options = parseReplacementField(it, fmt, options.fieldIndex);
-
-						if (!options.isReplacementField) {
-							outputIt = *it;
-							break;
-						}
-
-						if (options.hasArrayIndex) argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
-							using arg_type = std::remove_cvref_t<decltype(value)>;
-
-							if constexpr (!std::is_same_v<arg_type, std::monostate> && isArrayValue<arg_type>)
-								formatter_type<
-									std::remove_reference_t<decltype(std::declval<arg_type>()[0])>
-								>().format(value[options.arrayIndex], outputIt, options);
-						});
-						else argList.get(options.argumentIndex).visit([&outputIt, &options](auto&& value) { 
-							using arg_type = std::remove_cvref_t<decltype(value)>;
-
-							if constexpr (!std::is_same_v<arg_type, std::monostate>) formatter_type<arg_type>().format(value, outputIt, options);
-						});
-					}
-
-					break;
-				
-				case '}':
-					outputIt = *++it; // the reason why I don't put an extra switch block here to check for syntax is because the string is already checked for validity
-					break;
-
-				default:
-					outputIt = *it;
-					break;
-			}
-		}
-	}
-
-private:
-	constexpr static field_options parseReplacementField(view_iterator& it, const view_type& fmt, std::size_t prevFieldIndex) {
-		field_options fieldOptions;
-		fieldOptions.fieldIndex = ++prevFieldIndex;
-
-		char_type* helper { };
-		
-		switch (*++it) { // since the second character only has a few valid options
-			case '{':
-				fieldOptions.isReplacementField = false;
-				--fieldOptions.fieldIndex;
-				return fieldOptions;
-
-				break;
-			case '}':
-				return fieldOptions;
-
-				break;
-
-			case ':':
-				fieldOptions.argumentIndex = fieldOptions.fieldIndex;
-				++it;
-
-				break;
-
-			default:
-				auto fcRes = fromChars(it, fmt.end(), fieldOptions.argumentIndex);
-				// if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Format parameter index not valid!");
-				it = fcRes.ptr;
-
-				if (*it == '[') {
-					fcRes = fromChars(it + 1, fmt.end(), fieldOptions.arrayIndex);
-					// if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Index into format parameter not valid!");
-					fieldOptions.hasArrayIndex = true;
-					it = fcRes.ptr + 1;
-				}
-
-				if (*it == ':') ++it;
-
-				break;
-		}
-
-		fieldOptions.formatSpec = view_type(it, fmt.begin() + fmt.find('}', it - fmt.begin()));
-
-		return fieldOptions;
-	}
-};
-
-using FormatContext = BasicFormatContext<char>;
-using WFormatContext = BasicFormatContext<wchar_t>;
-
-
-// general formatting functions
+// formatting functions
 
 template <class... Args> inline String format(FormatString<Args...> fmt, Args&&... args) {
 	String out;
-	FormatContext::format(
+	FormatContext(
 		detail::FormatBackInserter(
 			&out,
 			[](void* out, const char& v) { static_cast<String*>(out)->pushBack(v); },
 			[](void* out) { return false; }
-		), 
-		fmt.get(), 
-		args...
-	);
+		),
+		makeFormatArgs(args...)
+	).format(fmt.get());
+
 	return out;
 }
 template <class... Args> inline WString format(WFormatString<Args...> fmt, Args&&... args) {
 	WString out;
-	FormatContext::format(
+	WFormatContext(
 		detail::FormatBackInserter(
 			&out,
 			[](void* out, const wchar_t& v) { static_cast<WString*>(out)->pushBack(v); },
 			[](void* out) { return false; }
-		), 
-		fmt.get(), 
-		std::forward<Args>(args)...
-	);
+		),
+		makeWFormatArgs(args...)
+	).format(fmt.get());
+
 	return out;
 }
 
