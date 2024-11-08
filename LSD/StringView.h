@@ -16,6 +16,7 @@
 #include "CharTraits.h"
 
 #include <cstdlib>
+#include <cassert>
 #include <utility>
 #include <initializer_list>
 
