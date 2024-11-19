@@ -518,7 +518,7 @@ private:
 	[[no_unique_address]] key_equal m_equal { };
 
 	constexpr void rehashIfNecessary() noexcept {
-		if (m_array.size() >= m_buckets.size() * maxLoadFactor) rehash(detail::nextPrime(m_array.size()));
+		if (m_array.size() >= m_buckets.size() * maxLoadFactor) rehash(nextPrime(m_array.size()));
 	}
 	template <class K> constexpr size_type keyToBucket(const K& key) const noexcept {
 		return m_hasher(key) % m_buckets.size();
