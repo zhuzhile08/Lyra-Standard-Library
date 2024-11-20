@@ -14,7 +14,7 @@
 #include "Vector.h"
 #include "UnorderedSparseSet.h"
 #include "String.h"
-#include "FromChars/FromChars.h"
+#include "FromChars.h"
 
 #include <exception>
 #include <variant>
@@ -67,10 +67,6 @@ template <
 	detail::FloatingType Floating = double,
 	template <class...> class NodeContainer = UnorderedSparseSet> 
 class BasicJson {
-private:
-	CUSTOM_HASHER(Hasher, const BasicJson&, const_key_reference, Hash<key_type>{}, .m_name)
-	CUSTOM_EQUAL(Equal, const BasicJson&, const_key_reference, .m_name)
-
 public:
 	using size_type = std::size_t;
 	using difference_type = std::ptrdiff_t;
@@ -89,6 +85,8 @@ public:
 	using key_rvreference = key_type&&;
 
 	using json_type = BasicJson;
+	using pointer = json_type*;
+	using const_pointer = const json_type*;
 	using reference = json_type&;
 	using const_reference = const json_type&;
 	using rvreference = json_type&&;
@@ -104,21 +102,26 @@ public:
 		array_type,
 		string_type
 	>;
+
+private:
+	CUSTOM_HASHER(Hasher, const BasicJson&, const_key_reference, Hash<key_type>{}, .m_name)
+	CUSTOM_EQUAL(Equal, const BasicJson&, const_key_reference, .m_name)
+
+public:
 	
-	using container = Container<smart_pointer, Hasher, Equal>;
+	using container = NodeContainer<json_type, Hasher, Equal>;
 
 	using iterator = typename container::iterator;
 	using const_iterator = typename container::const_iterator;
 	using iterator_pair = std::pair<iterator, bool>;
 
-
 	constexpr BasicJson() noexcept = default;
-	constexpr BasicJson(const value_type& value) noexcept requires std::is_copy_assignable_v<smart_pointer> : m_value(value) { }
+	constexpr BasicJson(const value_type& value) noexcept : m_value(value) { }
 	constexpr BasicJson(value_type&& value) noexcept : m_value(std::move(value)) { }
 	template <class KeyType> 
-	constexpr BasicJson(KeyType&& key, value_type&& value) noexcept : m_name(std::forward<KeyType>(name)), m_value(std::move(value)) { }
+	constexpr BasicJson(KeyType&& key, value_type&& value) noexcept : m_name(std::forward<KeyType>(key)), m_value(std::move(value)) { }
 	template <class KeyType, class Value> 
-	constexpr BasicJson(KeyType&& key, Value&& value) noexcept : m_name(std::forward<KeyType>(name)) {
+	constexpr BasicJson(KeyType&& key, Value&& value) noexcept : m_name(std::forward<KeyType>(key)) {
 		assign(std::forward<Value>(value));
 	}
 	constexpr BasicJson(const BasicJson&) = default;
@@ -203,11 +206,9 @@ public:
 		return m_children.cend();
 	}
 
-	constexpr reference insert(movable child) {
+	constexpr reference insert(rvreference child) {
 		child.m_parent = this;
 		auto& res = *m_children.emplace(std::move(child)).first->get();
-
-		
 
 		return res;
 	}
@@ -223,15 +224,15 @@ public:
 
 	constexpr reference erase(iterator pos) { 
 		return m_children.erase(pos); 
-		return *dynamic_cast<pointer>(this);
+		return *this;
 	}
 	constexpr reference erase(const_iterator pos) { 
 		return m_children.erase(pos); 
-		return *dynamic_cast<pointer>(this);
+		return *this;
 	}
 	constexpr reference erase(const_iterator first, const_iterator last) { 
 		return m_children.erase(first, last); 
-		return *dynamic_cast<pointer>(this);
+		return *this;
 	}
 	template <class KeyType> constexpr size_type erase(KeyType&& name) requires std::is_convertible_v<KeyType, key_type> { 
 		return m_children.erase(std::forward(name)); 
@@ -242,7 +243,7 @@ public:
 		return *this;
 	}
 
-
+	/*
 	template <class KeyType> constexpr reference rename(KeyType&& name) {
 		auto t = dynamic_cast<pointer>(this);
 		m_parent->m_children.extract(m_name);
@@ -250,8 +251,9 @@ public:
 		m_parent->m_children.emplace(smart_pointer(t));
 		return *t;
 	}
+	*/
 
-	template <class Iterator> NODISCARD static constexpr json_type parse(Iterator begin, Iterator end) {
+	template <class Iterator> [[nodiscard]] static constexpr json_type parse(Iterator begin, Iterator end) {
 		// first node
 		json_type json;
 
@@ -265,7 +267,7 @@ public:
 
 		return json;
 	}
-	template <class Container> NODISCARD static constexpr json_type parse(const Container& container) {
+	template <class Container> [[nodiscard]] static constexpr json_type parse(const Container& container) {
 		return parse(container.begin(), container.end());
 	}
 
@@ -406,10 +408,10 @@ public:
 		if constexpr (stringlike) {
 			key_type k(key);
 			size_type beg = 0, cur;
-			pointer_const p = dynamic_cast<pointer_const>(this);
+			const_pointer p = this;
 
 			while ((cur = k.find("::", beg)) < k.size()) {
-				p = p->m_children.at(k.substr(beg, cur - beg));
+				p = &p->m_children.at(k.substr(beg, cur - beg));
 				(beg = cur) += 2;
 			}
 
@@ -428,7 +430,7 @@ public:
 		if constexpr (stringlike) {
 			key_type k(key);
 			size_type beg = 0, cur;
-			pointer p = dynamic_cast<pointer>(this);
+			const_pointer p = this;
 
 			while ((cur = k.find("::", beg)) < k.size()) {
 				p = p->m_children.at(k.substr(beg, cur - beg));
@@ -459,7 +461,7 @@ public:
 		return *m_children[std::forward<KeyType>(name)];
 	}
 	template <class KeyType> constexpr reference operator[](KeyType&& name) {
-		return *m_children[std::forward<KeyType>(name)];=
+		return *m_children[std::forward<KeyType>(name)];
 	}
 
 
@@ -477,7 +479,7 @@ public:
 		return m_name;
 	}
 	[[nodiscard]] constexpr const_pointer const parent() const noexcept {
-		return dynamic_cast<pointer>(m_parent);
+		return m_parent;
 	}
 
 private:
@@ -485,13 +487,9 @@ private:
 
 	key_type m_name { };
 
-	json_type* m_parent = nullptr;
+	pointer m_parent = nullptr;
 	container m_children { };
 
-
-	template <class... Args> NODISCARD static constexpr smart_pointer create(Args&&... args) {
-		return smart_pointer::create(std::forward<Args>(args)...);
-	}
 
 	template <class Iterator> static constexpr int skipCharacters(Iterator& begin, Iterator& end) {
 		for (; begin != end; begin++) {
@@ -642,29 +640,33 @@ private:
 		array_type r;
 
 		for (++begin; begin != end; begin++) {
-			auto tok = smart_pointer::create();
+			json_type tok { };
 
 			switch(skipCharacters(begin, end)) {
 				case '{':
-					tok->m_value = parseObject(begin, end, *tok);
-					r.emplaceBack(tok.release());
+					tok.m_value = parseObject(begin, end, *tok);
+					r.emplaceBack(std::move(tok));
 
 					break;
+
 				case '[':
-					tok->m_value = parseArray(begin, end);
-					r.emplaceBack(tok.release());
+					tok.m_value = parseArray(begin, end);
+					r.emplaceBack(std::move(tok));
 
 					break;
+
 				case '\"':
-					tok->m_value = parseString(begin, end);
-					r.emplaceBack(tok.release());
+					tok.m_value = parseString(begin, end);
+					r.emplaceBack(std::move(tok));
 
 					if (*(begin + 1) != ']') ++begin;
 
 					break;
+
 				case ']':
 					return r;
 					break;
+
 				case '}':
 				case ',':
 					break;
