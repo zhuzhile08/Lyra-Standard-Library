@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cassert>
 #include <new>
+#include <memory>
 #include <utility>
 #include <initializer_list>
 
