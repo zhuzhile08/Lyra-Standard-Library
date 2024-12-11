@@ -15,6 +15,7 @@
 
 #include <type_traits>
 #include <typeindex>
+#include <limits>
 #include <functional>
 #include <string>
 #include <filesystem>
@@ -28,7 +29,10 @@ template <class Ty> concept PointerType = std::is_pointer_v<Ty>;
 
 template <IntegralType Integral> struct Hash<Integral> {
 	constexpr std::size_t operator()(Integral i) const noexcept {
-		if constexpr (sizeof(i) <= sizeof(std::size_t)) {
+		if constexpr (sizeof(i) < sizeof(std::size_t) && std::is_signed_v<Integral>) {
+			if (i >= 0) return static_cast<std::size_t>(i);
+			else static_cast<std::size_t>(i) + static_cast<std::size_t>(std::numeric_limits<Integral>::max() / 2);
+		} else if constexpr(sizeof(i) <= sizeof(std::size_t) && std::is_unsigned_v<Integral>) {
 			return static_cast<std::size_t>(i);
 		} else {
 			i = (i ^ (i >> 30)) * Integral(0xbf58476d1ce4e5b9);
