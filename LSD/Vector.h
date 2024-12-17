@@ -92,7 +92,7 @@ public:
 
 	constexpr ~Vector() {
 		if (m_begin) {
-			for (auto it = m_begin; it != m_end; it++) allocator_traits::destroy(m_alloc, m_begin);
+			for (auto it = m_begin; it != m_end; it++) allocator_traits::destroy(m_alloc, it);
 			allocator_traits::deallocate(m_alloc, m_begin, m_cap - m_begin);
 			
 			m_begin = nullptr;
