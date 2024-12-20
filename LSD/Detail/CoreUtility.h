@@ -26,9 +26,9 @@ namespace lsd {
 template <class Ty> concept IteratableContainer = requires(Ty c1, Ty c2) {
 	typename Ty::size_type;
 	typename Ty::value_type;
-	c1.swap(c2);
-	c1.begin();
-	c1.end();
+	std::swap(c1, c2);
+	std::begin(c1);
+	std::end(c1);
 };
 
 
@@ -43,7 +43,7 @@ inline constexpr std::size_t hashmapBucketSizeCheck(std::size_t requested, std::
 
 // convert a size to an integer for safe member access
 
-template <class Integer> inline constexpr Integer sizeToIndex(Integer size) noexcept requires std::is_integral_v<Integer> {
+template <std::integral Integer> inline constexpr Integer sizeToIndex(Integer size) noexcept {
 	return (size == 0) ? 0 : size - 1;
 }
 
