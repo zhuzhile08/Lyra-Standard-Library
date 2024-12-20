@@ -32,7 +32,7 @@ template <class CharTy> struct StringFormatter {
 	using char_type = CharTy;
 	using back_inserter = detail::BasicFormatBackInserter<char_type>;
 	using field_options = detail::BasicFieldOptions<char_type>;
-	using format_spec = detail::BasicGeneralFormatSpec<char_type>;
+	using format_spec = detail::BasicFormatSpec<const char_type*, char_type>;
 	using context_type = BasicFormatContext<char_type>;
 
 	template <class StringCharTy> 

@@ -33,6 +33,8 @@ template <class> class BasicFormatVerifier;
 template <class> struct BasicRuntimeFormatString;
 template <class, class...> struct BasicFormatString;
 
+template <class, class> class BasicFormatSpec;
+
 template <class> class BasicFormatArg;
 template <class> class BasicFormatArgs;
 

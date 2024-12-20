@@ -5,15 +5,8 @@
  * @brief Formatting utility and library
  * 
  * @brief Formatting specification: 
- * @brief replacementField  ::= "{" [field][":"format] "}"
- * @brief field             ::= [argumentIndex]["["elementIndex"]"]
- * @brief format            ::= [[fillCharacter]alignMode][sign]["#"]["0"][width]["."precision][typeFormat]
- * @brief fillCharacter     ::= <any character except '{' and '}'>
- * @brief alignMode         ::= '<' | '>' | '='
- * @brief sign              ::= '+' | '-' | ' '
- * @brief width        		::= <unsigned integer>
- * @brief precision			::= <unsigned integer>
- * @brief typeFormat        ::= <extended formatting arguments, ususally used for data presentation style>
+ * @brief replacementField  ::= "{" [field][":"formatSpec] "}"
+ * @brief formatSpec		::= <view in Detail/Format/FormatSpecs.h>
  * 
  * @date 2024-06-18
  * 
