@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24.0)
 set(CMAKE_CXX_STANDARD 23)
 
-project(LyraStandardLibrary VERSION 0.8.0)
+project(LyraStandardLibrary VERSION 0.8.1)
 
 
 # add headers

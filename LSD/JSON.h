@@ -208,7 +208,7 @@ public:
 
 	constexpr reference insert(rvreference child) {
 		child.m_parent = this;
-		auto& res = *m_children.emplace(std::move(child)).first->get();
+		auto& res = *m_children.emplace(std::move(child)).first;
 
 		return res;
 	}
@@ -243,17 +243,7 @@ public:
 		return *this;
 	}
 
-	/*
-	template <class KeyType> constexpr reference rename(KeyType&& name) {
-		auto t = dynamic_cast<pointer>(this);
-		m_parent->m_children.extract(m_name);
-		m_name = std::forward<KeyType>(name);
-		m_parent->m_children.emplace(smart_pointer(t));
-		return *t;
-	}
-	*/
-
-	template <class Iterator> [[nodiscard]] static constexpr json_type parse(Iterator begin, Iterator end) {
+	template <lsd::IteratorType Iterator> [[nodiscard]] static constexpr json_type parse(Iterator begin, Iterator end) {
 		// first node
 		json_type json;
 
@@ -267,8 +257,18 @@ public:
 
 		return json;
 	}
-	template <class Container> [[nodiscard]] static constexpr json_type parse(const Container& container) {
-		return parse(container.begin(), container.end());
+	template <lsd::IteratableContainer Container> [[nodiscard]] static constexpr json_type parse(const Container& container) {
+		return parse(std::begin(container), std::end(container));
+	}
+	template <class CStringLike> [[nodiscard]] static constexpr json_type parse(const CStringLike& string) requires(
+		(std::is_pointer_v<CStringLike>) &&
+		std::is_integral_v<std::remove_cvref_t<std::remove_pointer_t<std::remove_all_extents_t<std::remove_cvref_t<CStringLike>>>>>
+	) {
+		auto end = string;
+		while (*end != '\0')
+			++end;
+
+		return parse(string, end);
 	}
 
 	constexpr string_type stringify() const {
@@ -512,8 +512,6 @@ private:
 	}
 
 	template <class Iterator> static constexpr string_type parseString(Iterator& begin, Iterator& end) {
-		if (*begin != '\"') throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, expected quotation marks!");
-
 		string_type r;
 
 		for (++begin; begin != end; begin++) {
@@ -565,9 +563,10 @@ private:
 			case '8':
 			case '9':
 				{
-					auto sequenceEnd = begin + 1;
-					for (bool finished = false; sequenceEnd != end && !finished; sequenceEnd++) {
-						switch (*sequenceEnd) { 
+					auto sequenceBegin = begin;
+
+					for (; begin != end; begin++) {
+						switch (*(begin + 1)) { 
 							case ' ':
 							case '\f':
 							case '\n':
@@ -576,34 +575,31 @@ private:
 							case '\v':
 							case '\0': 
 							case '}':
+							case ']':
 							case ',':
-								finished = true;
 								break;
 							
 							default:
-								break;
+								continue;
 						}
+
+						break;
 					}
+
+					auto sequenceEnd = begin + 1;
 
 					unsigned_type uRes { };
 
-					if (fromChars(&*begin, &*sequenceEnd, uRes).ptr == &*sequenceEnd) return uRes;
+					if (fromChars(sequenceBegin, sequenceEnd, uRes).ptr == sequenceEnd) return uRes;
 					else {
 						signed_type sRes = { };
 
-						if (fromChars(&*begin, &*sequenceEnd, sRes).ptr == &*sequenceEnd) return sRes;
+						if (fromChars(sequenceBegin, sequenceEnd, sRes).ptr == sequenceEnd) return sRes;
 						else {
 							floating_type fRes = { };
 							
-							/*
-							if (fromChars(&*begin, &*sequenceEnd, fRes).ptr == &*sequenceEnd) return fRes;
-							else throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, number could not be parsed!");
-							*/
-
-							char format[22] { }; /// @todo lsd::fromChars doesn't support decimal floating point conversion yet
-							std::snprintf(format, 22, "%%%zuf", end - begin);
-							if (sscanf(&*begin, format, &fRes) == 1) return fRes;
-							else throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, number could not be parsed!");
+							if (fromChars(sequenceBegin, sequenceEnd, fRes).ptr == sequenceEnd) return fRes;
+							else throw JsonParseError("lsd::Json::parsePrimitive(): JSON Syntax Error: Unexpected symbol, number could not be parsed!");
 						}
 					}
 				}
@@ -611,7 +607,7 @@ private:
 				break;
 			
 			default:
-				throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, couldn't match identifier with any type!");
+				throw JsonParseError("lsd::Json::parsePrimitive(): JSON Syntax Error: Unexpected symbol, couldn't match identifier with any type!");
 				break;
 		}
 
@@ -644,7 +640,7 @@ private:
 
 			switch(skipCharacters(begin, end)) {
 				case '{':
-					tok.m_value = parseObject(begin, end, *tok);
+					tok.m_value = parseObject(begin, end, tok);
 					r.emplaceBack(std::move(tok));
 
 					break;
@@ -672,8 +668,8 @@ private:
 					break;
 
 				default:
-					tok->m_value = parsePrimitive(begin, end);
-					r.emplaceBack(tok.release());
+					tok.m_value = parsePrimitive(begin, end);
+					r.emplaceBack(std::move(tok));
 					
 					break;
 			}
@@ -686,8 +682,10 @@ private:
 	template <class Iterator> static constexpr json_type parsePair(Iterator& begin, Iterator& end) {
 		json_type tok;
 
+		if (*begin != '\"') throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, expected quotation marks!"); // the check is done here and not in the string because this is the only case where the validity of begin is not guaranteed
 		tok.m_name = parseString(begin, end);
 		++begin;
+
 		if (skipCharacters(begin, end) != ':') throw JsonParseError("lsd::Json::parsePair(): JSON Syntax Error: Unexpected symbol, expected double colon after variable name!");
 		++begin;
 
@@ -720,7 +718,7 @@ private:
 
 	static constexpr void stringifyPrimitive(const json_type& t, string_type& s) {
 		if (t.isBoolean()) {
-			if (t == true) s.append("true");
+			if (t.get<bool>() == true) s.append("true");
 			else s.append("false");
 		} else if (t.isSigned()) {
 			if constexpr (sizeof(literal_type) == 1)
@@ -744,7 +742,7 @@ private:
 		s.pushBack('{');
 		for (auto it = t.begin(); it != t.end(); it++) {
 			if (it != t.begin()) s.pushBack(',');
-			stringifyPair(*dynamic_cast<json_type*>(it->get()), s);
+			stringifyPair(*it, s);
 		}
 		s.pushBack('}');
 	}
@@ -753,14 +751,14 @@ private:
 		const auto& array = t.get<array_type>();
 		for (auto it = array.rbegin(); it != array.rend(); it++) {
 			if (it != array.rbegin()) s.pushBack(',');
-			if ((*it)->isString())
-				s.append("\"").append((*it)->template get<string_type>()).pushBack('\"');
-			else if ((*it)->isObject())
-				stringifyObject(**it, s);
-			else if ((*it)->isArray())
-				stringifyArray(**it, s);	
+			if (it->isString())
+				s.append("\"").append(it->template get<string_type>()).pushBack('\"');
+			else if (it->isObject())
+				stringifyObject(*it, s);
+			else if (it->isArray())
+				stringifyArray(*it, s);	
 			else
-				stringifyPrimitive(**it, s);
+				stringifyPrimitive(*it, s);
 		}
 		s.pushBack(']');
 	}
@@ -780,29 +778,33 @@ private:
 	static constexpr void stringifyObjectPretty(size_type indent, const json_type& t, string_type& s) {
 		indent++;
 		s.append("{\n");
+
 		for (auto it = t.begin(); it != t.end(); it++) {
 			if (it != t.begin()) s.append(",\n");
-			stringifyPairPretty(indent, *it->get(), s);
+			stringifyPairPretty(indent, *it, s);
 		}
+
 		s.append("\n").append(--indent, '\t').pushBack('}');
 	}
 	static constexpr void stringifyArrayPretty(size_type indent, const json_type& t, string_type& s) {
 		indent += 1;
 		s.append("[\n");
+
 		const auto& array = t.get<array_type>();
 		for (auto it = array.begin(); it != array.end(); it++) {
 			if (it != array.begin()) s.append(",\n");
 			s.append(indent, '\t');
 
-			if ((*it)->isString())
-				s.append("\"").append((*it)->template get<string_type>()).pushBack('\"');
-			else if ((*it)->isObject())
-				stringifyObjectPretty(indent, **it, s);
-			else if ((*it)->isArray())
-				stringifyArrayPretty(indent, **it, s);	
+			if (it->isString())
+				s.append("\"").append(it->template get<string_type>()).pushBack('\"');
+			else if (it->isObject())
+				stringifyObjectPretty(indent, *it, s);
+			else if (it->isArray())
+				stringifyArrayPretty(indent, *it, s);	
 			else
-				stringifyPrimitive(**it, s);
+				stringifyPrimitive(*it, s);
 		}
+
 		s.append("\n").append(--indent, '\t').pushBack(']');
 	}
 	static constexpr void stringifyPairPretty(size_type indent, const json_type& t, string_type& s) {
