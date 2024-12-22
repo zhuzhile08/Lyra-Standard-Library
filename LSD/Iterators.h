@@ -285,6 +285,8 @@ private:
 };
 
 
+// iterator trait
+
 template <class, class = void> struct IsIterator : public std::false_type { };
 template <class Ty> struct IsIterator<Ty, std::void_t<
 	typename std::iterator_traits<Ty>::difference_type,
@@ -295,5 +297,27 @@ template <class Ty> struct IsIterator<Ty, std::void_t<
 >> : public std::true_type { };
 
 template <class Ty> inline constexpr bool isIteratorValue = IsIterator<Ty>::value;
+
+
+// iterator concepts
+
+template <class Ty> concept IteratorType = isIteratorValue<Ty>;
+
+template <class Ty> concept ForwardContinuousIteratorType = requires(Ty it, std::size_t n) {
+	isIteratorValue<Ty>;
+	it + n;
+};
+
+template <class Ty> concept BackwardsContinuousIteratorType = requires(Ty it, std::size_t n) {
+	isIteratorValue<Ty>;
+	it - n;
+};
+
+template <class Ty> concept ContinuousIteratorType = requires(Ty first, Ty second, std::size_t n) {
+	isIteratorValue<Ty>;
+	first - second;
+	first + n;
+	first - n;
+};
 
 }
