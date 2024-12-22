@@ -5,7 +5,7 @@
  * @brief Formatting utility and library
  * 
  * @brief Formatting specification: 
- * @brief replacementField  ::= "{" [field][":"formatSpec] "}"
+ * @brief replacementField  ::= "{"[field][":"formatSpec]"}"
  * @brief formatSpec		::= <view in Detail/Format/FormatSpecs.h>
  * 
  * @date 2024-06-18

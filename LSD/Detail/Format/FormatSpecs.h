@@ -22,7 +22,7 @@ namespace detail {
 /**
  * @brief container for parsed general format spec
  * 
- * @brief formatSpec            ::= [[fillCharacter]alignMode][sign]["#"]["0"][width]["."precision][typeFormat]
+ * @brief formatSpec        ::= [[fillCharacter]alignMode][sign]["#"]["0"][width]["."precision][typeFormat]
  * @brief fillCharacter     ::= <any character except '{' and '}'>
  * @brief alignMode         ::= '<' | '>' | '='
  * @brief sign              ::= '+' | '-' | ' '
