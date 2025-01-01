@@ -21,6 +21,24 @@
                 "MIMode": "lldb",
                 "program": "${workspaceFolder}/out/build/Debug/Tests/Format/Format"
             }
+        },
+        {
+            "name": "JSON",
+            "type": "cppdbg",
+            "request": "launch",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "windows": {
+                "MIMode": "gdb",
+                "program": "${workspaceFolder}\\out\\build\\Debug\\Tests\\JSON\\Debug\\JSON.exe"
+            },
+            "osx": {
+                "MIMode": "lldb",
+                "program": "${workspaceFolder}/out/build/Debug/Tests/JSON/JSON"
+            }
         }
     ]
 
