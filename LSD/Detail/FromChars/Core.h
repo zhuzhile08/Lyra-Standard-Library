@@ -1,5 +1,5 @@
 /*************************
- * @file FromCharsCore.h
+ * @file Core.h
  * @author Zhile Zhu (zhuzhile08@gmail.com)
  * 
  * @brief Core utility and structures for the From-Chars library

@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "Detail/FromChars/FromCharsIntegral.h"
+#include "Detail/FromChars/Integral.h"
 #include "Detail/Format/FormatContext.h"
 #include "Detail/Format/Formatters.h"
 #include "Detail/Format/FormatArgs.h"

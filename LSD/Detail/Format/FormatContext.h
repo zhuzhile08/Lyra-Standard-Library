@@ -13,7 +13,7 @@
 #include "FormatCore.h"
 #include "FormatArgs.h"
 
-#include "../FromChars/FromCharsIntegral.h"
+#include "../FromChars/Integral.h"
 
 #include "../../String.h"
 #include "../../StringView.h"

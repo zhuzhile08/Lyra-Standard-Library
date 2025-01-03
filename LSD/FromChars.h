@@ -11,6 +11,6 @@
 
 #pragma once
 
-#include "Detail/FromChars/FromCharsCore.h"
-#include "Detail/FromChars/FromCharsIntegral.h"
-#include "Detail/FromChars/FromCharsFloating.h"
+#include "Detail/FromChars/Core.h"
+#include "Detail/FromChars/Integral.h"
+#include "Detail/FromChars/Floating.h"

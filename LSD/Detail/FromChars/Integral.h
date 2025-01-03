@@ -1,5 +1,5 @@
 /*************************
- * @file FromCharsIntegral.h
+ * @file Integral.h
  * @author Zhile Zhu (zhuzhile08@gmail.com)
  * 
  * @brief From-Chars functions for integral types
@@ -11,7 +11,7 @@
 
 #pragma once
 
-#include "FromCharsCore.h"
+#include "Core.h"
 
 namespace lsd {
 

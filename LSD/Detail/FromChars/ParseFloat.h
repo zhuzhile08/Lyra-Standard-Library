@@ -20,8 +20,8 @@
 
 #pragma once
 
-#include "FromCharsCore.h"
-#include "FromCharsIntegral.h"
+#include "Core.h"
+#include "Integral.h"
 #include "../../Iterators.h"
 #include "../../StringView.h"
 
@@ -52,6 +52,9 @@ public:
 
 	[[nodiscard]] constexpr bool empty() const noexcept {
 		return begin == end;
+	}
+	[[nodiscard]] constexpr std::size_t size() const noexcept {
+		return end - begin;
 	}
 };
 
@@ -185,6 +188,7 @@ template <ContinuousIteratorType Iterator> constexpr std::errc parseFloatingPoin
 		++begin;
 		result.negative = true;
 	}
+	
 	if (begin == end) return std::errc::invalid_argument;
 
 
