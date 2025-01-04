@@ -40,8 +40,8 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
 	std::size_t iterationCount = 0;
 
 	if (base > 10) {
-		const decltype(*begin) uppercaseLimit = ('A' + base - 10);
-		const decltype(*begin) lowercaseLimit = ('a' + base - 10);
+		const std::remove_cvref_t<decltype(*begin)> uppercaseLimit = ('A' + base - 10);
+		const std::remove_cvref_t<decltype(*begin)> lowercaseLimit = ('a' + base - 10);
 
 		for (; begin != end; begin++, iterationCount++) {
 			res *= base;
@@ -59,7 +59,7 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
 			else prevRes = res;
 		}
 	} else {
-		const decltype(*begin) numLimit = ('0' + base);
+		const std::remove_cvref_t<decltype(*begin)> numLimit = ('0' + base);
 
 		for (; begin != end && *begin >= '0' && *begin < numLimit; begin++, iterationCount++) {
 			res *= base;

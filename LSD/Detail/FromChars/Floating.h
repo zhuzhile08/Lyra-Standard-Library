@@ -9,6 +9,7 @@
  * @copyright Copyright (c) 2024
  *************************/
 
+#include "../CoreUtility.h"
 #include "Core.h"
 #include "Integral.h"
 #include "ParseFloat.h"
