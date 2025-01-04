@@ -112,7 +112,7 @@ def main():
 		else:
 			mant = mant << abs(mantBitLenMinus64)
 
-		powTenMant += f"\t{mant:#018x}ULL,\n"
+		powTenMant += f"\tUINT64_C({mant:#018x}),\n"
 		powTenExp += f"\t{i + expMod},\n"
 	
 	powTenMant = powTenMant[:-2]

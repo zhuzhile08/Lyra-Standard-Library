@@ -67,7 +67,7 @@ public:
 
 	num_view whole;
 	num_view fractional;
-	std::int64_t exponent = 1; // since the largest number a double can represent only has around 300 digits, this should be enougth
+	std::int64_t exponent = 0; // since the largest number a double can represent only has around 300 digits, this should be enougth
 
 	Iterator last;
 };

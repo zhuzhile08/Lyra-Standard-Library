@@ -10,6 +10,7 @@ inline constexpr auto jsonTest = "{\
 	\"negativeNumber\"    :-12345 ,\
 	\"float\"  :123.45 ,\
 	\"negativeFloat\" :   -123.45,\
+	\"longFloat\" :   3.14159265358979323846264338327950288419716939937510582097494459230781640628620899862803482534211706798214808651328230,\
 	\"zero\" :    0   ,\
 	\"booleanTrue\": true   ,\
 	\"booleanFalse\":false,\
