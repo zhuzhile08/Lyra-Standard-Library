@@ -100,14 +100,12 @@ template <ContinuousIteratorType Iterator> constexpr bool parseHexNumber(
 				trailingZeros = 0;
 
 				continue;
-				break;
 
 			case '0':
 				++begin;
 				++trailingZeros;
 
 				continue;
-				break;
 
 			default:
 				endFound = true;
@@ -148,14 +146,12 @@ template <ContinuousIteratorType Iterator> constexpr bool parseDecNumber(
 				trailingZeros = 0;
 
 				continue;
-				break;
 
 			case '0':
 				++begin;
 				++trailingZeros;
 
 				continue;
-				break;
 
 			default:
 				endFound = true;

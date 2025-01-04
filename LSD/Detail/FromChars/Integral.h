@@ -82,19 +82,30 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
 
 namespace detail {
 
-// Fast and unsafe version of fromChars, do NOT use this under any normal circumstances
+// Fast and unsafe versions of fromChars, do NOT use this under any normal circumstances
+
 template <class Numerical, class Iterator, typename std::enable_if_t<
 	std::is_unsigned_v<Numerical> && 
 	isIteratorValue<Iterator> && 
 	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type>, 
 int> = 0> 
-constexpr bool uncheckedFastUnsignedFromChars(Iterator begin, Iterator end, Numerical& result, std::size_t base = 0) {
+constexpr void uncheckedFastUnsignedBase10FromChars(Iterator begin, Iterator end, Numerical& result) {
+	for (; begin != end; begin++)
+		result = result * 10 + *begin - '0';
+}
+
+template <class Numerical, class Iterator, typename std::enable_if_t<
+	std::is_unsigned_v<Numerical> && 
+	isIteratorValue<Iterator> && 
+	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type>, 
+int> = 0> 
+constexpr bool uncheckedFastUnsignedBase16FromChars(Iterator begin, Iterator end, Numerical& result) {
 	Numerical prev = result;
 
 	for (; begin != end; begin++) {
-		if (*begin <= 'A') (result *= base) += *begin - '0';
-		else if (*begin < 'a') (result *= base) += 10 + *begin - 'A';
-		else (result *= base) += 10 + *begin - 'a';
+		if (*begin <= 'A') (result *= 16) += *begin - '0';
+		else if (*begin < 'a') (result *= 16) += 10 + *begin - 'A';
+		else (result *= 16) += 10 + *begin - 'a';
 
 		if (result < prev) return false;
 		prev = result;
@@ -103,6 +114,7 @@ constexpr bool uncheckedFastUnsignedFromChars(Iterator begin, Iterator end, Nume
 	return true;
 }
 
+
 // Same principle as above, but parses until the next digit overflows
 template <class Numerical, class Iterator, typename std::enable_if_t<
 	std::is_unsigned_v<Numerical> && 
@@ -110,24 +122,18 @@ template <class Numerical, class Iterator, typename std::enable_if_t<
 	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type>, 
 int> = 0> 
 constexpr bool uncheckedOverflowBoundBase10FastUnsignedFromChars(Iterator begin, Iterator end, Numerical& result, std::size_t& digitsParsed) {
-	Numerical prev = result;
+	static constexpr Numerical maxVal = std::numeric_limits<Numerical>::max();
+	static constexpr Numerical maxValOverTen = maxVal / 10;
+	static constexpr Numerical maxLastDigit = maxVal % 10;
 
 	for (; begin != end; begin++) {
-		result *= 10;
-		if (result / 10 != prev) {
-			result = prev;
-			return false;
-		}
-		prev = result;
+		auto n = *begin - '0';
 
-		result += *begin - '0';
-
-		if (result < prev) {
-			result = prev;
+		if (result > maxValOverTen || (result == maxValOverTen && n > maxLastDigit))
 			return false;
-		}
+
+		result = result * 10 + n;
 		++digitsParsed;
-		prev = result;
 	}
 
 	return true;

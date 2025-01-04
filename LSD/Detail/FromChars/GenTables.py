@@ -43,7 +43,7 @@ FILE_ENDING = """
 
 CONST_ARRAY_BASE = """\
 
-inline constexpr lsd::Array<{}, {}> {} {{
+inline constexpr {} {}[{}]{{
 {}
 }};
 """
@@ -54,7 +54,7 @@ FAST_PATH_DOUBLE_ARRAY_SIZE = 309
 
 
 def generateArray(name, type, length, value):
-	return CONST_ARRAY_BASE.format(type, str(length), name, value)
+	return CONST_ARRAY_BASE.format(type, name, str(length), value)
 
 def main():
 	date = datetime.today()
@@ -75,8 +75,7 @@ def main():
 
 	# calculate table of estimations of power of tens for the eisen lemire algorithm and write it to the file
 
-	powTenMant = ""
-	powTenExp = ""
+	powTen = ""
 
 	for i in range(-FAST_PATH_DOUBLE_ARRAY_SIZE + 1, FAST_PATH_DOUBLE_ARRAY_SIZE):
 		mantVal = int(5 ** abs(i))
@@ -112,14 +111,11 @@ def main():
 		else:
 			mant = mant << abs(mantBitLenMinus64)
 
-		powTenMant += f"\tUINT64_C({mant:#018x}),\n"
-		powTenExp += f"\t{i + expMod},\n"
+		powTen += f"\t{{ UINT64_C({mant:#018x}), {i + expMod} }},\n"
 	
-	powTenMant = powTenMant[:-2]
-	powTenExp = powTenExp[:-2]
+	powTen = powTen[:-2]
 
-	file.write(generateArray("powerOfTenMant", "std::uint64_t", FAST_PATH_DOUBLE_ARRAY_SIZE * 2, powTenMant))
-	file.write(generateArray("powerOfTenExp", "std::int16_t", FAST_PATH_DOUBLE_ARRAY_SIZE * 2, powTenExp)) # the int16 is purely for saving space
+	file.write(generateArray("powerOfTenTable", "std::pair<std::uint64_t, std::int16_t>", FAST_PATH_DOUBLE_ARRAY_SIZE * 2, powTen))
 
 
 	# write the file ending and close the file
