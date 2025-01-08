@@ -29,6 +29,7 @@ FILE_OPENING = """\
 #include "../../Array.h"
 
 #include <cstdint>
+#include <utility>
 
 namespace lsd {{
 
@@ -48,9 +49,11 @@ inline constexpr {} {}[{}]{{
 }};
 """
 
-FAST_PATH_FLOAT_ARRAY_SIZE = 39
+FAST_PATH_FLOAT_ARRAY_SIZE = 8
 
-FAST_PATH_DOUBLE_ARRAY_SIZE = 309
+FAST_PATH_DOUBLE_ARRAY_SIZE = 16
+
+SLOW_PATH_ARRAY_SIZE = 308
 
 
 def generateArray(name, type, length, value):
@@ -77,7 +80,7 @@ def main():
 
 	powTen = ""
 
-	for i in range(-FAST_PATH_DOUBLE_ARRAY_SIZE + 1, FAST_PATH_DOUBLE_ARRAY_SIZE):
+	for i in range(-SLOW_PATH_ARRAY_SIZE + 1, SLOW_PATH_ARRAY_SIZE):
 		mantVal = int(5 ** abs(i))
 
 		mant = int()
@@ -115,7 +118,7 @@ def main():
 	
 	powTen = powTen[:-2]
 
-	file.write(generateArray("powerOfTenTable", "std::pair<std::uint64_t, std::int16_t>", FAST_PATH_DOUBLE_ARRAY_SIZE * 2, powTen))
+	file.write(generateArray("powerOfTenTable", "std::pair<std::uint64_t, std::int64_t>", SLOW_PATH_ARRAY_SIZE * 2, powTen))
 
 
 	# write the file ending and close the file

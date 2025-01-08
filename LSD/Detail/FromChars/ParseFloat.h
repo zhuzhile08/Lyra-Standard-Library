@@ -35,194 +35,120 @@ namespace lsd {
 
 namespace detail {
 
-// structural implementations of the floating point spec
+// From chars integral specialized for floating point parsing
 
-enum class FloatMode {
-	regular,
-	infinity,
-	notANumber
-};
+template <class Iterator>
+constexpr FromCharsResult<Iterator> unsignedFromCharsBase10(Iterator begin, Iterator end, std::uint64_t& result, std::size_t* parsedDigits)
+requires (
+	isIteratorValue<Iterator> && 
+	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type> 
+) {
+	constexpr std::uint64_t maxVal = std::numeric_limits<std::uint64_t>::max();
+	
+	constexpr std::uint64_t maxValOverBase = maxVal / 10;
+	constexpr std::uint64_t maxLastDigit = maxVal % 10;
 
-template <ContinuousIteratorType Iterator> struct NumberView {
-public:
-	Iterator begin;
-	Iterator end;
+	constexpr char zeroC = '0';
+	constexpr char nineC = '9' + 1;
 
-	std::size_t remainingZeros; // only one of either the trailing or leading zeros has to be stored, since the other will be automatically shortened, and only the other may be useful for simplification
+	std::errc ec { };
+	std::size_t iterationCount = 0;
 
-	[[nodiscard]] constexpr bool empty() const noexcept {
-		return begin == end;
+	for (std::uint8_t n = 0; begin != end; begin++, iterationCount++) {
+		n = *begin - '0';
+
+		if (result > maxValOverBase || (result == maxValOverBase && n > maxLastDigit)) {
+			ec = std::errc::result_out_of_range;
+
+			break;
+		}
+
+		result = result * 10 + n;
 	}
-	[[nodiscard]] constexpr std::size_t size() const noexcept {
-		return end - begin;
-	}
-};
+
+	if (iterationCount != 0) {
+		if (parsedDigits) *parsedDigits = iterationCount;
+
+		return { begin, ec };
+	} else return { begin, std::errc::invalid_argument };
+}
+
+
+// structural implementation of the floating point spec
 
 template <ContinuousIteratorType Iterator> struct FloatParseResult {
 public:
-	using num_view = NumberView<Iterator>;
-
 	bool negative = false;
-	FloatMode mode = FloatMode::regular;
 
-	num_view whole;
-	num_view fractional;
+	std::size_t wholeSize = 0;
+	std::size_t fracSize = 0;
+
+	std::uint64_t mantissa = 0;
 	std::int64_t exponent = 0; // since the largest number a double can represent only has around 300 digits, this should be enougth
+
+	bool fastPathAvailable = true;
 
 	Iterator last;
 };
 
 
-// number parsers
-
-template <ContinuousIteratorType Iterator> constexpr bool parseHexNumber(
-	NumberView<Iterator>& view, 
-	Iterator& begin, 
-	const Iterator& end,
-	std::size_t& leadingZeros,
-	std::size_t& trailingZeros
-) {
-	auto oldBegin = begin;
-
-	// calculate leading zeros
-	while (begin != end && *begin == '0') {
-		++leadingZeros;
-		++begin;
-	}
-	
-	// parse number whilst calculating trailing zeros
-	auto endFound = false; 
-	while (!endFound && begin != end) {
-		switch (*begin) {
-			case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
-			case 'A': case 'B': case 'C': case 'D': case 'E': case 'F':
-				++begin;
-				trailingZeros = 0;
-
-				continue;
-
-			case '0':
-				++begin;
-				++trailingZeros;
-
-				continue;
-
-			default:
-				endFound = true;
-				break;
-		}
-	}
-
-	if (oldBegin == begin && leadingZeros == 0) return false;
-
-	view.begin = oldBegin;
-	view.end = begin;
-
-	return true;
-}
-
-
-template <ContinuousIteratorType Iterator> constexpr bool parseDecNumber(
-	NumberView<Iterator>& view, 
-	Iterator& begin, 
-	const Iterator& end,
-	std::size_t& leadingZeros,
-	std::size_t& trailingZeros
-) {
-	auto oldBegin = begin;
-
-	// calculate leading zeros
-	while (begin != end && *begin == '0') {
-		++leadingZeros;
-		++begin;
-	}
-	
-	// parse number whilst calculating trailing zeros
-	auto endFound = false; 
-	while (!endFound && begin != end) {
-		switch (*begin) {
-			case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': 
-				++begin;
-				trailingZeros = 0;
-
-				continue;
-
-			case '0':
-				++begin;
-				++trailingZeros;
-
-				continue;
-
-			default:
-				endFound = true;
-				break;
-		}
-	}
-
-
-	if (oldBegin == begin && leadingZeros == 0) return false;
-	
-	view.begin = oldBegin;
-	view.end = begin;
-	
-	return true;
-}
-
-
 // the parser itself
 
-template <ContinuousIteratorType Iterator> constexpr std::errc parseFloatingPoint(
+template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc parseFloatingPoint(
 	FloatParseResult<Iterator>& result,
 	Iterator begin,
 	Iterator end,
-	CharsFormat fmt
+	CharsFormat fmt,
+	Floating& fres
 ) {
+	static constexpr std::uint64_t maxVal = std::numeric_limits<std::uint64_t>::max();
+
 	if (begin == end) return std::errc::invalid_argument;
 
 	// parse sign
 	if (*begin == '-') {
-		++begin;
+		if (++begin == end) return std::errc::invalid_argument;
+
 		result.negative = true;
 	}
-	
-	if (begin == end) return std::errc::invalid_argument;
 
 
 	// parse irregular modes
 	switch (*begin) {
 		case 'i': case 'I':
 			if (detail::caselessStrNCmp(++begin, end, "nf", 2)) {
-				result.mode = FloatMode::infinity;
+				fres = std::numeric_limits<Floating>::infinity() * (result.negative ? -1 : 1);
 				begin += 2;
 
 				if (detail::caselessStrNCmp(begin, end, "inity", 5)) begin += 5;
 				result.last = begin;
 
-				return std::errc { };
+				return std::errc::operation_canceled;
 			} 
 			
 			return std::errc::invalid_argument;
 
 		case 'n': case 'N':
 			if (detail::caselessStrNCmp(++begin, end, "an", 2)) {
-				result.mode = FloatMode::notANumber;
+				fres = std::numeric_limits<Floating>::quiet_NaN() * (result.negative ? -1 : 1);
 				result.last = begin + 2;
 
-				return std::errc { };
+				return std::errc::operation_canceled;
 			}
 
 			return std::errc::invalid_argument;
 	}
 
+
 	// the code now goes down 2 paths, depending on the format of the float
 	if (fmt == CharsFormat::hex) { // hex float
+		/*
 		// parse whole part
 
-		std::size_t wholeLeadingZeros = 0, wholeTrailingZeros = 0;
-		auto emptyWhole = parseHexNumber(result.whole, begin, end, wholeLeadingZeros, wholeTrailingZeros); // don't throw an error, since this may be valid in some scenarios
+		auto fcRes = fromChars(begin, end, result.mantissa, 10, &result.wholeSize);
+		if (fcRes.ptr == begin || fcRes.ec == std::errc::invalid_argument) return std::errc::invalid_argument;
 
-		result.whole.begin += wholeLeadingZeros;
-		result.whole.remainingZeros = wholeTrailingZeros;
+		begin = fcRes.ptr;
 
 		if (begin == end) {
 			result.last = begin;
@@ -231,21 +157,11 @@ template <ContinuousIteratorType Iterator> constexpr std::errc parseFloatingPoin
 		}
 
 
+
 		// parse fractional part
 		if (*begin == '.') {
-			std::size_t fracLeadingZeros = 0, fracTrailingZeros = 0;
-
-			if (!parseHexNumber(result.fractional, ++begin, end, fracLeadingZeros, fracTrailingZeros) && emptyWhole)
-				return std::errc::invalid_argument; // here, there is an instant error, since there 
-
-			result.fractional.end -= fracTrailingZeros;
-			result.whole.remainingZeros = fracLeadingZeros;
-			
-			if (begin == end) {
-				result.last = begin;
-
-				return std::errc { };
-			}
+			if (!parseHexNumber(result.mantissa, result.fractionalSize, begin, end))
+				return std::errc::invalid_argument;
 		}
 
 
@@ -261,38 +177,81 @@ template <ContinuousIteratorType Iterator> constexpr std::errc parseFloatingPoin
 			return std::errc::invalid_argument;
 		
 		return std::errc { };
+		*/
 	} else { // decimal float
 		// parse whole part
 
-		std::size_t wholeLeadingZeros = 0, wholeTrailingZeros = 0;
-		auto emptyWhole = !parseDecNumber(result.whole, begin, end, wholeLeadingZeros, wholeTrailingZeros);
+		auto wholeFcRes = unsignedFromCharsBase10(begin, end, result.mantissa, &result.wholeSize);
 
-		result.whole.begin += wholeLeadingZeros;
-		result.whole.remainingZeros = wholeTrailingZeros;
-
-		if (begin == end) {
-			result.last = begin;
+		if (wholeFcRes.ptr == end) { // it can only be end if something was parsed, which is why this is ok here
+			result.last = wholeFcRes.ptr;
 
 			return std::errc { };
 		}
 
+		begin = wholeFcRes.ptr;
 
-		// parse fractional part
-		if (*begin == '.') {
-			std::size_t fracLeadingZeros = 0, fracTrailingZeros = 0;
 
-			if (!parseDecNumber(result.fractional, ++begin, end, fracLeadingZeros, fracTrailingZeros) && emptyWhole)
-				return std::errc::invalid_argument;
+		if (wholeFcRes.ec == std::errc::result_out_of_range) { // just skips the entire rest of the number until the exponent
+			result.fastPathAvailable = false;
 
-			result.fractional.end -= fracTrailingZeros;
-			result.whole.remainingZeros = fracLeadingZeros;
-			
+			while (begin != end) {
+				switch (*begin) {
+					case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': case '.':
+						++begin;
+						continue;
+				}
+
+				break;
+			}
+
 			if (begin == end) {
 				result.last = begin;
 
 				return std::errc { };
 			}
-		}
+		} else if (*begin == '.') { // parse fractional part
+			auto fracFcRes = unsignedFromCharsBase10(++begin, end, result.mantissa, &result.fracSize);
+			if (fracFcRes.ec == std::errc::invalid_argument && wholeFcRes.ec == std::errc::invalid_argument)
+				return std::errc::invalid_argument;
+
+			if (result.mantissa == 0) {
+				fres = 0; // special exit case, where both whole and fractional were all zeros
+
+				return std::errc::operation_canceled;
+			}
+
+			if (fracFcRes.ptr == end) {
+				result.last = fracFcRes.ptr;
+
+				return std::errc { };
+			}
+
+			begin = wholeFcRes.ptr;
+
+			// skip until exponent
+			if (fracFcRes.ec == std::errc::result_out_of_range) {
+				result.fastPathAvailable = false;
+				++begin;
+
+				while (begin != end) {
+					switch (*begin) {
+						case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+							++begin;
+							continue;
+					}
+
+					break;
+				}
+
+				if (begin == end) {
+					result.last = begin;
+
+					return std::errc { };
+				}
+			}
+		} else if (wholeFcRes.ec == std::errc::invalid_argument) // special case where neither the whole or floating part was present
+			result.mantissa = 1;
 
 
 		// parse exponent
@@ -302,11 +261,11 @@ template <ContinuousIteratorType Iterator> constexpr std::errc parseFloatingPoin
 		if ((*begin == 'e' || *begin == 'E') && scientific) {
 			auto fcRes = fromChars(++begin, end, result.exponent, 10);
 
-			if (fcRes.ec == std::errc { })
+			if (fcRes.ptr == end)
 				result.last = fcRes.ptr;
 
 			return fcRes.ec;
-		} else if (((fmt & CharsFormat::fixed) == 0 && scientific) || emptyWhole)
+		} else if ((fmt & CharsFormat::fixed) == 0 && scientific)
 			return std::errc::invalid_argument;
 
 		result.last = begin;

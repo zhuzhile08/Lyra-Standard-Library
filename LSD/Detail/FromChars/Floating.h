@@ -115,72 +115,36 @@ public:
 };
 
 
-// simplify parsed float
-template <class Numerical, ContinuousIteratorType Iterator> constexpr bool simplifyFloat(FloatParseResult<Iterator>& result) {
-	using fp_info = FloatingPointInfo<Numerical>;
-
-	if (result.fractional.empty()) {
-		result.exponent = result.exponent - 1 + result.whole.size();
-		result.whole.end -= result.whole.remainingZeros;
-	} else if (result.whole.empty()) {
-		result.exponent -= result.fractional.remainingZeros;
-		result.fractional.begin += result.fractional.remainingZeros;
-	} else result.exponent = result.exponent - 1 + result.whole.size();
-
-	if (result.exponent > fp_info::expMax() || result.exponent < fp_info::expMin()) return false;
-
-	return true;
-}
-
-
-// handle trivial cases and hexadecimal floats
-template <ContinuousIteratorType Iterator, class Numerical> constexpr bool handleTrivialCases(
-	FloatParseResult<Iterator>& parseRes, Numerical& result, CharsFormat fmt
-) {
-	if (parseRes.mode == detail::FloatMode::infinity) {
-		result = std::numeric_limits<Numerical>::infinity() * (parseRes.negative ? -1 : 1);
-		
-		return true;
-	} else if (parseRes.mode == detail::FloatMode::notANumber) {
-		result = std::numeric_limits<Numerical>::quiet_NaN() * (parseRes.negative ? -1 : 1);
-
-		return true;
-	} else if (parseRes.whole.empty() && parseRes.fractional.empty()) {
-		result = (parseRes.exponent == 0) ? 1 : 0; 
-
-		return true;
-	} else if (fmt == CharsFormat::hex) {
-		/// @todo
-
-		return true;
-	}
-
-	return false;
-}
-
-
 // fast conversion path
 template <ContinuousIteratorType Iterator, class Numerical> constexpr bool fastPath(
 	const FloatParseResult<Iterator>& parseRes, Numerical& result
 ) {
-	auto fracLen = parseRes.fractional.size();
+	std::int64_t e = parseRes.exponent - parseRes.fracSize;
 
-	auto e = parseRes.exponent - fracLen - 1;
-	auto digitCount = parseRes.whole.size() + fracLen; // useless optimization
+	if (e >= 0) {
+		if constexpr (std::is_same_v<Numerical, double>) {
+			if (!parseRes.fastPathAvailable || e >= INT64_C(16))
+				return false;
+			
+			result = parseRes.mantissa * decDoublePowers[e];
+		} else {
+			if (!parseRes.fastPathAvailable || e >= INT64_C(8))
+				return false;
 
-	if (digitCount > 19 || e > parseRes.exponent)
-		return false;
-
-	std::uint64_t f = 0;
-	uncheckedFastUnsignedBase10FromChars(parseRes.whole.begin, parseRes.whole.end, f);
-	uncheckedFastUnsignedBase10FromChars(parseRes.fractional.begin, parseRes.fractional.end, f);
-
-	if constexpr (std::is_same_v<Numerical, double>) {
-		if (e >= 0) result = f * decDoublePowers[e];
-		else result = f / decDoublePowers[e];
+			result = parseRes.mantissa * decFloatPowers[e];
+		}
 	} else {
-		if (e >= 0) result = f * decFloatPowers[e];
-		else result = f / decFloatPowers[e];
+		if constexpr (std::is_same_v<Numerical, double>) {
+			if (!parseRes.fastPathAvailable || e <= INT64_C(-16))
+				return false;
+			
+			result = parseRes.mantissa / decDoublePowers[-e];
+		} else {
+			if (!parseRes.fastPathAvailable || e <= INT64_C(-8))
+				return false;
+
+			result = parseRes.mantissa / decFloatPowers[-e];
+		}
 	}
 
 	if (parseRes.negative) result *= -1;
@@ -195,18 +159,12 @@ template <ContinuousIteratorType Iterator, class Numerical> constexpr bool eisel
 ) {
 	using fp_info = FloatingPointInfo<Numerical>;
 
-	// parse the number first
-	std::uint64_t m = 0;
-	std::size_t digitsParsed = 0;
-	if (uncheckedOverflowBoundBase10FastUnsignedFromChars(parseRes.whole.begin, parseRes.whole.end, m, digitsParsed))
-		uncheckedOverflowBoundBase10FastUnsignedFromChars(parseRes.fractional.begin, parseRes.fractional.end, m, digitsParsed);
-
 	// calculate the index into the table
-	std::size_t expIndex = parseRes.exponent - digitsParsed + sizeof(powerOfTenTable) / 2;
+	std::size_t expIndex = parseRes.exponent - parseRes.fracSize - 1 + std::size(powerOfTenTable) / 2;
 	const auto& powTen = powerOfTenTable[expIndex];
 
 	// calculate mantissa
-	UnsignedInt128 mantTimesPow10 = UnsignedInt128(m, powTen.first);
+	UnsignedInt128 mantTimesPow10 = UnsignedInt128(parseRes.mantissa, powTen.first);
 	std::size_t leadingZeros = std::countl_zero(mantTimesPow10.high);
 	std::size_t highDigits = 64 - leadingZeros;
 
@@ -235,9 +193,8 @@ template <ContinuousIteratorType Iterator, class Numerical> constexpr bool eisel
 	// remove upper bit of mantissa
 	resInt &= ~(UINT64_C(1) << fp_info::mantShift());
 	
-	if (parseRes.negative) resInt += (implicitCast<std::uint64_t>(parseRes.negative) << 63);
-	resInt += exp + fp_info::expBias() << fp_info::mantShift();
-	
+	resInt += (implicitCast<std::uint64_t>(parseRes.negative) << 63);
+	resInt += (exp + fp_info::expBias()) << fp_info::mantShift();
 	
 	result = std::bit_cast<Numerical>(resInt);
 	
@@ -257,14 +214,10 @@ template <class Numerical, IteratorType Iterator> constexpr FromCharsResult<Iter
 ) {
 	detail::FloatParseResult<Iterator> parseRes { };
 
- 	if (auto parseErr = detail::parseFloatingPoint(parseRes, begin, end, fmt); parseErr != std::errc { })
-		return { begin, parseErr };
-
-	if (detail::handleTrivialCases(parseRes, result, fmt))
+ 	if (auto parseErr = detail::parseFloatingPoint(parseRes, begin, end, fmt, result); parseErr == std::errc::operation_canceled)
 		return { parseRes.last, std::errc { } };
-
-	if (!detail::simplifyFloat<Numerical>(parseRes))
-		return { begin, std::errc::result_out_of_range };
+	else if (parseErr != std::errc { })
+		return { begin, parseErr };
 
 	if (detail::fastPath(parseRes, result))
 		return { parseRes.last, std::errc { } };

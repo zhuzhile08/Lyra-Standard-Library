@@ -15,13 +15,17 @@
 
 namespace lsd {
 
-template <class Numerical, class Iterator, typename std::enable_if_t<
+// Default, standard compatible from chars
+template <class Numerical, class Iterator> 
+constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Numerical& result, int base = 10)
+requires (
 	std::is_integral_v<Numerical> && 
 	isIteratorValue<Iterator> && 
-	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type>, 
-int> = 0> 
-constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Numerical& result, int base = 10) {
-	if (base > 36 || begin == end) return { begin, std::errc::invalid_argument };
+	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type> 
+) {
+	constexpr Numerical maxVal = std::numeric_limits<Numerical>::max();
+
+	if (base < 2 || base > 36 || begin == end) return { begin, std::errc::invalid_argument };
 
 	auto beginCopy = begin;
 
@@ -34,8 +38,10 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
 		++begin;
 	}
 
+	const Numerical maxValOverBase = maxVal / base;
+	const Numerical maxLastDigit = maxVal % base;
+
 	Numerical res = 0;
-	Numerical prevRes = res;
 
 	std::size_t iterationCount = 0;
 
@@ -43,33 +49,29 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
 		const std::remove_cvref_t<decltype(*begin)> uppercaseLimit = ('A' + base - 10);
 		const std::remove_cvref_t<decltype(*begin)> lowercaseLimit = ('a' + base - 10);
 
-		for (; begin != end; begin++, iterationCount++) {
-			res *= base;
-			if (res / base != prevRes) return { begin, std::errc::result_out_of_range };
-			prevRes = res;
-
-			if (*begin >= '0' && *begin <= '9') res += *begin - '0';
+		for (std::uint8_t n = 0; begin != end; begin++, iterationCount++) {
+			if (*begin >= '0' && *begin <= '9') n = *begin - '0';
 			else if (*begin >= 'A') {
-				if (*begin < uppercaseLimit) res += 10 + *begin - 'A';
-				else if (*begin >= 'a' && *begin < lowercaseLimit) res += 10 + *begin - 'a';
+				if (*begin < uppercaseLimit) n = 10 + *begin - 'A';
+				else if (*begin >= 'a' && *begin < lowercaseLimit) n = 10 + *begin - 'a';
 				else break;
 			} else break;
 
-			if (prevRes > res) return { begin, std::errc::result_out_of_range };
-			else prevRes = res;
+			if (res > maxValOverBase || (res == maxValOverBase && n > maxLastDigit))
+				return { beginCopy, std::errc::result_out_of_range };
+
+			res = res * base + n;
 		}
 	} else {
 		const std::remove_cvref_t<decltype(*begin)> numLimit = ('0' + base);
 
-		for (; begin != end && *begin >= '0' && *begin < numLimit; begin++, iterationCount++) {
-			res *= base;
-			if (res / base != prevRes) return { begin, std::errc::result_out_of_range };
-			prevRes = res;
+		for (std::uint8_t n = 0; begin != end && *begin >= '0' && *begin < numLimit; begin++, iterationCount++) {
+			n = *begin - '0';
 
-			res += *begin - '0';
+			if (res > maxValOverBase || (res == maxValOverBase && n > maxLastDigit))
+				return { beginCopy, std::errc::result_out_of_range };
 
-			if (prevRes > res) return { begin, std::errc::result_out_of_range };
-			else prevRes = res;
+			res = res * base + n;
 		}
 	}
 
@@ -80,65 +82,77 @@ constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Nume
 }
 
 
-namespace detail {
-
-// Fast and unsafe versions of fromChars, do NOT use this under any normal circumstances
-
-template <class Numerical, class Iterator, typename std::enable_if_t<
-	std::is_unsigned_v<Numerical> && 
+// Extended from chars
+template <class Numerical, class Iterator> 
+constexpr FromCharsResult<Iterator> fromChars(Iterator begin, Iterator end, Numerical& result, std::size_t* parsedDigits, int base = 10)
+requires (
+	std::is_integral_v<Numerical> && 
 	isIteratorValue<Iterator> && 
-	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type>, 
-int> = 0> 
-constexpr void uncheckedFastUnsignedBase10FromChars(Iterator begin, Iterator end, Numerical& result) {
-	for (; begin != end; begin++)
-		result = result * 10 + *begin - '0';
-}
+	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type> 
+) {
+	constexpr Numerical maxVal = std::numeric_limits<Numerical>::max();
 
-template <class Numerical, class Iterator, typename std::enable_if_t<
-	std::is_unsigned_v<Numerical> && 
-	isIteratorValue<Iterator> && 
-	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type>, 
-int> = 0> 
-constexpr bool uncheckedFastUnsignedBase16FromChars(Iterator begin, Iterator end, Numerical& result) {
-	Numerical prev = result;
+	if (base < 2 || base > 36 || begin == end) return { begin, std::errc::invalid_argument };
 
-	for (; begin != end; begin++) {
-		if (*begin <= 'A') (result *= 16) += *begin - '0';
-		else if (*begin < 'a') (result *= 16) += 10 + *begin - 'A';
-		else (result *= 16) += 10 + *begin - 'a';
+	auto beginCopy = begin;
 
-		if (result < prev) return false;
-		prev = result;
+	Numerical sign = 1;
+
+	if (*begin == '-') {
+		if constexpr (std::is_signed_v<Numerical>) sign = -1;
+		else return { begin, std::errc::invalid_argument };
+
+		++begin;
 	}
 
-	return true;
-}
+	const Numerical maxValOverBase = maxVal / base;
+	const Numerical maxLastDigit = maxVal % base;
 
+	std::errc ec { };
+	std::size_t iterationCount = 0;
 
-// Same principle as above, but parses until the next digit overflows
-template <class Numerical, class Iterator, typename std::enable_if_t<
-	std::is_unsigned_v<Numerical> && 
-	isIteratorValue<Iterator> && 
-	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type>, 
-int> = 0> 
-constexpr bool uncheckedOverflowBoundBase10FastUnsignedFromChars(Iterator begin, Iterator end, Numerical& result, std::size_t& digitsParsed) {
-	static constexpr Numerical maxVal = std::numeric_limits<Numerical>::max();
-	static constexpr Numerical maxValOverTen = maxVal / 10;
-	static constexpr Numerical maxLastDigit = maxVal % 10;
+	if (base > 10) {
+		const std::remove_cvref_t<decltype(*begin)> uppercaseLimit = ('A' + base - 10);
+		const std::remove_cvref_t<decltype(*begin)> lowercaseLimit = ('a' + base - 10);
 
-	for (; begin != end; begin++) {
-		auto n = *begin - '0';
+		for (std::uint8_t n = 0; begin != end; begin++, iterationCount++) {
+			if (*begin >= '0' && *begin <= '9') n = *begin - '0';
+			else if (*begin >= 'A') {
+				if (*begin < uppercaseLimit) n = 10 + *begin - 'A';
+				else if (*begin >= 'a' && *begin < lowercaseLimit) n = 10 + *begin - 'a';
+				else break;
+			} else break;
 
-		if (result > maxValOverTen || (result == maxValOverTen && n > maxLastDigit))
-			return false;
+			if (result > maxValOverBase || (result == maxValOverBase && n > maxLastDigit)) {
+				ec = std::errc::result_out_of_range;
 
-		result = result * 10 + n;
-		++digitsParsed;
+				break;
+			}
+
+			result = result * base + n;
+		}
+	} else {
+		const std::remove_cvref_t<decltype(*begin)> numLimit = ('0' + base);
+
+		for (std::uint8_t n = 0; begin != end && *begin >= '0' && *begin < numLimit; begin++, iterationCount++) {
+			n = *begin - '0';
+
+			if (result > maxValOverBase || (result == maxValOverBase && n > maxLastDigit)) {
+				ec = std::errc::result_out_of_range;
+
+				break;
+			}
+
+			result = result * base + n;
+		}
 	}
 
-	return true;
-}
+	if (iterationCount != 0) {
+		result *= sign;
+		if (parsedDigits) *parsedDigits = iterationCount;
 
-} // namespace detail
+		return { begin, ec };
+	} else return { beginCopy, std::errc::invalid_argument };
+}
 
 } // namespace lsd
