@@ -20,6 +20,8 @@
 #include <new>
 #include <memory>
 #include <utility>
+#include <stdexcept>
+#include <algorithm>
 #include <initializer_list>
 
 namespace lsd {

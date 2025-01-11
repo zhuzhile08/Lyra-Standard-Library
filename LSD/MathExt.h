@@ -10,7 +10,11 @@
 
 #pragma once
 
+#include <type_traits>
+#include <concepts>
+
 #include <cstddef>
+#include <cstdint>
 #include <cmath>
 
 namespace lsd {
