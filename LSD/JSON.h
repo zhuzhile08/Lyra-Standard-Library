@@ -276,7 +276,7 @@ public:
 		return parse(string, end);
 	}
 
-	constexpr string_type stringify(bool fastJson = false;) const {
+	constexpr string_type stringify(bool fastJson = false) const {
 		string_type r;
 		if (fastJson) r.pushBack('#');
 
@@ -525,7 +525,49 @@ private:
 		for (++begin; begin != end; begin++) {
 			switch (*begin) {
 				case '\\':
-					r.pushBack(*++begin); // @todo this is not the correct behavior
+					++begin;
+
+					if (begin == end) {
+						throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Missing symbol, string not terminated!");
+
+						return r;
+					}
+
+					switch (*begin) {
+						case 'b':
+							r.pushBack('\b');
+
+							break;
+
+						case 't':
+							r.pushBack('\t');
+							
+							break;
+
+						case 'n':
+							r.pushBack('\n');
+							
+							break;
+
+						case 'f':
+							r.pushBack('\f');
+							
+							break;
+
+						case 'r':
+							r.pushBack('\r');
+							
+							break;
+						
+						case 'u':
+							/// @todo 4 hex digits
+
+							break;
+
+						default:
+							r.pushBack(*begin);
+					}
+
 					break;
 
 				case '\"':
@@ -691,12 +733,16 @@ private:
 	template <class Iterator> static constexpr json_type parsePair(Iterator& begin, Iterator& end) {
 		json_type tok;
 
-		if (*begin != '\"') throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, expected quotation marks!"); // the check is done here and not in the string because this is the only case where the validity of begin is not guaranteed
+		if (*begin != '\"')
+			throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, expected quotation marks!"); // the check is done here and not in the string because this is the only case where the validity of begin is not guaranteed
 		tok.m_name = parseString(begin, end);
-		++begin;
 
-		if (skipCharacters(begin, end) != ':') throw JsonParseError("lsd::Json::parsePair(): JSON Syntax Error: Unexpected symbol, expected double colon after variable name!");
-		++begin;
+		if (++begin == end)
+			throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol!");
+		if (skipCharacters(begin, end) != ':')
+			throw JsonParseError("lsd::Json::parsePair(): JSON Syntax Error: Unexpected symbol, expected double colon after variable name!");
+		if (++begin == end)
+			throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol!");
 
 		switch(skipCharacters(begin, end)) {
 			case '{':
@@ -791,7 +837,7 @@ private:
 		json_type tok;
 
 		tok.m_name = parseString(begin, end);
-		++begin; // skip
+		++begin; // skip '"'
 		++begin; // skip ':'
 
 		switch(*begin) {
