@@ -770,8 +770,8 @@ private:
 	static constexpr void stringifyArray(const json_type& t, string_type& s) {
 		s.pushBack('[');
 		const auto& array = t.get<array_type>();
-		for (auto it = array.rbegin(); it != array.rend(); it++) {
-			if (it != array.rbegin()) s.pushBack(',');
+		for (auto it = array.begin(); it != array.end(); it++) {
+			if (it != array.end()) s.pushBack(',');
 			if (it->isString())
 				s.append("\"").append(it->template get<string_type>()).pushBack('\"');
 			else if (it->isObject())
