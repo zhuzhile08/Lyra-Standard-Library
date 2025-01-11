@@ -35,6 +35,24 @@ namespace lsd {
 
 namespace detail {
 
+// structural implementation of the floating point spec
+
+template <ContinuousIteratorType Iterator> struct FloatParseResult {
+public:
+	bool negative = false;
+
+	std::size_t wholeSize = 0;
+	std::size_t fracSize = 0;
+
+	std::uint64_t mantissa = 0;
+	std::int64_t exponent = 0; // since the largest number a double can represent only has around 300 digits, this should be enougth
+
+	bool fastPathAvailable = true;
+
+	Iterator last;
+};
+
+
 // From chars integral specialized for floating point parsing
 
 template <class Iterator>
@@ -48,13 +66,13 @@ requires (
 	constexpr std::uint64_t maxValOverBase = maxVal / 10;
 	constexpr std::uint64_t maxLastDigit = maxVal % 10;
 
-	constexpr char zeroC = '0';
+	constexpr char zeroC = '0' - 1;
 	constexpr char nineC = '9' + 1;
 
 	std::errc ec { };
 	std::size_t iterationCount = 0;
 
-	for (std::uint8_t n = 0; begin != end; begin++, iterationCount++) {
+	for (std::uint8_t n = 0; begin != end && *begin > zeroC && *begin < nineC; begin++, iterationCount++) {
 		n = *begin - '0';
 
 		if (result > maxValOverBase || (result == maxValOverBase && n > maxLastDigit)) {
@@ -72,24 +90,6 @@ requires (
 		return { begin, ec };
 	} else return { begin, std::errc::invalid_argument };
 }
-
-
-// structural implementation of the floating point spec
-
-template <ContinuousIteratorType Iterator> struct FloatParseResult {
-public:
-	bool negative = false;
-
-	std::size_t wholeSize = 0;
-	std::size_t fracSize = 0;
-
-	std::uint64_t mantissa = 0;
-	std::int64_t exponent = 0; // since the largest number a double can represent only has around 300 digits, this should be enougth
-
-	bool fastPathAvailable = true;
-
-	Iterator last;
-};
 
 
 // the parser itself
@@ -197,7 +197,21 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 
 			while (begin != end) {
 				switch (*begin) {
-					case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': case '.':
+					case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+						++begin;
+						++result.exponent; // Small hack, combined with the funny part with the exponent parsing
+
+						continue;
+				}
+
+				break;
+			}
+
+			if (begin != end && *begin == '.') ++begin;
+
+			while (begin != end) {
+				switch (*begin) {
+					case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
 						++begin;
 						continue;
 				}
@@ -227,7 +241,7 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 				return std::errc { };
 			}
 
-			begin = wholeFcRes.ptr;
+			begin = fracFcRes.ptr;
 
 			// skip until exponent
 			if (fracFcRes.ec == std::errc::result_out_of_range) {
@@ -238,6 +252,7 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 					switch (*begin) {
 						case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
 							++begin;
+
 							continue;
 					}
 
@@ -259,17 +274,19 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 		bool scientific = (fmt & CharsFormat::scientific) != 0;
 
 		if ((*begin == 'e' || *begin == 'E') && scientific) {
-			auto fcRes = fromChars(++begin, end, result.exponent, 10);
+			auto expfac = result.exponent;
+			auto fcRes = fromChars(++begin, end, result.exponent);
+			result.exponent += expfac;
 
-			if (fcRes.ptr == end)
-				result.last = fcRes.ptr;
+			if (fcRes.ec != std::errc { })
+				return fcRes.ec;
 
-			return fcRes.ec;
+			result.last = fcRes.ptr;
+			return std::errc { };
 		} else if ((fmt & CharsFormat::fixed) == 0 && scientific)
 			return std::errc::invalid_argument;
 
 		result.last = begin;
-
 		return std::errc { };
 	}
 }

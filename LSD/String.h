@@ -1629,4 +1629,15 @@ template <class CharTy, class Traits, class Alloc> auto quoted(const lsd::BasicS
 	return quoted(str.data(), delim, escape);
 }
 
+
+// templated strncmp
+
+template <class Ty> bool strncmp(Ty first, const char* second, std::size_t size) requires isIteratorValue<Ty> {
+	for (; size > 0; size--, first++, second++) {
+		if (*first != *second) return false;
+	}
+
+	return true;
+}
+
 } // namespace lsd

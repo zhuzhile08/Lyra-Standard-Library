@@ -81,9 +81,9 @@ public:
 		// and the implementation differences on different platforms of std::uint64_t
 
 		std::uint64_t aHi = a >> 32;
-		std::uint64_t aLo = a & UINT64_C(0x00000000FFFFFFFF);
+		std::uint64_t aLo = a & UINT64_C(0xFFFFFFFF);
 		std::uint64_t bHi = b >> 32;
-		std::uint64_t bLo = b & UINT64_C(0x00000000FFFFFFFF);
+		std::uint64_t bLo = b & UINT64_C(0xFFFFFFFF);
 
 		/**
 		 * Visual representation of the multiplication grid

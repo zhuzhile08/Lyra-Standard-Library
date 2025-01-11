@@ -14,6 +14,7 @@
 #include "Vector.h"
 #include "UnorderedSparseSet.h"
 #include "String.h"
+#include "StringView.h"
 #include "FromChars.h"
 
 #include <exception>
@@ -25,10 +26,10 @@ namespace lsd {
 class JsonParseError : public std::runtime_error {
 public:
 	JsonParseError(const String& message) : std::runtime_error(message.cStr()) {
-		m_message.append(message).pushBack('!');
+		m_message.append(message);
 	}
 	JsonParseError(const char* message) : std::runtime_error(message) {
-		m_message.append(message).pushBack('!');
+		m_message.append(message);
 	}
 	JsonParseError(const JsonParseError&) = default;
 	JsonParseError(JsonParseError&&) = default;
@@ -241,31 +242,25 @@ public:
 		return *this;
 	}
 
-	template <lsd::IteratorType Iterator> [[nodiscard]] static constexpr json_type parse(Iterator begin, Iterator end) {
+	template <lsd::ContinuousIteratorType Iterator> [[nodiscard]] static constexpr json_type parse(Iterator begin, Iterator end) {
 		// first node
 		json_type json;
+		if (begin == end) return json;
 
-		if (*begin == '#') { // Fast json mode, doesn't skip whitespaces since there shouldn't be any and doesn't check for validness
-			++begin;
-			if (begin == end) json.m_value = object_type();
-			else if (*begin == '{') json.m_value = parseObjectFast(begin, end, json);
-			else if (*begin == '[') json.m_value = parseArrayFast(begin, end);
-		} else {
-			skipCharacters(begin, end);
+		skipCharacters(begin, end);
 
-			// start parsing
-			if (*begin == '{') json.m_value = parseObject(begin, end, json);
-			else if (*begin == '[') json.m_value = parseArray(begin, end);
-			else if (++begin == end) json.m_value = object_type();
-			else throw JsonParseError("lsd::Json::parse(): JSON Syntax Error: Unexpected symbol, JSON file has to either contain a single object or array at global scope or be empty!");
-		}
+		// start parsing
+		if (*begin == '{') json.m_value = parseObject(begin, end, json);
+		else if (*begin == '[') json.m_value = parseArray(begin, end);
+		else if (++begin == end) json.m_value = object_type();
+		else throw JsonParseError("lsd::Json::parse(): JSON Syntax Error: Unexpected symbol, JSON file has to either contain a single object or array at global scope or be empty!");
 
 		return json;
 	}
 	template <lsd::IteratableContainer Container> [[nodiscard]] static constexpr json_type parse(const Container& container) {
 		return parse(std::begin(container), std::end(container));
 	}
-	template <class CStringLike> [[nodiscard]] static constexpr json_type parse(const CStringLike& string) requires(
+	template <class CStringLike> [[nodiscard]] static constexpr json_type parse(CStringLike string) requires(
 		(std::is_pointer_v<CStringLike>) &&
 		std::is_integral_v<std::remove_cvref_t<std::remove_pointer_t<std::remove_all_extents_t<std::remove_cvref_t<CStringLike>>>>>
 	) {
@@ -276,9 +271,8 @@ public:
 		return parse(string, end);
 	}
 
-	constexpr string_type stringify(bool fastJson = false) const {
+	constexpr string_type stringify() const {
 		string_type r;
-		if (fastJson) r.pushBack('#');
 
 		if (isObject()) stringifyObject(*this, r);
 		else if (isArray()) stringifyArray(*this, r);
@@ -500,20 +494,16 @@ private:
 	// Parsing functions
 
 	template <class Iterator> static constexpr int skipCharacters(Iterator& begin, Iterator& end) {
-		for (; begin != end; begin++) {
-			switch (*begin) {
-				case ' ':
-				case '\f':
-				case '\n':
-				case '\r':
-				case '\t':
-				case '\v':
-				case '\0':
+		switch (*begin) {
+			case ' ': case '\f': case '\n': case '\r': case '\t': case '\v': case '\0':
+				for (++begin; begin != end; begin++) {
+					switch (*begin) {
+						case ' ': case '\f': case '\n': case '\r': case '\t': case '\v': case '\0':
+							continue;
+					}
+
 					break;
-				
-				default:
-					return *begin;
-			}
+				}
 		}
 
 		return *begin;
@@ -561,6 +551,7 @@ private:
 						
 						case 'u':
 							/// @todo 4 hex digits
+							begin += 4;
 
 							break;
 
@@ -572,11 +563,9 @@ private:
 
 				case '\"':
 					return r;
-					break;
 				
 				default:
 					r.pushBack(*begin);
-					break;
 			}
 		}
 
@@ -586,22 +575,26 @@ private:
 	template <class Iterator> static constexpr value_type parsePrimitive(Iterator& begin, Iterator& end) {
 		switch(*begin) {
 			case 't':
-				begin += 3;
+				if (end - begin < 4 || !strncmp(++begin, "rue", 3))
+					break;
+
+				begin += 2;
 				return true;
 
-				break;
 			case 'f':
-				begin += 4;
+				if (end - begin < 5 || !strncmp(++begin, "alse", 4))
+					break;
+				
+				begin += 3;
 				return false;
 				
-				break;
 			case 'n':
-				begin += 3;
-				return value_type();
+				if (end - begin < 4 || !strncmp(++begin, "ull", 3))
+					break;
 
-				break;
+				begin += 2;
+				return value_type(null_type { });
 			
-			case '-':
 			case '0':
 			case '1':
 			case '2':
@@ -611,71 +604,49 @@ private:
 			case '6':
 			case '7':
 			case '8':
-			case '9':
-				{
-					auto sequenceBegin = begin;
-
-					for (; begin != end; begin++) {
-						switch (*(begin + 1)) { 
-							case ' ':
-							case '\f':
-							case '\n':
-							case '\r':
-							case '\t':
-							case '\v':
-							case '\0': 
-							case '}':
-							case ']':
-							case ',':
-								break;
-							
-							default:
-								continue;
-						}
-
-						break;
-					}
-
-					auto sequenceEnd = begin + 1;
-
-					unsigned_type uRes { };
-
-					if (fromChars(sequenceBegin, sequenceEnd, uRes).ptr == sequenceEnd) return uRes;
-					else {
-						signed_type sRes = { };
-
-						if (fromChars(sequenceBegin, sequenceEnd, sRes).ptr == sequenceEnd) return sRes;
-						else {
-							floating_type fRes = { };
-							
-							if (fromChars(sequenceBegin, sequenceEnd, fRes).ptr == sequenceEnd) return fRes;
-							else throw JsonParseError("lsd::Json::parsePrimitive(): JSON Syntax Error: Unexpected symbol, number could not be parsed!");
-						}
-					}
+			case '9': {
+				unsigned_type uRes { };
+				if (auto res = fromChars(begin, end, uRes); res.ec == std::errc { } && 
+					*res.ptr != '.' && *res.ptr != 'e' && *res.ptr != 'p'
+				) {
+					begin = res.ptr - 1;
+					return uRes;
 				}
 
 				break;
+			}
 			
-			default:
-				throw JsonParseError("lsd::Json::parsePrimitive(): JSON Syntax Error: Unexpected symbol, couldn't match identifier with any type!");
-				break;
+			case '-': {
+				signed_type sRes = { };
+				if (auto res = fromChars(begin, end, sRes); res.ec == std::errc { } && 
+					*res.ptr != '.' && *res.ptr != 'e' && *res.ptr != 'p'
+				) {
+					begin = res.ptr - 1;
+					return sRes;
+				}
+			}
 		}
 
+		floating_type fRes = { };
+		if (auto res = fromChars(begin, end, fRes); res.ec == std::errc { }) {
+			begin = res.ptr - 1;
+			return fRes;
+		}
+
+		throw JsonParseError("lsd::Json::parsePrimitive(): JSON Syntax Error: Unexpected symbol, couldn't match identifier with any type!");
 		return value_type();
 	}
 
 	template <class Iterator> static constexpr object_type parseObject(Iterator& begin, Iterator& end, json_type& json) {
 		for (++begin; begin != end; begin++) {
 			switch(skipCharacters(begin, end)) {
-				default:
-					json.insert(parsePair(begin, end));
-					break;
-					
 				case '}':
 					return object_type();
-					break;
+
+				default:
+					json.insert(parsePair(begin, end));
+
 				case ',':
-					break;
 			}
 		}
 
@@ -712,17 +683,13 @@ private:
 
 				case ']':
 					return r;
-					break;
-
-				case '}':
-				case ',':
-					break;
 
 				default:
 					tok.m_value = parsePrimitive(begin, end);
 					r.emplaceBack(std::move(tok));
-					
-					break;
+
+				case '}':
+				case ',':
 			}
 		}
 
@@ -747,15 +714,12 @@ private:
 		switch(skipCharacters(begin, end)) {
 			case '{':
 				tok.m_value = parseObject(begin, end, tok);
-
 				break;
 			case '[':
 				tok.m_value = parseArray(begin, end);
-
 				break;
 			case '\"':
 				tok.m_value = parseString(begin, end);
-
 				break;
 			
 			case '}':
@@ -765,103 +729,6 @@ private:
 
 			default:
 				tok.m_value = parsePrimitive(begin, end);
-				break;
-		}
-
-		return tok;
-	}
-
-	template <class Iterator> static constexpr object_type parseObjectFast(Iterator& begin, Iterator& end, json_type& json) {
-		for (++begin; begin != end; begin++) {
-			switch(*begin) {
-				default:
-					json.insert(parsePairFast(begin, end));
-					break;
-					
-				case '}':
-					return object_type();
-					break;
-				case ',':
-					break;
-			}
-		}
-
-		return object_type();
-	}
-	template <class Iterator> static constexpr array_type parseArrayFast(Iterator& begin, Iterator& end) {
-		array_type r;
-
-		for (++begin; begin != end; begin++) {
-			json_type tok { };
-
-			switch(*begin) {
-				case '{':
-					tok.m_value = parseObjectFast(begin, end, tok);
-					r.emplaceBack(std::move(tok));
-
-					break;
-
-				case '[':
-					tok.m_value = parseArrayFast(begin, end);
-					r.emplaceBack(std::move(tok));
-
-					break;
-
-				case '\"':
-					tok.m_value = parseString(begin, end);
-					r.emplaceBack(std::move(tok));
-
-					if (*(begin + 1) != ']') ++begin;
-
-					break;
-
-				case ']':
-					return r;
-					break;
-
-				case '}':
-				case ',':
-					break;
-
-				default:
-					tok.m_value = parsePrimitive(begin, end);
-					r.emplaceBack(std::move(tok));
-					
-					break;
-			}
-		}
-
-		return r;
-	}
-	template <class Iterator> static constexpr json_type parsePairFast(Iterator& begin, Iterator& end) {
-		json_type tok;
-
-		tok.m_name = parseString(begin, end);
-		++begin; // skip '"'
-		++begin; // skip ':'
-
-		switch(*begin) {
-			case '{':
-				tok.m_value = parseObjectFast(begin, end, tok);
-
-				break;
-			case '[':
-				tok.m_value = parseArrayFast(begin, end);
-
-				break;
-			case '\"':
-				tok.m_value = parseString(begin, end);
-
-				break;
-			
-			case '}':
-			case ']':
-				++begin;
-				break;
-
-			default:
-				tok.m_value = parsePrimitive(begin, end);
-				break;
 		}
 
 		return tok;
