@@ -115,7 +115,7 @@ public:
 	using const_iterator = typename container::const_iterator;
 	using iterator_pair = std::pair<iterator, bool>;
 
-	constexpr BasicJson() noexcept = default;
+	constexpr BasicJson() noexcept : m_value(object_type { }) { }
 	constexpr BasicJson(const value_type& value) noexcept : m_value(value) { }
 	constexpr BasicJson(value_type&& value) noexcept : m_value(std::move(value)) { }
 	template <class KeyType> 
@@ -213,10 +213,8 @@ public:
 		return res;
 	}
 	template <class... Args> constexpr reference emplace(Args&&... args) {
-		auto& res = *m_children.emplace(std::forward<Args>(args)...).first->get();
-		res.m_parent = *this;
-
-		
+		auto& res = *m_children.emplace(std::forward<Args>(args)...).first;
+		res.m_parent = this;
 
 		return res;
 	}
@@ -247,13 +245,20 @@ public:
 		// first node
 		json_type json;
 
-		skipCharacters(begin, end);
+		if (*begin == '#') { // Fast json mode, doesn't skip whitespaces since there shouldn't be any and doesn't check for validness
+			++begin;
+			if (begin == end) json.m_value = object_type();
+			else if (*begin == '{') json.m_value = parseObjectFast(begin, end, json);
+			else if (*begin == '[') json.m_value = parseArrayFast(begin, end);
+		} else {
+			skipCharacters(begin, end);
 
-		// start parsing
-		if (*begin == '{') json.m_value = parseObject(begin, end, json);
-		else if (*begin == '[') json.m_value = parseArray(begin, end);
-		else if (++begin == end) json.m_value = object_type();
-		else throw JsonParseError("lsd::Json::parse(): JSON Syntax Error: Unexpected symbol, JSON file has to either contain a single object or array at global scope or be empty!");
+			// start parsing
+			if (*begin == '{') json.m_value = parseObject(begin, end, json);
+			else if (*begin == '[') json.m_value = parseArray(begin, end);
+			else if (++begin == end) json.m_value = object_type();
+			else throw JsonParseError("lsd::Json::parse(): JSON Syntax Error: Unexpected symbol, JSON file has to either contain a single object or array at global scope or be empty!");
+		}
 
 		return json;
 	}
@@ -271,8 +276,9 @@ public:
 		return parse(string, end);
 	}
 
-	constexpr string_type stringify() const {
+	constexpr string_type stringify(bool fastJson = false;) const {
 		string_type r;
+		if (fastJson) r.pushBack('#');
 
 		if (isObject()) stringifyObject(*this, r);
 		else if (isArray()) stringifyArray(*this, r);
@@ -491,6 +497,8 @@ private:
 	container m_children { };
 
 
+	// Parsing functions
+
 	template <class Iterator> static constexpr int skipCharacters(Iterator& begin, Iterator& end) {
 		for (; begin != end; begin++) {
 			switch (*begin) {
@@ -517,7 +525,7 @@ private:
 		for (++begin; begin != end; begin++) {
 			switch (*begin) {
 				case '\\':
-					r.pushBack(*++begin);
+					r.pushBack(*++begin); // @todo this is not the correct behavior
 					break;
 
 				case '\"':
@@ -613,6 +621,7 @@ private:
 
 		return value_type();
 	}
+
 	template <class Iterator> static constexpr object_type parseObject(Iterator& begin, Iterator& end, json_type& json) {
 		for (++begin; begin != end; begin++) {
 			switch(skipCharacters(begin, end)) {
@@ -715,6 +724,105 @@ private:
 
 		return tok;
 	}
+
+	template <class Iterator> static constexpr object_type parseObjectFast(Iterator& begin, Iterator& end, json_type& json) {
+		for (++begin; begin != end; begin++) {
+			switch(*begin) {
+				default:
+					json.insert(parsePairFast(begin, end));
+					break;
+					
+				case '}':
+					return object_type();
+					break;
+				case ',':
+					break;
+			}
+		}
+
+		return object_type();
+	}
+	template <class Iterator> static constexpr array_type parseArrayFast(Iterator& begin, Iterator& end) {
+		array_type r;
+
+		for (++begin; begin != end; begin++) {
+			json_type tok { };
+
+			switch(*begin) {
+				case '{':
+					tok.m_value = parseObjectFast(begin, end, tok);
+					r.emplaceBack(std::move(tok));
+
+					break;
+
+				case '[':
+					tok.m_value = parseArrayFast(begin, end);
+					r.emplaceBack(std::move(tok));
+
+					break;
+
+				case '\"':
+					tok.m_value = parseString(begin, end);
+					r.emplaceBack(std::move(tok));
+
+					if (*(begin + 1) != ']') ++begin;
+
+					break;
+
+				case ']':
+					return r;
+					break;
+
+				case '}':
+				case ',':
+					break;
+
+				default:
+					tok.m_value = parsePrimitive(begin, end);
+					r.emplaceBack(std::move(tok));
+					
+					break;
+			}
+		}
+
+		return r;
+	}
+	template <class Iterator> static constexpr json_type parsePairFast(Iterator& begin, Iterator& end) {
+		json_type tok;
+
+		tok.m_name = parseString(begin, end);
+		++begin; // skip
+		++begin; // skip ':'
+
+		switch(*begin) {
+			case '{':
+				tok.m_value = parseObjectFast(begin, end, tok);
+
+				break;
+			case '[':
+				tok.m_value = parseArrayFast(begin, end);
+
+				break;
+			case '\"':
+				tok.m_value = parseString(begin, end);
+
+				break;
+			
+			case '}':
+			case ']':
+				++begin;
+				break;
+
+			default:
+				tok.m_value = parsePrimitive(begin, end);
+				break;
+		}
+
+		return tok;
+	}
+
+
+	// Stringification implementations
 
 	static constexpr void stringifyPrimitive(const json_type& t, string_type& s) {
 		if (t.isBoolean()) {
@@ -819,6 +927,7 @@ private:
 		else
 			stringifyPrimitive(t, s);
 	}
+
 
 	friend struct HashFunction;
 	friend struct EqualFunction;
