@@ -81,10 +81,11 @@ private:
 		static_cast<size_type>(sizeof(value_type) / (sizeof(pointer) * 4) + 1);
 	static constexpr size_type smallStringCap = 
 		static_cast<size_type>((sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - 1) / sizeof(value_type)) - 1;
+	static constexpr size_type smallStringTrueCap = smallStringCap + 1;
 	static constexpr size_type smallStringPaddingSize = 
-		sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - (smallStringCap + 1) * sizeof(value_type);
+		sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - smallStringTrueCap * sizeof(value_type);
 
-	using small_string_type = value_type[smallStringCap + 1];
+	using small_string_type = value_type[smallStringTrueCap];
 	using small_string_tag = unsigned char[smallStringPaddingSize];
 
 
@@ -92,7 +93,7 @@ private:
 
 	struct Short {
 		small_string_type data { };
-		small_string_tag tag { 1 };
+		small_string_tag tag { 0 };
 	};
 
 	struct Long {
@@ -168,7 +169,7 @@ public:
 			reserve(count);
 
 			if (smallStringMode())
-				for (auto it = m_short.data; first != last; it++, first++) traits_type::assign(*it, *first);
+				for (auto it = m_short.data; first != last; it++, first++, m_short.tag[0]++) traits_type::assign(*it, *first);
 			else {
 				for (; first != last; m_long.end++, first++) allocator_traits::construct(m_alloc, m_long.end, *first);
 				allocator_traits::construct(m_alloc, m_long.end, value_type { });
@@ -180,10 +181,10 @@ public:
 	constexpr BasicString(container_rvreference other) noexcept :
 		m_alloc(std::exchange(other.m_alloc, m_alloc)) {
 		if (other.smallStringMode()) {
-			m_short.tag[0] = 1;
+			m_short.tag[0] = other.m_short.tag[0];
 			traits_type::move(m_short.data, other.m_short.data, smallStringCap);
 		} else {
-			m_short.tag[0] = std::exchange(other.m_short.tag[0], 1); // other is now practically in small string mode
+			m_short.tag[0] = std::exchange(other.m_short.tag[0], 0); // other is now practically empty in small string mode
 			m_long.begin = std::exchange(other.m_long.begin, pointer { });
 			m_long.end = std::exchange(other.m_long.end, pointer { });
 			m_long.cap = std::exchange(other.m_long.cap, pointer { });
@@ -192,7 +193,7 @@ public:
 	constexpr BasicString(container_rvreference other, const_alloc_reference alloc) : 
 		m_alloc(alloc) {
 		if (other.smallStringMode()) {
-			m_short.tag[0] = 1;
+			m_short.tag[0] = other.m_short.tag[0];
 			traits_type::move(m_short.data, other.m_short.data, smallStringCap);
 		} else if (detail::allocatorPropagationNecessary(other.m_alloc, m_alloc)) {
 			auto count = other.m_long.end - other.m_long.begin;
@@ -302,7 +303,7 @@ public:
 			smartReserve(count);
 
 			if (smallStringMode()) 
-				for (auto it = m_short.data; first != last; it++, first++) traits_type::assign(*it, *first);
+				for (auto it = m_short.data; first != last; it++, first++, m_short.tag[0]++) traits_type::assign(*it, *first);
 			else {
 				for (; first != last; first++, m_long.end++) allocator_traits::construct(m_alloc, m_long.end, *first);
 				allocator_traits::construct(m_alloc, m_long.end, '\0');
@@ -409,38 +410,36 @@ public:
 		++count; // null terminator
 
 		if (count > maxSize()) throw std::length_error("lsd::BasicString::reserve(): Count + 1 exceded maximum allocation size");
-		else {
-			if (smallStringMode() && count > smallStringCap) {
-				auto ssSize = smallStringSize(); 
+		else if (smallStringMode() && count > smallStringCap) {
+			auto ssSize = smallStringSize(); 
 
-				pointer begin { };
-				begin = allocator_traits::allocate(m_alloc, count);
+			pointer begin { };
+			begin = allocator_traits::allocate(m_alloc, count);
 
-				auto beginIt = begin;
-				for (auto ssIt = m_short.data; ssIt <= (m_short.data + ssSize); ssIt++, beginIt++)  // <= because of null terminator
-					allocator_traits::construct(m_alloc, beginIt, *ssIt);
+			auto beginIt = begin;
+			for (auto ssIt = m_short.data; ssIt <= (m_short.data + ssSize); ssIt++, beginIt++)  // <= because of null terminator
+				allocator_traits::construct(m_alloc, beginIt, *ssIt);
 
-				m_long.begin = begin;
-				m_long.end = m_long.begin + ssSize;
-				m_long.cap = m_long.begin + count;
-				m_short.tag[0] = 0;
-			} else if (!smallStringMode()) {
-				auto cap = capacity();
+			m_long.begin = begin;
+			m_long.end = m_long.begin + ssSize;
+			m_long.cap = m_long.begin + count;
+			m_short.tag[0] = smallStringTrueCap;
+		} else if (!smallStringMode()) {
+			auto cap = capacity();
 
-				if (count > cap) {
-					auto s = size();
-					auto oldBegin = std::exchange(m_long.begin, allocator_traits::allocate(m_alloc, count));
+			if (count > cap) {
+				auto s = size();
+				auto oldBegin = std::exchange(m_long.begin, allocator_traits::allocate(m_alloc, count));
 
-					if (oldBegin) {
-						for (auto beginIt = m_long.begin, oldBeginIt = oldBegin; oldBeginIt != m_long.end + 1; oldBeginIt++, beginIt++) // plus one for null terminator
-							allocator_traits::construct(m_alloc, beginIt, *oldBeginIt);
+				if (oldBegin) {
+					for (auto beginIt = m_long.begin, oldBeginIt = oldBegin; oldBeginIt != m_long.end + 1; oldBeginIt++, beginIt++) // plus one for null terminator
+						allocator_traits::construct(m_alloc, beginIt, *oldBeginIt);
 
-						allocator_traits::deallocate(m_alloc, oldBegin, cap);
-					}
-
-					m_long.end = m_long.begin + s;
-					m_long.cap = m_long.begin + count;
+					allocator_traits::deallocate(m_alloc, oldBegin, cap);
 				}
+
+				m_long.end = m_long.begin + s;
+				m_long.cap = m_long.begin + count;
 			}
 		}
 	}
@@ -453,7 +452,7 @@ public:
 				if (s <= smallStringCap) { // returns string to small string mode
 					pointer oldBegin = m_long.begin;
 					pointer oldEnd = m_long.end + 1;
-					m_short.tag[0] = 1;
+					m_short.tag[0] = s - 1;
 
 					m_long.begin = nullptr;
 					m_long.end = nullptr;
@@ -650,9 +649,10 @@ public:
 		auto s = size();
 		smartReserve(s + count);
 		
-		if (smallStringMode())
+		if (smallStringMode()) {
+			m_short.tag[0] += count;
 			for (auto it = (m_short.data + s); count > 0; count--, it++) traits_type::assign(*it, value);
-		else {
+		} else {
 			for (; count > 0; count--, m_long.end++) allocator_traits::construct(m_alloc, m_long.end, value);
 			allocator_traits::construct(m_alloc, m_long.end, value_type { });
 		}
@@ -681,7 +681,7 @@ public:
 		smartReserve(s + count);
 
 		if (smallStringMode()) 
-			for (auto it = (m_short.data + s); first != last; first++, it++) traits_type::assign(*it, *first);
+			for (auto it = (m_short.data + s); first != last; first++, it++, m_short.tag[0]++) traits_type::assign(*it, *first);
 		else {
 			for (; first != last; first++, m_long.end++) allocator_traits::construct(m_alloc, m_long.end, *first);
 			allocator_traits::construct(m_alloc, m_long.end, value_type { });
@@ -752,8 +752,10 @@ public:
 	}
 
 	constexpr void clear() {
-		if (smallStringMode()) std::fill_n(m_short.data, smallStringCap - 1, value_type { });
-		else destructBehind(m_long.begin - 1);
+		if (smallStringMode()) {
+			std::fill_n(m_short.data, smallStringCap - 1, value_type { });
+			m_short.tag[0] = 0;
+		} else destructBehind(m_long.begin - 1);
 	}
 
 	constexpr size_type find(const_container_reference other, size_type pos = 0) const noexcept {
@@ -1286,15 +1288,12 @@ private:
 	};
 
 	constexpr bool smallStringMode() const noexcept {
-		return bool(1 & m_short.tag[0]);
+		return bool(m_short.tag[0] < smallStringTrueCap);
 	}
 	constexpr size_type smallStringSize() const noexcept {
 		assert(smallStringMode() && "lsd::BasicString::smallStringSize(): BasicString was not a small string!");
 
-		auto it = m_short.data;
-		for (; it != (m_short.data + traits_type::length(m_short.data)) && !traits_type::eq(*it, value_type { }); it++) { }
-
-		return it - m_short.data;
+		return m_short.tag[0];
 	}
 
 	constexpr pointer pBegin() noexcept {
@@ -1349,11 +1348,12 @@ private:
 		if (smallStringMode() && (newSize < smallStringCap)) { // small string mode
 			auto moveSrc = position + eraseCount;
 			auto moveDst = moveSrc + gapSize;
-
 			traits_type::move(moveDst, moveSrc, pEnd() - moveSrc + 1);
 
+			m_short.tag[0] = newSize - 1;
+
 			return { position, true };
-		} else if (smallStringMode() && (newSize >= smallStringCap)) {
+		} else if (smallStringMode() && (newSize >= smallStringCap)) { // exit small string mode
 			auto index = position - m_short.data;
 
 			// reserve memory without constructing new memory, similar to smartReserve()
@@ -1379,13 +1379,13 @@ private:
 				allocator_traits::construct(m_alloc, it, *begIt);
 
 			// assign everything after initialization is finished
-			m_short.tag[0] = 0;
+			m_short.tag[0] = smallStringTrueCap;
 			m_long.begin = newBegin;
 			m_long.end = newEnd;
 			m_long.cap = m_long.begin + reserveCount;
 
 			return { pos, false };
-		} else {
+		} else { // not in small string mode
 			auto cap = capacity();
 
 			if (newSize > cap) {
@@ -1445,7 +1445,7 @@ private:
 
 	constexpr void destructBehind(pointer position) {
 		if (smallStringMode())
-			for (auto it = m_short.data + smallStringSize(); it != position; it--) traits_type::assign(*it, value_type { });
+			for (auto it = m_short.data + smallStringSize(); it != position; it--, m_short.tag[0]--) traits_type::assign(*it, value_type { });
 		else {
 			for (; m_long.end != position; m_long.end--) allocator_traits::destroy(m_alloc, m_long.end);
 			allocator_traits::construct(m_alloc, ++m_long.end, value_type { });
