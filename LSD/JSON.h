@@ -616,7 +616,7 @@ private:
 				break;
 			}
 			
-			case '-': {
+			case '-':
 				signed_type sRes = { };
 				if (auto res = fromChars(begin, end, sRes); res.ec == std::errc { } && 
 					*res.ptr != '.' && *res.ptr != 'e' && *res.ptr != 'p'
@@ -624,7 +624,6 @@ private:
 					begin = res.ptr - 1;
 					return sRes;
 				}
-			}
 		}
 
 		floating_type fRes = { };
@@ -771,7 +770,7 @@ private:
 		s.pushBack('[');
 		const auto& array = t.get<array_type>();
 		for (auto it = array.begin(); it != array.end(); it++) {
-			if (it != array.end()) s.pushBack(',');
+			if (it != array.begin()) s.pushBack(',');
 			if (it->isString())
 				s.append("\"").append(it->template get<string_type>()).pushBack('\"');
 			else if (it->isObject())
