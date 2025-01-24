@@ -26,7 +26,7 @@ namespace lsd {
 template <
 	class Key,
 	class Hash = Hash<Key>,
-	class Equal = std::equal_to<Key>,
+	class Equal = EqualTo<Key>,
 	class Alloc = std::allocator<Key>
 > class UnorderedSparseSet {
 public:

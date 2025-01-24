@@ -1487,6 +1487,7 @@ constexpr WString operator""_s(const wchar_t* str, std::size_t len) {
 
 template <class C> struct Hash<BasicString<C>> {
 	using string_type = BasicString<C>;
+	using view_type = BasicStringView<C>;
 
 	constexpr std::size_t operator()(const string_type& s) const noexcept { // uses the djb2 instead of murmur- or CityHash
 		std::size_t hash = 5381; 
@@ -1506,6 +1507,10 @@ template <class C> struct Hash<BasicString<C>> {
 #endif
 
 		return hash;
+	}
+
+	constexpr std::size_t operator()(const view_type& v) const noexcept {
+		return Hash<view_type>()(v);
 	}
 };
 

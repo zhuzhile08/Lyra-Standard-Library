@@ -27,7 +27,7 @@ template <
 	class Key,
 	class Ty,
 	class Hash = Hash<Key>,
-	class Equal = std::equal_to<Key>,
+	class Equal = EqualTo<Key>,
 	class Alloc = std::allocator<std::pair<Key, Ty>>
 > class UnorderedSparseMap {
 public:
