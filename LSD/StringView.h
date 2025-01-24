@@ -415,13 +415,13 @@ public:
 		return *ptr;
 	}
 
-	friend constexpr bool operator==(container s1, container s2) {
+	friend constexpr bool operator==(container s1, std::type_identity_t<container> s2) {
 		return s1.compare(s2) == 0;
 	}
 	friend constexpr bool operator==(container s1, const_pointer s2) {
 		return s1.compare(s2) == 0;
 	}
-	friend constexpr auto operator<=>(container s1, container s2) {
+	friend constexpr auto operator<=>(container s1, std::type_identity_t<container> s2) {
 		if constexpr (requires { typename traits_type::comparison_category; }) return static_cast<traits_type::comparison_category>(s1.compare(s2) <=> 0);
 		else return static_cast<std::weak_ordering>(s1.compare(s2) <=> 0);
 	}
