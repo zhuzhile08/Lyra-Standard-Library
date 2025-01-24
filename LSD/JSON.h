@@ -79,6 +79,7 @@ public:
 	using floating_type = Floating;
 	using literal_type = Literal;
 	using string_type = BasicString<literal_type>;
+	using view_type = BasicStringView<literal_type>;
 
 	using key_type = string_type;
 	using key_reference = key_type&;
@@ -105,8 +106,8 @@ public:
 	>;
 
 private:
-	CUSTOM_HASHER(Hasher, const BasicJson&, const_key_reference, Hash<key_type>{}, .m_name)
-	CUSTOM_EQUAL(Equal, const BasicJson&, const_key_reference, .m_name)
+	CUSTOM_HASHER(Hasher, const BasicJson&, const view_type&, Hash<view_type>{}, .m_name)
+	CUSTOM_EQUAL(Equal, const BasicJson&, const view_type&, .m_name)
 
 public:
 	
@@ -117,73 +118,93 @@ public:
 	using iterator_pair = std::pair<iterator, bool>;
 
 	constexpr BasicJson() noexcept : m_value(object_type { }) { }
-	constexpr BasicJson(const value_type& value) noexcept : m_value(value) { }
-	constexpr BasicJson(value_type&& value) noexcept : m_value(std::move(value)) { }
-	template <class KeyType> 
-	constexpr BasicJson(KeyType&& key, value_type&& value) noexcept : m_name(std::forward<KeyType>(key)), m_value(std::move(value)) { }
-	template <class KeyType, class Value> 
-	constexpr BasicJson(KeyType&& key, Value&& value) noexcept : m_name(std::forward<KeyType>(key)) {
+	explicit constexpr BasicJson(const value_type& value) : m_value(value) { }
+	explicit constexpr BasicJson(value_type&& value) : m_value(std::move(value)) { }
+	template <class Value> explicit constexpr BasicJson(Value&& value) {
 		assign(std::forward<Value>(value));
 	}
-	constexpr BasicJson(const BasicJson&) = default;
-	constexpr BasicJson(BasicJson&&) = default;
-	constexpr ~BasicJson() noexcept = default;
+	template <class KeyType> constexpr BasicJson(KeyType&& key, value_type&& value) : 
+		m_name(std::forward<KeyType>(key)), m_value(std::move(value)) { }
+	template <class KeyType, class Value> constexpr BasicJson(KeyType&& key, Value&& value) : m_name(std::forward<KeyType>(key)) {
+		assign(std::forward<Value>(value));
+	}
+	constexpr BasicJson(const BasicJson& other) :
+		m_value(other.m_value),
+		m_name(other.m_name) {
+		for (const auto& child : other.m_children) insert(child);
+	}
+	constexpr BasicJson(BasicJson&& other) : 
+		m_value(std::move(other.m_value)),
+		m_name(std::move(other.m_name)),
+		m_children(std::move(other.m_children)) {
+		for (auto& child : m_children) child.m_parent = this;
+	}
 
-	constexpr reference operator=(const_reference) = default;
-	constexpr reference operator=(rvreference) = default;
+	constexpr reference operator=(const_reference other) {
+		m_value = other.m_value;
+		m_name = other.m_name;
+		for (const auto& child : other.m_children) insert(child);
+		return *this;
+	}
+	constexpr reference operator=(rvreference other) {
+		m_value = std::move(other.m_value);
+		m_name = std::move(other.m_name);
+		m_children = std::move(other.m_children);
+		for (auto& child : m_children) child.m_parent = this;
+		return *this;
+	}
 
-	constexpr reference operator=(const value_type& value) noexcept {
+	constexpr reference operator=(const value_type& value) {
 		m_value = value;
 		return *this;
 	}
-	constexpr reference operator=(value_type&& value) noexcept {
+	constexpr reference operator=(value_type&& value) {
 		m_value = std::move(value);
 		return *this;
 	}
-	template <class Value> constexpr reference operator=(const Value& value) noexcept { 
+	template <class Value> constexpr reference operator=(const Value& value) { 
 		assign(value);
 		return *this;
 	}
-	template <class Value> constexpr reference operator=(Value&& value) noexcept {
+	template <class Value> constexpr reference operator=(Value&& value) {
 		assign(std::forward<Value>(value));
 		return *this;
 	}
 	
-	template <class Ty, std::enable_if_t<
+	template <class Ty> constexpr void assign(Ty&& value) requires (
 		std::is_floating_point_v<std::remove_cvref_t<Ty>> ||
 		std::is_unsigned_v<std::remove_cvref_t<Ty>> ||
 		std::is_signed_v<std::remove_cvref_t<Ty>> ||
-		std::is_nothrow_convertible_v<Ty, value_type>,
-	int> = 0>
-	constexpr void assign(const Ty& value) noexcept {
+		std::is_constructible_v<string_type, Ty> ||
+		std::is_constructible_v<value_type, Ty>
+	) {
 		if constexpr (std::is_floating_point_v<std::remove_cvref_t<Ty>>) m_value = static_cast<floating_type>(value);
 		else if constexpr (std::is_unsigned_v<std::remove_cvref_t<Ty>>) m_value = static_cast<unsigned_type>(value);
 		else if constexpr (std::is_signed_v<std::remove_cvref_t<Ty>>) m_value = static_cast<signed_type>(value);
-		else m_value = value;
-	}
-	template <class Ty, std::enable_if_t<
-		std::is_floating_point_v<std::remove_cvref_t<Ty>> ||
-		std::is_unsigned_v<std::remove_cvref_t<Ty>> ||
-		std::is_signed_v<std::remove_cvref_t<Ty>> ||
-		std::is_nothrow_convertible_v<Ty, value_type>,
-	int> = 0>
-	constexpr void assign(Ty&& value) noexcept {
-		if constexpr (std::is_floating_point_v<std::remove_cvref_t<Ty>>) m_value = static_cast<floating_type>(value);
-		else if constexpr (std::is_unsigned_v<std::remove_cvref_t<Ty>>) m_value = static_cast<unsigned_type>(value);
-		else if constexpr (std::is_signed_v<std::remove_cvref_t<Ty>>) m_value = static_cast<signed_type>(value);
+		else if constexpr (std::is_constructible_v<string_type, Ty>) m_value.template emplace<string_type>(value);
 		else m_value = std::forward<Ty>(value);
 	}
-	template <class Ty, class KeyType> constexpr void assign(KeyType&& key, const Ty& value) noexcept {
+	template <class Ty, class KeyType> constexpr void assign(KeyType&& key, const Ty& value) {
 		assign(value);
 		rename(std::forward<KeyType>(key));
 	}
-	template <class Ty, class KeyType> constexpr void assign(KeyType&& key, Ty&& value) noexcept {
+	template <class Ty, class KeyType> constexpr void assign(KeyType&& key, Ty&& value) {
 		assign(value);
 		rename(std::forward<KeyType>(key));
 	}
 
-	constexpr void swap(reference other) noexcept { 
+	constexpr void swap(reference other) { 
 		m_children.swap(other.m_children); 
+
+		for (const auto& child : other.m_children)
+			child.m_parent = &other;
+		
+		for (const auto& child : m_children)
+			child.m_parent = this;
+
+		m_name.swap(other.m_name);
+		std::swap(m_parent, other.m_parent);
+		std::swap(m_value, other.m_value);
 	}
 
 
@@ -207,6 +228,12 @@ public:
 		return m_children.cend();
 	}
 
+	constexpr reference insert(const_reference child) {
+		auto& res = *m_children.emplace(child).first;
+		res.parent = this;
+
+		return res;
+	}
 	constexpr reference insert(rvreference child) {
 		child.m_parent = this;
 		auto& res = *m_children.emplace(std::move(child)).first;
@@ -325,10 +352,10 @@ public:
 	constexpr auto& boolean() noexcept {
 		return std::get<bool>(m_value);
 	}
-	constexpr auto& sInt() noexcept {
+	constexpr auto& signedInt() noexcept {
 		return std::get<signed_type>(m_value);
 	}
-	constexpr auto& uInt() noexcept {
+	constexpr auto& unsignedInt() noexcept {
 		return std::get<unsigned_type>(m_value);
 	}
 	constexpr auto& floating() noexcept {
@@ -366,15 +393,14 @@ public:
 		return std::get<string_type>(m_value);
 	}
 
-	template <class Ty, std::enable_if_t<
+	template <class Ty> constexpr decltype(auto) get() const noexcept requires (
 		std::is_same_v<std::remove_cvref_t<Ty>, json_type> ||
 		std::is_floating_point_v<std::remove_cvref_t<Ty>> ||
 		std::is_unsigned_v<std::remove_cvref_t<Ty>> ||
 		std::is_signed_v<std::remove_cvref_t<Ty>> ||
 		std::is_nothrow_convertible_v<literal_type*, Ty> ||
-		std::is_nothrow_convertible_v<Ty, value_type>,
-	int> = 0>
-	constexpr decltype(auto) get() const noexcept {
+		std::is_nothrow_convertible_v<Ty, value_type>
+	) {
 		using type = std::remove_cvref_t<Ty>;
 
 		if constexpr (std::is_same_v<type, json_type>) return *this;
@@ -399,69 +425,49 @@ public:
 	}
 
 	template <class KeyType> constexpr const_reference child(KeyType&& key) const {
-		constexpr bool stringlike = requires(const KeyType& k) {
-			key_type(key);
-			key_type().find("");
-			key_type().substr(0, 0);
-		};
+		view_type k(key);
+		size_type beg = 0, cur;
+		const_pointer p = this;
 
-		if constexpr (stringlike) {
-			key_type k(key);
-			size_type beg = 0, cur;
-			const_pointer p = this;
-
-			while ((cur = k.find("::", beg)) < k.size()) {
-				p = &p->m_children.at(k.substr(beg, cur - beg));
-				(beg = cur) += 2;
-			}
-
-			return *p->m_children.at(k.substr(beg)).get();
-		} else {
-			return *m_children.at(key).get();
+		while ((cur = k.find("::", beg)) < k.size()) {
+			p = &p->m_children.at(k.substr(beg, cur - beg));
+			(beg = cur) += 2;
 		}
+
+		return p->m_children.at(k.substr(beg));
 	}
 	template <class KeyType> constexpr reference child(KeyType&& key) {
-		constexpr bool stringlike = requires(const KeyType& k) {
-			key_type(key);
-			key_type().find("");
-			key_type().substr(0, 0);
-		};
+		view_type k(key);
+		size_type beg = 0, cur;
+		const_pointer p = this;
 
-		if constexpr (stringlike) {
-			key_type k(key);
-			size_type beg = 0, cur;
-			const_pointer p = this;
-
-			while ((cur = k.find("::", beg)) < k.size()) {
-				p = p->m_children.at(k.substr(beg, cur - beg));
-				beg = cur + 2;
-			}
-
-			return *p->m_children.at(k.substr(beg)).get();
-		} else {
-			return *m_children.at(key).get();
+		while ((cur = k.find("::", beg)) < k.size()) {
+			p = &p->m_children.at(k.substr(beg, cur - beg));
+			beg = cur + 2;
 		}
+
+		return p->m_children.at(k.substr(beg));
 	}
 
 	const_reference at(size_type i) const {
-		return *get<array_type>().at(i);
+		return array().at(i);
 	}
 	reference operator[](size_type i) {
-		return *get<array_type>()[i];
+		return array()[i];
 	}
 
 	template <class KeyType> constexpr const_reference at(KeyType&& name) const {
-		*m_children.at(std::forward<KeyType>(name));
+		return m_children.at(std::forward<KeyType>(name));
 	}
 	template <class KeyType> constexpr reference at(KeyType&& name) {
-		*m_children.at(std::forward<KeyType>(name));
+		return m_children.at(std::forward<KeyType>(name));
 	}
 	
 	template <class KeyType> constexpr const_reference operator[](KeyType&& name) const {
-		return *m_children[std::forward<KeyType>(name)];
+		return m_children[std::forward<KeyType>(name)];
 	}
 	template <class KeyType> constexpr reference operator[](KeyType&& name) {
-		return *m_children[std::forward<KeyType>(name)];
+		return m_children[std::forward<KeyType>(name)];
 	}
 
 
