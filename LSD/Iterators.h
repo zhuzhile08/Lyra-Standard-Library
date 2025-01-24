@@ -37,7 +37,7 @@ public:
 
 	constexpr Iterator() noexcept = default;
 	constexpr Iterator(pointer pointer) noexcept : m_pointer(pointer) { }
-	constexpr Iterator(reference reference) noexcept : m_pointer(&reference) { }
+	explicit constexpr Iterator(reference reference) noexcept : m_pointer(&reference) { }
 
 	constexpr reference operator*() const { return *m_pointer; }
 	constexpr pointer operator->() const noexcept { return m_pointer; }
@@ -128,7 +128,7 @@ public:
 
 	constexpr ReverseIterator() noexcept = default;
 	constexpr ReverseIterator(pointer pointer) noexcept : m_pointer(pointer) { }
-	constexpr ReverseIterator(reference reference) noexcept : m_pointer(&reference) { }
+	explicit constexpr ReverseIterator(reference reference) noexcept : m_pointer(&reference) { }
 
 	constexpr reference operator*() const { return *m_pointer; }
 	constexpr pointer operator->() const noexcept { return m_pointer; }

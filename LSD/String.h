@@ -213,7 +213,7 @@ public:
 	}
 	constexpr BasicString(init_list ilist, const_alloc_reference alloc = allocator_type())
 		 : BasicString(ilist.begin(), ilist.end(), alloc) { }
-	template <class StringViewLike> constexpr BasicString(const StringViewLike& sv, const_alloc_reference alloc = allocator_type()) requires isConvertibleToView<StringViewLike> {
+	template <class StringViewLike> explicit constexpr BasicString(const StringViewLike& sv, const_alloc_reference alloc = allocator_type()) requires isConvertibleToView<StringViewLike> {
 		view_type v(sv);
 		*this = std::move(BasicString(v.m_begin, v.m_end, alloc));
 	}
