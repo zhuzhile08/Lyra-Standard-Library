@@ -66,13 +66,11 @@ requires (
 	constexpr std::uint64_t maxValOverBase = maxVal / 10;
 	constexpr std::uint64_t maxLastDigit = maxVal % 10;
 
-	constexpr char zeroC = '0' - 1;
-	constexpr char nineC = '9' + 1;
-
 	std::errc ec { };
 	std::size_t iterationCount = 0;
 
-	for (std::uint8_t n = 0; begin != end && *begin > zeroC && *begin < nineC; begin++, iterationCount++) {
+	std::uint8_t n = 0; 
+	while (begin != end && *begin >= '0' && *begin <= '9') {
 		n = *begin - '0';
 
 		if (result > maxValOverBase || (result == maxValOverBase && n > maxLastDigit)) {
@@ -82,6 +80,9 @@ requires (
 		}
 
 		result = result * 10 + n;
+
+		++begin;
+		++iterationCount;
 	}
 
 	if (iterationCount != 0) {
@@ -195,29 +196,14 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 		if (wholeFcRes.ec == std::errc::result_out_of_range) { // just skips the entire rest of the number until the exponent
 			result.fastPathAvailable = false;
 
-			while (begin != end) {
-				switch (*begin) {
-					case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-						++begin;
-						++result.exponent; // Small hack, combined with the funny part with the exponent parsing
-
-						continue;
-				}
-
-				break;
+			while (begin != end && *begin >= '0' && *begin <= '9') {
+				++begin;
+				++result.exponent; // Small hack, combined with the funny part with the exponent parsing
 			}
 
 			if (begin != end && *begin == '.') ++begin;
 
-			while (begin != end) {
-				switch (*begin) {
-					case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-						++begin;
-						continue;
-				}
-
-				break;
-			}
+			while (begin != end && *begin >= '0' && *begin <= '9') ++begin;
 
 			if (begin == end) {
 				result.last = begin;
@@ -248,16 +234,7 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 				result.fastPathAvailable = false;
 				++begin;
 
-				while (begin != end) {
-					switch (*begin) {
-						case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-							++begin;
-
-							continue;
-					}
-
-					break;
-				}
+				while (begin != end && *begin >= '0' && *begin <= '9') ++begin;
 
 				if (begin == end) {
 					result.last = begin;
