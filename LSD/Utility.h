@@ -23,13 +23,13 @@
 
 namespace lsd {
 
-// address conversion
+// Address conversion
 template <class Ty> [[nodiscard]] constexpr inline const void* getAddress(const Ty& type) noexcept {
 	return static_cast<const void*>(type);
 }
 
 
-// compile time type id generator
+// Compile time type id generator
 
 using type_id = const void*;
 
@@ -49,7 +49,7 @@ template <class Ty> constexpr type_id typeId() noexcept {
 
 namespace std {
 
-// standard library function overloads for custom containers
+// Standard library function overloads for custom containers
 
 template <lsd::IteratableContainer Ty> void swap(Ty& a, Ty& b) {
 	a.swap(b);

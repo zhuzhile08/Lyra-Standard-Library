@@ -30,7 +30,7 @@ namespace lsd {
 
 namespace detail {
 
-// utility macros
+// Utility macros
 
 #define SIGNED_SCALAR_DIGITS(type) ((sizeof(type) / 2) * 3 + sizeof(type)) + 2
 #define UNSIGNED_SCALAR_DIGITS(type) ((sizeof(type) / 2) * 3 + sizeof(type)) + 1
@@ -75,7 +75,7 @@ public:
 	static constexpr size_type npos = -1;
 
 private:
-	// aggressive small string and padding calculation
+	// Aggressive small string and padding calculation
 
 	static constexpr size_type paddingSize = 
 		static_cast<size_type>(sizeof(value_type) / (sizeof(pointer) * 4) + 1);
@@ -89,7 +89,7 @@ private:
 	using small_string_tag = unsigned char[smallStringPaddingSize];
 
 
-	// internal string storage types
+	// Internal string storage types
 
 	struct Short {
 		small_string_type data { };
@@ -101,18 +101,18 @@ private:
 		pointer end { };
 		pointer cap { };
 
-		pointer padding[paddingSize] { }; // there has to be at least one block of padding for the tag
+		pointer padding[paddingSize] { }; // There has to be at least one block of padding for the tag
 	};
 
 
-	// eraseAndInsertGap special return value
+	// EraseAndInsertGap special return value
 	struct EraseAndInsertGapReturnInfo {
 		pointer result;
 		bool isMemReady;
 	};
 
 
-	// helper type trait for string-view-likes
+	// Helper type trait for string-view-likes
 
 	template <class StringViewLike, class = void> struct IsConvertibleToView : public std::false_type { };
 	template <class StringViewLike> struct IsConvertibleToView<StringViewLike, std::enable_if_t<
@@ -184,7 +184,7 @@ public:
 			m_short.tag[0] = other.m_short.tag[0];
 			traits_type::move(m_short.data, other.m_short.data, smallStringCap);
 		} else {
-			m_short.tag[0] = std::exchange(other.m_short.tag[0], 0); // other is now practically empty in small string mode
+			m_short.tag[0] = std::exchange(other.m_short.tag[0], 0); // Other is now practically empty in small string mode
 			m_long.begin = std::exchange(other.m_long.begin, pointer { });
 			m_long.end = std::exchange(other.m_long.end, pointer { });
 			m_long.cap = std::exchange(other.m_long.cap, pointer { });
@@ -224,7 +224,7 @@ public:
 	}
 	
 	constexpr ~BasicString() {
-		if (!smallStringMode()) { // extra check vor the validity of m_long.begin is not needed since it will always be valid when the string isn't in small string mode
+		if (!smallStringMode()) { // Extra check vor the validity of m_long.begin is not needed since it will always be valid when the string isn't in small string mode
 			destructBehind(m_long.begin - 1);
 
 			allocator_traits::deallocate(m_alloc, m_long.begin, m_long.cap - m_long.begin);
@@ -279,7 +279,7 @@ public:
 		return *this;
 	}
 	constexpr container_reference assign(const_container_reference other, size_type pos, size_type count = npos) {
-		auto s = other.size(); // just in case to avoid traits_type::length()
+		auto s = other.size(); // Just in case to avoid traits_type::length()
 		if (pos > s) throw std::out_of_range("lsd::BasicString::operator=(): Requested position exceded string bounds!");
 
 		assign(other.pBegin() + pos, other.pBegin() + pos + std::min(count, s - pos), other.m_alloc);
@@ -432,7 +432,7 @@ public:
 				auto oldBegin = std::exchange(m_long.begin, allocator_traits::allocate(m_alloc, count));
 
 				if (oldBegin) {
-					for (auto beginIt = m_long.begin, oldBeginIt = oldBegin; oldBeginIt != m_long.end + 1; oldBeginIt++, beginIt++) // plus one for null terminator
+					for (auto beginIt = m_long.begin, oldBeginIt = oldBegin; oldBeginIt != m_long.end + 1; oldBeginIt++, beginIt++) // Plus one for null terminator
 						allocator_traits::construct(m_alloc, beginIt, *oldBeginIt);
 
 					allocator_traits::deallocate(m_alloc, oldBegin, cap);
@@ -449,7 +449,7 @@ public:
 			auto cap = capacity();
 
 			if (s < cap) {
-				if (s <= smallStringCap) { // returns string to small string mode
+				if (s <= smallStringCap) { // Returns string to small string mode
 					pointer oldBegin = m_long.begin;
 					pointer oldEnd = m_long.end + 1;
 					m_short.tag[0] = s - 1;
@@ -1316,7 +1316,7 @@ private:
 	constexpr void smartReserve(size_type size) noexcept {
 		auto cap = capacity();
 
-		if (size >= smallStringCap && size > cap) { // attempts to keep small string mode
+		if (size >= smallStringCap && size > cap) { // Attempts to keep small string mode
 			auto newCap = std::max(cap * 2, static_cast<size_type>(2)) - 2;
 			reserve((newCap < size) ? size : newCap);
 		}
@@ -1341,11 +1341,11 @@ private:
 		return *this;
 	}
 
-	constexpr EraseAndInsertGapReturnInfo eraseAndInsertGap(pointer position, size_type eraseCount, size_type gapSize) { // does not check for validity of eraseCount or gapSize
+	constexpr EraseAndInsertGapReturnInfo eraseAndInsertGap(pointer position, size_type eraseCount, size_type gapSize) { // Does not check for validity of eraseCount or gapSize
 		auto oldSize = size();
 		auto newSize = oldSize + gapSize - eraseCount + 1;
 
-		if (smallStringMode() && (newSize < smallStringCap)) { // small string mode
+		if (smallStringMode() && (newSize < smallStringCap)) { // Small string mode
 			auto moveSrc = position + eraseCount;
 			auto moveDst = moveSrc + gapSize;
 			traits_type::move(moveDst, moveSrc, pEnd() - moveSrc + 1);
@@ -1353,32 +1353,32 @@ private:
 			m_short.tag[0] = newSize - 1;
 
 			return { position, true };
-		} else if (smallStringMode() && (newSize >= smallStringCap)) { // exit small string mode
+		} else if (smallStringMode() && (newSize >= smallStringCap)) { // Exit small string mode
 			auto index = position - m_short.data;
 
-			// reserve memory without constructing new memory, similar to smartReserve()
+			// Reserve memory without constructing new memory, similar to smartReserve()
 			auto doubleCap = std::max(capacity() * 2, static_cast<size_type>(2)) - 2;
 			auto reserveCount = (newSize > doubleCap) ? newSize : doubleCap;
 			auto newBegin = allocator_traits::allocate(m_alloc, reserveCount);
 			auto newEnd = newBegin + newSize - 1;
 
-			// prepare some iterators for the following parts
+			// Prepare some iterators for the following parts
 			auto it = newBegin;
 			auto pos = it + index;
 			auto begIt = pBegin();
 
-			// re-construct the string in front of pos/position
-			for (; it < pos; it++, begIt++) // does not need extra check for validity of begin, since if the string was empty, it would be in small string mode
+			// Re-construct the string in front of pos/position
+			for (; it < pos; it++, begIt++) // Does not need extra check for validity of begin, since if the string was empty, it would be in small string mode
 				allocator_traits::construct(m_alloc, it, *begIt);
 
 			it += gapSize;
 			begIt += eraseCount;
 
-			// reconstruct the remaining parts of the string
+			// Reconstruct the remaining parts of the string
 			for (; it <= newEnd; it++, begIt++)
 				allocator_traits::construct(m_alloc, it, *begIt);
 
-			// assign everything after initialization is finished
+			// Assign everything after initialization is finished
 			m_short.tag[0] = smallStringTrueCap;
 			m_long.begin = newBegin;
 			m_long.end = newEnd;
@@ -1391,28 +1391,28 @@ private:
 			if (newSize > cap) {
 				auto index = position - m_long.begin;
 
-				// reserve memory without constructing new memory, similar to smartReserve()
+				// Reserve memory without constructing new memory, similar to smartReserve()
 				auto doubleCap = std::max(cap * 2, static_cast<size_type>(2)) - 2;
 				auto reserveCount = (newSize > doubleCap) ? newSize : doubleCap;
 				auto oldBegin = std::exchange(m_long.begin, allocator_traits::allocate(m_alloc, reserveCount));
 				
-				// calculate new pointers
+				// Calculate new pointers
 				m_long.end = m_long.begin + newSize - 1;
 				m_long.cap = m_long.begin + reserveCount;
 
-				// prepare some iterators for the following parts
+				// Prepare some iterators for the following parts
 				auto pos = m_long.begin + index;
 				auto it = m_long.begin;
 				auto begIt = oldBegin;
 
-				// re-construct the string in front of pos/position
-				for (; it < pos; it++, begIt++) // does not need extra check for validity of begin, since if the string was empty, it would be in small string mode
+				// Re-construct the string in front of pos/position
+				for (; it < pos; it++, begIt++) // Does not need extra check for validity of begin, since if the string was empty, it would be in small string mode
 					allocator_traits::construct(m_alloc, it, *begIt);
 				
 				it += gapSize;
 				begIt += eraseCount;
 
-				// reconstruct the remaining parts of the string
+				// Reconstruct the remaining parts of the string
 				for (; it <= m_long.end; it++, begIt++)
 					allocator_traits::construct(m_alloc, it, *begIt);
 
@@ -1432,7 +1432,7 @@ private:
 						allocator_traits::destroy(m_alloc, oldEndIt);
 					}
 
-					for (; oldEndIt != moveBegin; --endIt, --oldEndIt) { // custom std::move_backward
+					for (; oldEndIt != moveBegin; --endIt, --oldEndIt) { // Custom std::move_backward
 						traits_type::assign(*endIt, *oldEndIt);
 						allocator_traits::destroy(m_alloc, oldEndIt);
 					}
@@ -1480,16 +1480,16 @@ constexpr WString operator""_s(const wchar_t* str, std::size_t len) {
 	return WString { str, len };
 }
 
-} // inline namespace literals
+} // Inline namespace literals
 
-} // inline namespace string_literals
+} // Inline namespace string_literals
 
 
 template <class C> struct Hash<BasicString<C>> {
 	using string_type = BasicString<C>;
 	using view_type = BasicStringView<C>;
 
-	constexpr std::size_t operator()(const string_type& s) const noexcept { // uses the djb2 instead of murmur- or CityHash
+	constexpr std::size_t operator()(const string_type& s) const noexcept { // Uses the djb2 instead of murmur- or CityHash
 		std::size_t hash = 5381; 
 
 #ifdef DJB2_HASH_MULTIPLY_33
@@ -1635,7 +1635,7 @@ template <class CharTy, class Traits, class Alloc> auto quoted(const lsd::BasicS
 }
 
 
-// templated strncmp
+// Templated strncmp
 
 template <class Ty> bool strncmp(Ty first, const char* second, std::size_t size) requires isIteratorValue<Ty> {
 	for (; size > 0; size--, first++, second++) {

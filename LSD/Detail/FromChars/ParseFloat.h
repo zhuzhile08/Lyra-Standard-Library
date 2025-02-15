@@ -35,7 +35,7 @@ namespace lsd {
 
 namespace detail {
 
-// structural implementation of the floating point spec
+// Structural implementation of the floating point spec
 
 template <ContinuousIteratorType Iterator> struct FloatParseResult {
 public:
@@ -45,7 +45,7 @@ public:
 	std::size_t fracSize = 0;
 
 	std::uint64_t mantissa = 0;
-	std::int64_t exponent = 0; // since the largest number a double can represent only has around 300 digits, this should be enougth
+	std::int64_t exponent = 0; // Since the largest number a double can represent only has around 300 digits, this should be enougth
 
 	bool fastPathAvailable = true;
 
@@ -93,7 +93,7 @@ requires (
 }
 
 
-// the parser itself
+// The parser itself
 
 template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc parseFloatingPoint(
 	FloatParseResult<Iterator>& result,
@@ -106,7 +106,7 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 
 	if (begin == end) return std::errc::invalid_argument;
 
-	// parse sign
+	// Parse sign
 	if (*begin == '-') {
 		if (++begin == end) return std::errc::invalid_argument;
 
@@ -114,7 +114,7 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 	}
 
 
-	// parse irregular modes
+	// Parse irregular modes
 	switch (*begin) {
 		case 'i': case 'I':
 			if (detail::caselessStrNCmp(++begin, end, "nf", 2)) {
@@ -141,10 +141,10 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 	}
 
 
-	// the code now goes down 2 paths, depending on the format of the float
-	if (fmt == CharsFormat::hex) { // hex float
+	// The code now goes down 2 paths, depending on the format of the float
+	if (fmt == CharsFormat::hex) { // Hex float
 		/*
-		// parse whole part
+		// Parse whole part
 
 		auto fcRes = fromChars(begin, end, result.mantissa, 10, &result.wholeSize);
 		if (fcRes.ptr == begin || fcRes.ec == std::errc::invalid_argument) return std::errc::invalid_argument;
@@ -159,14 +159,14 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 
 
 
-		// parse fractional part
+		// Parse fractional part
 		if (*begin == '.') {
 			if (!parseHexNumber(result.mantissa, result.fractionalSize, begin, end))
 				return std::errc::invalid_argument;
 		}
 
 
-		// parse exponent
+		// Parse exponent
 		if (*begin == 'p' || *begin == 'P') {
 			auto fcRes = fromChars(++begin, end, result.exponent, 16);
 
@@ -179,12 +179,12 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 		
 		return std::errc { };
 		*/
-	} else { // decimal float
-		// parse whole part
+	} else { // Decimal float
+		// Parse whole part
 
 		auto wholeFcRes = unsignedFromCharsBase10(begin, end, result.mantissa, &result.wholeSize);
 
-		if (wholeFcRes.ptr == end) { // it can only be end if something was parsed, which is why this is ok here
+		if (wholeFcRes.ptr == end) { // It can only be end if something was parsed, which is why this is ok here
 			result.last = wholeFcRes.ptr;
 
 			return std::errc { };
@@ -193,7 +193,7 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 		begin = wholeFcRes.ptr;
 
 
-		if (wholeFcRes.ec == std::errc::result_out_of_range) { // just skips the entire rest of the number until the exponent
+		if (wholeFcRes.ec == std::errc::result_out_of_range) { // Just skips the entire rest of the number until the exponent
 			result.fastPathAvailable = false;
 
 			while (begin != end && *begin >= '0' && *begin <= '9') {
@@ -210,13 +210,13 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 
 				return std::errc { };
 			}
-		} else if (*begin == '.') { // parse fractional part
+		} else if (*begin == '.') { // Parse fractional part
 			auto fracFcRes = unsignedFromCharsBase10(++begin, end, result.mantissa, &result.fracSize);
 			if (fracFcRes.ec == std::errc::invalid_argument && wholeFcRes.ec == std::errc::invalid_argument)
 				return std::errc::invalid_argument;
 
 			if (result.mantissa == 0) {
-				fres = 0; // special exit case, where both whole and fractional were all zeros
+				fres = 0; // Special exit case, where both whole and fractional were all zeros
 
 				return std::errc::operation_canceled;
 			}
@@ -229,7 +229,7 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 
 			begin = fracFcRes.ptr;
 
-			// skip until exponent
+			// Skip until exponent
 			if (fracFcRes.ec == std::errc::result_out_of_range) {
 				result.fastPathAvailable = false;
 				++begin;
@@ -242,11 +242,11 @@ template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc p
 					return std::errc { };
 				}
 			}
-		} else if (wholeFcRes.ec == std::errc::invalid_argument) // special case where neither the whole or floating part was present
+		} else if (wholeFcRes.ec == std::errc::invalid_argument) // Special case where neither the whole or floating part was present
 			result.mantissa = 1;
 
 
-		// parse exponent
+		// Parse exponent
 
 		bool scientific = (fmt & CharsFormat::scientific) != 0;
 

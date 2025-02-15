@@ -263,7 +263,7 @@ public:
 
 	constexpr void resize(size_type count) {
 		size_type size = 0;
-		--count; // because count has to be subtracted everywhere else by 1 anyways
+		--count; // Because count has to be subtracted everywhere else by 1 anyways
 		for (auto it = begin(); it != end(); it++, size++) {
 			if (size >= count) {
 				eraseAfter(it, end());
@@ -276,7 +276,7 @@ public:
 	}
 	constexpr void resize(size_type count, const value_type& value) {
 		size_type size = 0;
-		--count; // because count has to be subtracted everywhere else by 1 anyways
+		--count; // Because count has to be subtracted everywhere else by 1 anyways
 		for (auto it = begin(); it != end(); it++, size++) {
 			if (size >= count) {
 				eraseAfter(it, end());

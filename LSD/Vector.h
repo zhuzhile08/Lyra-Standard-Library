@@ -337,9 +337,9 @@ public:
 		auto it = m_begin + (pos - m_begin);
 
 		allocator_traits::destroy(m_alloc, it);
-		allocator_traits::construct(m_alloc, it, std::move(*(it + 1))); // weird bit here because it needs to reconstruct the previously destroyed piece of memory
+		allocator_traits::construct(m_alloc, it, std::move(*(it + 1))); // Weird bit here because it needs to reconstruct the previously destroyed piece of memory
 
-		std::move(it + 2, m_end, it + 1); // move the other elements normally
+		std::move(it + 2, m_end, it + 1); // Move the other elements normally
 
 		popBack();
 
@@ -446,38 +446,38 @@ private:
 		for (; count > 0; count--, m_end++) allocator_traits::construct(m_alloc, m_end, value);
 	}
 
-	constexpr pointer eraseAndInsertGap(pointer position, size_type eraseCount, size_type gapSize) { // does not check for validity of eraseCount or gapSize
+	constexpr pointer eraseAndInsertGap(pointer position, size_type eraseCount, size_type gapSize) { // Does not check for validity of eraseCount or gapSize
 		auto oldSize = size();
 		auto oldCap = capacity();
 
 		auto newSize = oldSize + gapSize - eraseCount;
 
 		if (newSize > oldCap) {
-			// convert position to index
+			// Convert position to index
 			auto index = position - m_begin;
 
-			// reserve memory without constructing new memory, similar to smartReserve()
+			// Reserve memory without constructing new memory, similar to smartReserve()
 			auto doubleCap = oldCap * 2;
 			auto reserveCount = (newSize > doubleCap) ?newSize : doubleCap;
 			auto oldBegin = std::exchange(m_begin, allocator_traits::allocate(m_alloc, reserveCount));
 			
-			// calculate new pointers
+			// Calculate new pointers
 			m_end = m_begin + newSize;
 			m_cap = m_begin + reserveCount;
 
 			if (oldBegin) {
-				// prepare some iterators for the following parts
+				// Prepare some iterators for the following parts
 				auto it = m_begin;
 				auto begIt = oldBegin;
 
-				// re-construct the vector in front of pos/position
+				// Re-construct the vector in front of pos/position
 				for (; it < (m_begin + index); it++, begIt++)
 					allocator_traits::construct(m_alloc, it, *begIt);
 				
 				it += gapSize;
 				begIt += eraseCount;
 
-				// reconstruct the remaining parts of the vector
+				// Reconstruct the remaining parts of the vector
 				for (; it <= m_end; it++, begIt++)
 					allocator_traits::construct(m_alloc, it, *begIt);
 
@@ -500,7 +500,7 @@ private:
 
 				std::move_backward(moveBegin, oldEndIt, endIt);
 
-				for (; oldEndIt != moveBegin; --endIt, --oldEndIt) { // custom std::move_backward
+				for (; oldEndIt != moveBegin; --endIt, --oldEndIt) { // Custom std::move_backward
 					*endIt = std::move(*oldEndIt);
 					allocator_traits::destroy(m_alloc, oldEndIt);
 				}

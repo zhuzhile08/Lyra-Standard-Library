@@ -41,7 +41,7 @@ public:
 
 namespace detail {
 
-// caseless strncmp
+// Caseless strncmp
 template <ContinuousIteratorType Iterator, ContinuousIteratorType Comparison> 
 constexpr bool caselessStrNCmp(Iterator begin, Iterator end, Comparison cmp, std::size_t count) requires(
 	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type> &&
@@ -59,7 +59,7 @@ constexpr bool caselessStrNCmp(Iterator begin, Iterator end, Comparison cmp, std
 }
 
 
-// digit validity checks
+// Digit validity checks
 
 constexpr inline std::size_t isHexDigit(int digit) noexcept {
 	return (digit >= '0' && digit <= '9') || (digit >= 'A' && digit <= 'F') || (digit >= 'a' && digit <= 'f');

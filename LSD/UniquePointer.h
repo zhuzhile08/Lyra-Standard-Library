@@ -17,7 +17,7 @@
 
 namespace lsd {
 
-// default deleters
+// Default deleters
 
 template <class Ty> struct DefaultDelete {
 	using pointer = Ty*;
@@ -133,7 +133,7 @@ private:
 };
 
 
-// deviates from standard implementation, acts like a runtime allocated lsd::Array/std::array
+// Deviates from standard implementation, acts like a runtime allocated lsd::Array/std::array
 template <class Ty, class DTy> class UniquePointer<Ty[], DTy> {
 public:
 	using element_type = Ty;

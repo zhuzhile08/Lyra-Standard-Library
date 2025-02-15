@@ -24,7 +24,7 @@ namespace lsd {
 
 namespace detail {
 
-// some numerical details about each floating point type
+// Some numerical details about each floating point type
 
 template <class Numerical> class FloatingPointInfo;
 
@@ -78,8 +78,8 @@ template <class Numerical>
 constexpr std::uint64_t expAndRawMantToMant(std::uint64_t a, std::uint64_t b, typename FloatingPointInfo<Numerical>::uint_type& result) noexcept {
 	using fp_info = FloatingPointInfo<Numerical>;
 
-	// this function doesn't use auto since "wrong" deductions can take place due to the bit shifts 
-	// and the implementation differences on different platforms of std::uint64_t
+	// This function doesn't use auto since "wrong" deductions can take place due to the bit shifts 
+	// And the implementation differences on different platforms of std::uint64_t
 
 	std::uint64_t aHi = a >> 32;
 	std::uint64_t aLo = a & UINT64_C(0xFFFFFFFF);
@@ -111,12 +111,12 @@ constexpr std::uint64_t expAndRawMantToMant(std::uint64_t a, std::uint64_t b, ty
 	auto highDigits = 64 - std::countl_zero(high);
 	
 
-	// shift mantissa into position
+	// Shift mantissa into position
 
 	if (highDigits > fp_info::mantShift() + 1) {
 		auto mantissa = high >> (highDigits - fp_info::mantShift() - 2);
 
-		result = (mantissa + (mantissa & 1)) >> 1; // rounding
+		result = (mantissa + (mantissa & 1)) >> 1; // Rounding
 	} else if (highDigits < fp_info::mantShift() + 1) {
 		auto shift = fp_info::mantShift() - highDigits + 1;
 		auto mantissa = low >> (64 - shift - 1);
@@ -124,14 +124,14 @@ constexpr std::uint64_t expAndRawMantToMant(std::uint64_t a, std::uint64_t b, ty
 		result = ((mantissa + (mantissa & 1)) >> 1) + (high << shift);
 	} else result = high + (low & (UINT64_C(1) << 63));
 
-	// remove upper bit of mantissa
+	// Remove upper bit of mantissa
 	result &= ~(UINT64_C(1) << fp_info::mantShift());
 
 	return highDigits;
 }
 
 
-// fast conversion path
+// Fast conversion path
 template <ContinuousIteratorType Iterator, class Numerical> constexpr bool fastPath(
 	const FloatParseResult<Iterator>& parseRes, Numerical& result
 ) {
@@ -169,24 +169,24 @@ template <ContinuousIteratorType Iterator, class Numerical> constexpr bool fastP
 }
 
 
-// slower path based on the eisel lemire algorithm
+// Slower path based on the eisel lemire algorithm
 template <ContinuousIteratorType Iterator, class Numerical> constexpr bool eiselLemire(
 	const FloatParseResult<Iterator>& parseRes, Numerical& result
 ) {
 	using fp_info = FloatingPointInfo<Numerical>;
 
-	// calculate the index into the table
+	// Calculate the index into the table
 	std::size_t expIndex = parseRes.exponent - parseRes.fracSize - 1 + std::size(powerOfTenTable) / 2;
 	const auto& powTen = powerOfTenTable[expIndex];
 
-	// start moving the values into a result integer
+	// Start moving the values into a result integer
 
 	typename fp_info::uint_type resInt = 0;
 
-	// calculate exponent and check if it is in range
-	std::int64_t exp = powTen.second // base exponent
-		 + expAndRawMantToMant<Numerical>(parseRes.mantissa, powTen.first, resInt) // since the number is shifted backwards during processing
-		 + 63; // since the real value of the number is shifted backwards to 1 > n <= 0
+	// Calculate exponent and check if it is in range
+	std::int64_t exp = powTen.second // Base exponent
+		 + expAndRawMantToMant<Numerical>(parseRes.mantissa, powTen.first, resInt) // Since the number is shifted backwards during processing
+		 + 63; // Since the real value of the number is shifted backwards to 1 > n <= 0
 	if (exp < fp_info::expMin() || exp > fp_info::expMax()) return false;
 	
 	resInt += (implicitCast<std::uint64_t>(parseRes.negative) << 63);
@@ -221,7 +221,7 @@ template <class Numerical, IteratorType Iterator> constexpr FromCharsResult<Iter
 	if (detail::eiselLemire(parseRes, result))
 		return { parseRes.last, std::errc { } };
 
-	return { begin, std::errc::result_out_of_range }; // since the input should be valid at this point, the only possible error is out of range
+	return { begin, std::errc::result_out_of_range }; // Since the input should be valid at this point, the only possible error is out of range
 }
 
 } // namespace lsd

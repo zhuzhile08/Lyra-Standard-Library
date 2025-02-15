@@ -222,9 +222,10 @@ public:
 		return find(other.data(), pos, other.size());
 	}
 	constexpr size_type find(const_pointer s, size_type pos, size_type count) const {
-		if (size() >= count && pos <= size() - count)
-			for (auto it = m_begin + pos; it < (m_end - count); it++)
-				if (traits_type::compare(s, it, count) == 0) return it - m_begin;
+		if (size() >= count)
+			for (auto it = m_begin + pos; it <= (m_end - count); it++)
+				if (traits_type::compare(s, it, count) == 0)
+					return it - m_begin;
 
 		return npos;
 	}
@@ -471,15 +472,15 @@ constexpr WStringView operator""_sv(const wchar_t* str, std::size_t len) {
 	return WStringView { str, len };
 }
 
-} // inline namespace literals
+} // Inline namespace literals
 
-} // inline namespace string_literals
+} // Inline namespace string_literals
 
 
 template <class C> struct Hash<BasicStringView<C>> {
 	using view_type = BasicStringView<C>;
 
-	constexpr std::size_t operator()(view_type s) const noexcept { // uses the djb2 instead of murmur- or CityHash
+	constexpr std::size_t operator()(view_type s) const noexcept { // Uses the djb2 instead of murmur- or CityHash
 		std::size_t hash = 5381; 
 
 #ifdef DJB2_HASH_MULTIPLY_33

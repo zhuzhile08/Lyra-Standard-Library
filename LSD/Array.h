@@ -133,7 +133,7 @@ template <class Ty, std::size_t Size> struct Array {
 };
 
 
-// array type trait
+// Array type trait
 
 template <class Ty> struct IsArray : std::is_array<Ty> { };
 template <class Ty, std::size_t Size> struct IsArray<Array<Ty, Size>> : std::true_type { };

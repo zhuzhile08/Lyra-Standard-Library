@@ -20,12 +20,12 @@ inline namespace operators {
 
 inline namespace enum_operators {
 
-// enum utilities
+// Enum utilities
 
 template <class Ty> concept EnumType = std::is_enum_v<Ty>;
 
 
-// credits to https://gist.github.com/StrikerX3/46b9058d6c61387b3f361ef9d7e00cd4 for these operators!
+// Credits to https://gist.github.com/StrikerX3/46b9058d6c61387b3f361ef9d7e00cd4 for these operators!
 
 template <EnumType Enum> constexpr inline Enum operator|(Enum first, Enum second) noexcept {
 	return static_cast<Enum>(
@@ -162,8 +162,8 @@ template <EnumType Enum, std::integral Num> auto constexpr inline operator<=>(Nu
 	return static_cast<Enum>(first) <=> second;
 }
 
-} // inline namespace enum_operators
+} // Inline namespace enum_operators
 
-} // inline namespace operators
+} // Inline namespace operators
 
 } // namespace lsd

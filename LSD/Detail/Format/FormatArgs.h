@@ -25,7 +25,7 @@ namespace lsd {
 
 namespace detail {
 
-// type erased format argument
+// Type erased format argument
 
 template <class Context> class TypeErasedFormatArg {
 public:
@@ -56,7 +56,7 @@ private:
 } // namespace detail
 
 
-// format argument store
+// Format argument store
 
 template <class Context> class BasicFormatArg {
 private:
@@ -131,7 +131,7 @@ private:
 
 namespace detail {
 
-// empty container mimicking an array when there are no format args
+// Empty container mimicking an array when there are no format args
 
 template <class Context> class BasicFormatArgStoreEmptyArray {
 public:
@@ -149,7 +149,7 @@ public:
 };
 
 
-// empty container mimicking a pointer when there are no format args
+// Empty container mimicking a pointer when there are no format args
 
 template <class Context> class BasicFormatArgsEmptyPointer {
 public:
@@ -158,7 +158,7 @@ public:
 };
 
 
-// container for format argument storage
+// Container for format argument storage
 
 template <class Context, class... Args> class BasicFormatArgStore {
 public:
@@ -181,7 +181,7 @@ private:
 } // namespace detail
 
 
-// create format argument storage
+// Create format argument storage
 
 template <class Context = BasicFormatContext<char>, class... Args> constexpr auto makeFormatArgs(Args&... args) {
 	return detail::BasicFormatArgStore<Context, Args...>(args...);
@@ -192,7 +192,7 @@ template <class... Args> constexpr auto makeWFormatArgs(Args&... args) {
 }
 
 
-// format argument container
+// Format argument container
 
 template <class Context> class BasicFormatArgs {
 public:
@@ -203,7 +203,7 @@ public:
 	template <class... Args> constexpr BasicFormatArgs(
 		const detail::BasicFormatArgStore<context_type, Args...>& store
 	) : m_size(sizeof...(Args)) {
-		if constexpr (sizeof...(Args) != 0) m_args = store.m_args.begin().get(); // this is usually quite bad because the args would go out of scope, but they won't since these are only going to be in the same scope
+		if constexpr (sizeof...(Args) != 0) m_args = store.m_args.begin().get(); // This is usually quite bad because the args would go out of scope, but they won't since these are only going to be in the same scope
 	}
 
 	constexpr format_arg get(std::size_t i) const noexcept {

@@ -270,13 +270,13 @@ public:
 	}
 
 	template <lsd::ContinuousIteratorType Iterator> [[nodiscard]] static constexpr json_type parse(Iterator begin, Iterator end) {
-		// first node
+		// First node
 		json_type json;
 		if (begin == end) return json;
 
 		skipCharacters(begin, end);
 
-		// start parsing
+		// Start parsing
 		if (*begin == '{') json.m_value = parseObject(begin, end, json);
 		else if (*begin == '[') json.m_value = parseArray(begin, end);
 		else if (++begin == end) json.m_value = object_type();
@@ -706,7 +706,7 @@ private:
 		json_type tok;
 
 		if (*begin != '\"')
-			throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, expected quotation marks!"); // the check is done here and not in the string because this is the only case where the validity of begin is not guaranteed
+			throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, expected quotation marks!"); // The check is done here and not in the string because this is the only case where the validity of begin is not guaranteed
 		tok.m_name = parseString(begin, end);
 
 		if (++begin == end)

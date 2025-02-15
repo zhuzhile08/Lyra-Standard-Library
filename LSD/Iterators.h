@@ -285,7 +285,7 @@ private:
 };
 
 
-// iterator trait
+// Iterator trait
 
 template <class, class = void> struct IsIterator : public std::false_type { };
 template <class Ty> struct IsIterator<Ty, std::void_t<
@@ -299,7 +299,7 @@ template <class Ty> struct IsIterator<Ty, std::void_t<
 template <class Ty> inline constexpr bool isIteratorValue = IsIterator<Ty>::value;
 
 
-// iterator concepts
+// Iterator concepts
 
 template <class Ty> concept IteratorType = isIteratorValue<Ty>;
 

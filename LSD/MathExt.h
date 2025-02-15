@@ -62,7 +62,7 @@ template <std::integral Type> inline constexpr std::size_t i64LenDec(Type x) {
 } // namespace detail
 
 
-// prime number utility
+// Prime number utility
 
 template <class Integer> inline constexpr bool isPrime(Integer n) noexcept requires std::is_integral_v<Integer> {
 	if (n == 2 || n == 3)
@@ -100,7 +100,7 @@ template <class Integer> inline constexpr Integer lastPrime(Integer n) noexcept 
 };
 
 
-// count digits of a number
+// Count digits of a number
 
 template <std::integral Type> inline constexpr std::size_t decNumLen(Type value) {
 	if constexpr (sizeof(Type) == 4) {
@@ -142,7 +142,7 @@ template <class Type> inline constexpr std::size_t numLen(Type value, std::size_
 }
 
 
-// log base n log x
+// Log base n log x
 
 template <std::int64_t Base, class Floating> inline constexpr Floating logn(Floating x) {
 	return std::log(x) / std::log(Base);

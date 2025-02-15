@@ -84,7 +84,7 @@ public:
 		m_array(alloc), m_buckets(2) { } 
 	template <class It> constexpr UnorderedSparseMap(
 		It first, It last, 
-		size_type bucketCount = 0, // set to 0 for default evaluation
+		size_type bucketCount = 0, // Set to 0 for default evaluation
 		const hasher& hash = hasher(), 
 		const key_equal& keyEqual = key_equal(), 
 		const allocator_type& alloc = allocator_type()) noexcept requires isIteratorValue<It> : 
@@ -119,7 +119,7 @@ public:
 		m_array(std::move(other.m_array), alloc), m_buckets(std::move(other.m_buckets)) { }
 	constexpr UnorderedSparseMap(
 		std::initializer_list<value_type> ilist, 
-		size_type bucketCount = 0, // set to 0 for default evaluation
+		size_type bucketCount = 0, // Set to 0 for default evaluation
 		const hasher& hash = hasher(), 
 		const key_equal& keyEqual = key_equal(), 
 		const allocator_type& alloc = allocator_type()) noexcept : 

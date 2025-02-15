@@ -20,9 +20,9 @@
 namespace lsd {
 
 template <typename Ty>
-concept DynarrayValueType = std::is_move_assignable_v<Ty> && std::is_default_constructible_v<Ty>; // allowed dynamic array internal type
+concept DynarrayValueType = std::is_move_assignable_v<Ty> && std::is_default_constructible_v<Ty>; // Allowed dynamic array internal type
 
-// very dangerous dynamic array implementation, please only store contents <= 4 bytes in small quantities
+// Very dangerous dynamic array implementation, please only store contents <= 4 bytes in small quantities
 template <DynarrayValueType Ty, std::size_t Capacity> struct Dynarray {
 	using size_type = std::size_t;
 	using difference_type = std::ptrdiff_t;
