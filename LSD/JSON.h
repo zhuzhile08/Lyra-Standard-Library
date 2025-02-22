@@ -452,19 +452,18 @@ public:
 	const_reference at(size_type i) const {
 		return array().at(i);
 	}
+	reference at(size_type i) {
+		return array().at(i);
+	}
+	const_reference operator[](size_type i) const {
+		return array()[i];
+	}
 	reference operator[](size_type i) {
 		return array()[i];
 	}
 
 	template <class KeyType> constexpr const_reference at(KeyType&& name) const {
 		return m_children.at(std::forward<KeyType>(name));
-	}
-	template <class KeyType> constexpr reference at(KeyType&& name) {
-		return m_children.at(std::forward<KeyType>(name));
-	}
-	
-	template <class KeyType> constexpr const_reference operator[](KeyType&& name) const {
-		return m_children[std::forward<KeyType>(name)];
 	}
 	template <class KeyType> constexpr reference operator[](KeyType&& name) {
 		return m_children[std::forward<KeyType>(name)];
@@ -474,7 +473,7 @@ public:
 	[[nodiscard]] constexpr bool empty() const noexcept { 
 		return m_children.empty(); 
 	}
-	constexpr operator bool() const noexcept { 
+	explicit constexpr operator bool() const noexcept { 
 		return m_children.empty(); 
 	}
 
