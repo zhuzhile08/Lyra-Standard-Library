@@ -1583,7 +1583,7 @@ template <class C> struct Hash<BasicString<C>> {
 	return String::castFrom<unsigned long, UNSIGNED_SCALAR_DIGITS(unsigned long)>(value, "%lu");
 }
 [[nodiscard]] inline String toString(unsigned long long value) {
-	return String::castFrom<unsigned long long, UNSIGNED_SCALAR_DIGITS(unsigned)>(value, "%llu");
+	return String::castFrom<unsigned long long, UNSIGNED_SCALAR_DIGITS(unsigned long long)>(value, "%llu");
 }
 [[nodiscard]] inline String toString(float value) {
 	return String::castFrom<float, sizeof(float) * 8 + 1>(value, "%g");
@@ -1611,7 +1611,7 @@ template <class C> struct Hash<BasicString<C>> {
 	return WString::castFrom<unsigned long, UNSIGNED_SCALAR_DIGITS(unsigned long)>(value, L"%lu");
 }
 [[nodiscard]] inline WString toWString(unsigned long long value) {
-	return WString::castFrom<unsigned long long, UNSIGNED_SCALAR_DIGITS(unsigned)>(value, L"%llu");
+	return WString::castFrom<unsigned long long, UNSIGNED_SCALAR_DIGITS(unsigned long long)>(value, L"%llu");
 }
 [[nodiscard]] inline WString toWString(float value) {
 	return WString::castFrom<float, sizeof(float) * 8 + 1>(value, L"%g");
