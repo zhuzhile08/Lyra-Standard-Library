@@ -62,44 +62,6 @@ template <std::integral Type> inline constexpr std::size_t i64LenDec(Type x) {
 } // namespace detail
 
 
-// prime number utility
-
-template <class Integer> inline constexpr bool isPrime(Integer n) noexcept requires std::is_integral_v<Integer> {
-	if (n == 2 || n == 3)
-		return true;
-	else if (n <= 1 || n % 2 == 0 || n % 3 == 0)
-		return false;
-	else for (Integer i = 5; i * i <= n; i += 6)
-		if (n % i == 0 || n % (i + 2) == 0)
-			return false;
-	return true;
-};
-
-template <class Integer> inline constexpr Integer nextPrime(Integer n) noexcept requires std::is_integral_v<Integer> {
-	if (n % 2 == 0)
-		--n;
-
-	while (true) {
-		n += 2;
-		if (isPrime(n)) {
-			return n;
-		}
-	}
-};
-
-template <class Integer> inline constexpr Integer lastPrime(Integer n) noexcept requires std::is_integral_v<Integer> {
-	if (n % 2 == 0)
-		++n;
-
-	while (true) {
-		n -= 2;
-		if (isPrime(n)) {
-			return n;
-		}
-	}
-};
-
-
 // count digits of a number
 
 template <std::integral Type> inline constexpr std::size_t decNumLen(Type value) {

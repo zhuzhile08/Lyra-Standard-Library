@@ -34,12 +34,6 @@ template <class Ty> concept IteratableContainer = requires(Ty c1, Ty c2) {
 
 namespace detail {
 
-// Hash map utility
-
-inline constexpr std::size_t hashmapBucketSizeCheck(std::size_t requested, std::size_t required) noexcept {
-	return (requested < required) ? nextPrime(required) : nextPrime(requested);
-}
-
 
 // Convert a size to an integer for safe member access
 

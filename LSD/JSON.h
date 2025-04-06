@@ -12,7 +12,7 @@
 #pragma once
 
 #include "Vector.h"
-#include "UnorderedSparseSet.h"
+#include "UnorderedDenseSet.h"
 #include "String.h"
 #include "StringView.h"
 #include "FromChars.h"
@@ -31,7 +31,7 @@ template <
 	std::signed_integral Signed = std::int64_t,
 	std::unsigned_integral Unsigned = std::uint64_t,
 	std::floating_point Floating = double,
-	template <class...> class NodeContainer = UnorderedSparseSet> 
+	template <class...> class NodeContainer = UnorderedDenseSet> 
 class BasicJson {
 public:
 	using size_type = std::size_t;
