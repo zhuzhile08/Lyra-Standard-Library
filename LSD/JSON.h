@@ -12,61 +12,26 @@
 #pragma once
 
 #include "Vector.h"
-#include "UnorderedSparseSet.h"
+#include "UnorderedDenseSet.h"
 #include "String.h"
 #include "StringView.h"
 #include "FromChars.h"
 
-#include <exception>
+#include "Detail/JSON/Core.h"
+
+#include <type_traits>
 #include <variant>
 #include <charconv>
 
 namespace lsd {
 
-class JsonParseError : public std::runtime_error {
-public:
-	JsonParseError(const String& message) : std::runtime_error(message.cStr()) {
-		m_message.append(message);
-	}
-	JsonParseError(const char* message) : std::runtime_error(message) {
-		m_message.append(message);
-	}
-	JsonParseError(const JsonParseError&) = default;
-	JsonParseError(JsonParseError&&) = default;
-
-	JsonParseError& operator=(const JsonParseError&) = default;
-	JsonParseError& operator=(JsonParseError&&) = default;
-
-	const char* what() const noexcept override {
-		return m_message.cStr();
-	}
-
-private:
-	String m_message { "Program terminated with JsonParseError: " };
-};
-
-
-namespace detail {
-
-template <class Ty> concept LiteralType = std::is_integral_v<Ty>;
-template <class Ty> concept SignedType = std::is_signed_v<Ty> && std::is_integral_v<Ty>;
-template <class Ty> concept UnsignedType = std::is_unsigned_v<Ty> && std::is_integral_v<Ty>;
-template <class Ty> concept FloatingType = std::is_floating_point_v<Ty>;
-
-} // namespace detail
-
-
-struct JsonNull { };
-struct JsonObject { };
-
-
 template <
-	detail::LiteralType Literal = char,
+	std::integral Literal = char,
 	template <class...> class ArrayContainer = Vector,
-	detail::SignedType Signed = std::int64_t,
-	detail::UnsignedType Unsigned = std::uint64_t,
-	detail::FloatingType Floating = double,
-	template <class...> class NodeContainer = UnorderedSparseSet> 
+	std::signed_integral Signed = std::int64_t,
+	std::unsigned_integral Unsigned = std::uint64_t,
+	std::floating_point Floating = double,
+	template <class...> class NodeContainer = UnorderedDenseSet> 
 class BasicJson {
 public:
 	using size_type = std::size_t;
@@ -83,8 +48,7 @@ public:
 
 	using key_type = string_type;
 	using key_reference = key_type&;
-	using const_key_reference = const key_type&;
-	using key_rvreference = key_type&&;
+	using const_key_reference = const key_reference;
 
 	using json_type = BasicJson;
 	using pointer = json_type*;
@@ -300,19 +264,21 @@ public:
 
 	constexpr string_type stringify() const {
 		string_type r;
+		auto formatHelper = detail::StringifyFormatHelper<string_type>();
 
-		if (isObject()) stringifyObject(*this, r);
-		else if (isArray()) stringifyArray(*this, r);
-		else stringifyPair(*this, r);
+		if (isObject()) stringifyObject(r, formatHelper);
+		else if (isArray()) stringifyArray(r, formatHelper);
+		else stringifyPair(r, formatHelper);
 
 		return r;
 	}
 	constexpr string_type stringifyPretty() const {
 		string_type r;
+		auto formatHelper = detail::PrettyStringifyFormatHelper<string_type>();
 
-		if (isObject()) stringifyObjectPretty(0, *this, r);
-		else if (isArray()) stringifyArrayPretty(0, *this, r);
-		else stringifyPairPretty(0, *this, r);
+		if (isObject()) stringifyObject(r, formatHelper);
+		else if (isArray()) stringifyArray(r, formatHelper);
+		else stringifyPair(r, formatHelper);
 
 		return r;
 	}
@@ -452,19 +418,18 @@ public:
 	const_reference at(size_type i) const {
 		return array().at(i);
 	}
+	reference at(size_type i) {
+		return array().at(i);
+	}
+	const_reference operator[](size_type i) const {
+		return array()[i];
+	}
 	reference operator[](size_type i) {
 		return array()[i];
 	}
 
 	template <class KeyType> constexpr const_reference at(KeyType&& name) const {
 		return m_children.at(std::forward<KeyType>(name));
-	}
-	template <class KeyType> constexpr reference at(KeyType&& name) {
-		return m_children.at(std::forward<KeyType>(name));
-	}
-	
-	template <class KeyType> constexpr const_reference operator[](KeyType&& name) const {
-		return m_children[std::forward<KeyType>(name)];
 	}
 	template <class KeyType> constexpr reference operator[](KeyType&& name) {
 		return m_children[std::forward<KeyType>(name)];
@@ -474,7 +439,7 @@ public:
 	[[nodiscard]] constexpr bool empty() const noexcept { 
 		return m_children.empty(); 
 	}
-	constexpr operator bool() const noexcept { 
+	explicit constexpr operator bool() const noexcept { 
 		return m_children.empty(); 
 	}
 
@@ -555,12 +520,21 @@ private:
 							
 							break;
 						
-						case 'u':
-							/// @todo 4 hex digits
-							begin += 4;
+						case 'u': {
+							++begin;
+
+							unsigned_type num = 0;
+							std::size_t digitCount = 0;
+
+							if (auto res = fromChars(begin, begin + 4, num, &digitCount, 16); res.ec != std::errc { } || digitCount != 4)
+								throw JsonParseError("lsd::Json::parseString(): JSON Syntax Error: Unexpected symbol, expected escaped hex character!");
+							
+							r.pushBack(static_cast<literal_type>(num));
+							begin += 3;
 
 							break;
-
+						}
+						
 						default:
 							r.pushBack(*begin);
 					}
@@ -612,7 +586,8 @@ private:
 			case '8':
 			case '9': {
 				unsigned_type uRes { };
-				if (auto res = fromChars(begin, end, uRes); res.ec == std::errc { } && 
+				if (auto res = fromChars(begin, end, uRes); 
+					res.ec == std::errc { } && 
 					*res.ptr != '.' && *res.ptr != 'e' && *res.ptr != 'p'
 				) {
 					begin = res.ptr - 1;
@@ -624,7 +599,8 @@ private:
 			
 			case '-':
 				signed_type sRes = { };
-				if (auto res = fromChars(begin, end, sRes); res.ec == std::errc { } && 
+				if (auto res = fromChars(begin, end, sRes); 
+					res.ec == std::errc { } && 
 					*res.ptr != '.' && *res.ptr != 'e' && *res.ptr != 'p'
 				) {
 					begin = res.ptr - 1;
@@ -742,108 +718,69 @@ private:
 
 	// Stringification implementations
 
-	static constexpr void stringifyPrimitive(const json_type& t, string_type& s) {
-		if (t.isBoolean()) {
-			if (t.get<bool>() == true) s.append("true");
+	constexpr void stringifyPrimitive(string_type& s) const {
+		if (isBoolean()) {
+			if (get<bool>() == true) s.append("true");
 			else s.append("false");
-		} else if (t.isSigned()) {
+		} else if (isSigned()) {
 			if constexpr (sizeof(literal_type) == 1)
-				s.append(toString(t.get<signed_type>()));
+				s.append(toString(get<signed_type>()));
 			else
-				s.append(toWString(t.get<signed_type>()));
-		} else if (t.isUnsigned()) {
+				s.append(toWString(get<signed_type>()));
+		} else if (isUnsigned()) {
 			if constexpr (sizeof(literal_type) == 1)
-				s.append(toString(t.get<unsigned_type>()));
+				s.append(toString(get<unsigned_type>()));
 			else
-				s.append(toWString(t.get<unsigned_type>()));
-		}  else if (t.isFloating()) {
+				s.append(toWString(get<unsigned_type>()));
+		} else if (isFloating()) {
 			if constexpr (sizeof(literal_type) == 1)
-				s.append(toString(t.get<floating_type>()));
+				s.append(toString(get<floating_type>()));
 			else
-				s.append(toWString(t.get<floating_type>()));
+				s.append(toWString(get<floating_type>()));
 		} else 
 			s.append("null");
 	}
-	static constexpr void stringifyObject(const json_type& t, string_type& s) {
-		s.pushBack('{');
-		for (auto it = t.begin(); it != t.end(); it++) {
-			if (it != t.begin()) s.pushBack(',');
-			stringifyPair(*it, s);
+	constexpr void stringifyObject(string_type& s, auto& formatHelper) const {
+		formatHelper.beginObject(s);
+		
+		for (auto it = begin(); it != end(); it++) {
+			formatHelper.seperator(it != begin(), s);
+			
+			it->stringifyPair(s, formatHelper);
 		}
-		s.pushBack('}');
+
+		formatHelper.endObject(s);
 	}
-	static constexpr void stringifyArray(const json_type& t, string_type& s) {
-		s.pushBack('[');
-		const auto& array = t.get<array_type>();
+	constexpr void stringifyArray(string_type& s, auto& formatHelper) const {
+		formatHelper.beginArray(s);
+
+		const auto& array = get<array_type>();
 		for (auto it = array.begin(); it != array.end(); it++) {
-			if (it != array.begin()) s.pushBack(',');
+			formatHelper.seperator(it != array.begin(), s);
+			
 			if (it->isString())
 				s.append("\"").append(it->template get<string_type>()).pushBack('\"');
 			else if (it->isObject())
-				stringifyObject(*it, s);
+				it->stringifyObject(s, formatHelper);
 			else if (it->isArray())
-				stringifyArray(*it, s);	
+				it->stringifyArray(s, formatHelper);	
 			else
-				stringifyPrimitive(*it, s);
+				it->stringifyPrimitive(s);
 		}
-		s.pushBack(']');
-	}
-	static constexpr void stringifyPair(const json_type& t, string_type& s) {
-		s.append("\"").append(t.m_name).append("\":");
 		
-		if (t.isString())
-			s.append("\"").append(t.get<string_type>()).append("\"");
-		else if (t.isObject())
-			stringifyObject(t, s);
-		else if (t.isArray())
-			stringifyArray(t, s);	
-		else
-			stringifyPrimitive(t, s);
+		formatHelper.endArray(s);
 	}
-
-	static constexpr void stringifyObjectPretty(size_type indent, const json_type& t, string_type& s) {
-		indent++;
-		s.append("{\n");
-
-		for (auto it = t.begin(); it != t.end(); it++) {
-			if (it != t.begin()) s.append(",\n");
-			stringifyPairPretty(indent, *it, s);
-		}
-
-		s.append("\n").append(--indent, '\t').pushBack('}');
-	}
-	static constexpr void stringifyArrayPretty(size_type indent, const json_type& t, string_type& s) {
-		indent += 1;
-		s.append("[\n");
-
-		const auto& array = t.get<array_type>();
-		for (auto it = array.begin(); it != array.end(); it++) {
-			if (it != array.begin()) s.append(",\n");
-			s.append(indent, '\t');
-
-			if (it->isString())
-				s.append("\"").append(it->template get<string_type>()).pushBack('\"');
-			else if (it->isObject())
-				stringifyObjectPretty(indent, *it, s);
-			else if (it->isArray())
-				stringifyArrayPretty(indent, *it, s);	
-			else
-				stringifyPrimitive(*it, s);
-		}
-
-		s.append("\n").append(--indent, '\t').pushBack(']');
-	}
-	static constexpr void stringifyPairPretty(size_type indent, const json_type& t, string_type& s) {
-		s.append(indent, '\t').append("\"").append(t.m_name).append("\": ");
+	constexpr void stringifyPair(string_type& s, auto& formatHelper) const {
+		(s += '\"').append(m_name).append("\": ");
 		
-		if (t.isString())
-			s.append("\"").append(t.get<string_type>()).pushBack('\"');
-		else if (t.isObject())
-			stringifyObjectPretty(indent, t, s);
-		else if (t.isArray())
-			stringifyArrayPretty(indent, t, s);	
+		if (isString())
+			(s += '\"').append(get<string_type>()).pushBack('\"');
+		else if (isObject())
+			stringifyObject(s, formatHelper);
+		else if (isArray())
+			stringifyArray(s, formatHelper);	
 		else
-			stringifyPrimitive(t, s);
+			stringifyPrimitive(s);
 	}
 
 

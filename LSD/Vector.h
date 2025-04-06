@@ -509,9 +509,6 @@ private:
 			return position;
 		}
 	}
-
-	template <class, class, class, class, class> friend class UnorderedSparseMap;
-	template <class, class, class, class> friend class UnorderedSparseSet;
 };
 
 } // namespace lsd

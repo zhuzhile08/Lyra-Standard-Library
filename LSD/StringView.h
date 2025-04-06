@@ -37,10 +37,10 @@ public:
 	using pointer = value_type*;
 	using const_pointer = const_value*;
 
-	using iterator = Iterator<value_type>;
 	using const_iterator = Iterator<const_value>; 
-	using reverse_iterator = ReverseIterator<value_type>;
+	using iterator = const_iterator;
 	using const_reverse_iterator = ReverseIterator<const_value>; 
+	using reverse_iterator = const_reverse_iterator;
 
 	using container = BasicStringView;
 	using container_reference = container&;
@@ -285,10 +285,10 @@ public:
 	}
 
 	constexpr size_type findLastOf(container other, size_type pos = npos) const noexcept {
-		return findLastOf(other.cStr(), pos, other.size());
+		return findLastOf(other.data(), pos, other.size());
 	}
 	[[deprecated]] constexpr size_type find_last_of(container other, size_type pos = npos) const noexcept {
-		return findLastOf(other.cStr(), pos, other.size());
+		return findLastOf(other.data(), pos, other.size());
 	}
 	constexpr size_type findLastOf(const_pointer s, size_type pos, size_type count) const {
 		if (size() != 0) {
@@ -318,10 +318,10 @@ public:
 	}
 
 	constexpr size_type findFirstNotOf(container other, size_type pos = 0) const noexcept {
-		return findFirstNotOf(other.cStr(), pos, other.size());
+		return findFirstNotOf(other.data(), pos, other.size());
 	}
 	[[deprecated]] constexpr size_type find_first_not_of(container other, size_type pos = 0) const noexcept {
-		return findFirstNotOf(other.cStr(), pos, other.size());
+		return findFirstNotOf(other.data(), pos, other.size());
 	}
 	constexpr size_type findFirstNotOf(const_pointer s, size_type pos, size_type count) const {
 		for (auto it = m_begin + pos; it < m_end; it++) {
@@ -350,10 +350,10 @@ public:
 	}
 
 	constexpr size_type findLastNotOf(container other, size_type pos = npos) const noexcept {
-		return findLastNotOf(other.cStr(), pos, other.size());
+		return findLastNotOf(other.data(), pos, other.size());
 	}
 	[[deprecated]] constexpr size_type find_last_not_of(container other, size_type pos = 0) const noexcept {
-		return findLastNotOf(other.cStr(), pos, other.size());
+		return findLastNotOf(other.data(), pos, other.size());
 	}
 	constexpr size_type findLastNotOf(const_pointer s, size_type pos, size_type count) const {
 		if (size() != 0) {

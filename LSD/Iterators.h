@@ -31,6 +31,7 @@ public:
 	using pointer_const = const_value*;
 	using reference = value_type&;
 	using const_reference = const_value&;
+
 	using container = Iterator;
 	using container_reference = container&;
 	using const_container_reference = const container&;
@@ -122,6 +123,7 @@ public:
 	using pointer_const = const_value*;
 	using reference = value_type&;
 	using const_reference = const_value&;
+
 	using container = ReverseIterator;
 	using container_reference = container&;
 	using const_container_reference = const container&;
@@ -184,7 +186,7 @@ public:
 		return it;
 	}
 
-	constexpr operator Iterator<const_value>() const noexcept {
+	constexpr operator ReverseIterator<const_value>() const noexcept {
 		return m_pointer;
 	}
 	constexpr explicit operator pointer() noexcept {
