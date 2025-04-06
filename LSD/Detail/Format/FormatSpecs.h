@@ -39,7 +39,9 @@ public:
 		auto it = context.fieldOptions().formatSpec.begin();
 		auto end = context.fieldOptions().formatSpec.end();
 
-		switch (*it) { // parse early exit end alignment spec
+		if (it == end) return;
+
+		switch (*it) { // Parse early exit end alignment spec
 			case '}':
 				return;
 
@@ -70,21 +72,12 @@ public:
 							
 							default:
 								it = alignFirst;
-								
-								break;
 						}
 				}
-
-				break;
 			}
 		}
 		
-		switch (*it) { // parse early exit and sign spec
-			case '}':
-				return;
-
-				break;
-
+		switch (*it) { // Parse early exit and sign spec
 			case '+':
 			case '-':
 			case ' ':
@@ -92,6 +85,9 @@ public:
 				++it;
 
 				break;
+			
+			case '}':
+				return;
 		}
 
 		if (*it == '#') {
@@ -104,9 +100,9 @@ public:
 			++it;
 		}
 
-		// don't check the results here because it's optional anyways
+		// Don't check the results here because it's optional anyways
 
-		switch (*it) { // parse minimum width and precision
+		switch (*it) { // Parse minimum width and precision
 			case '{': {
 				std::size_t index = context.fieldOptions().fieldIndex;
 				
@@ -121,17 +117,17 @@ public:
 				break;
 			}
 
-			default: 
-				if (auto fcRes = fromChars(it, end, width); *fcRes.ptr == '.') {
+			default: {
+				auto fcRes = fromChars(it, end, width);
+				
+				if (*fcRes.ptr == '.')
 					fcRes = fromChars(fcRes.ptr + 1, end, precision);
 
-					it = fcRes.ptr;
-				}
-
-				break;
+				it = fcRes.ptr;
+			}
 		}
 		
-		// put the type format into a string view for the formatter to deal with
+		// Put the type format into a string view for the formatter to deal with
 		typeFormat = BasicStringView<CharTy>(it, end);
 	}
 
@@ -174,7 +170,7 @@ public:
 		auto it = context.fieldOptions().formatSpec.begin();
 		auto end = context.fieldOptions().formatSpec.end();
 
-		switch (*it) { // parse early exit end alignment spec
+		switch (*it) { // Parse early exit end alignment spec
 			case '}':
 				return;
 
@@ -215,7 +211,7 @@ public:
 		}
 
 
-		switch (*it) { // parse minimum width
+		switch (*it) { // Parse minimum width
 			case '{': {
 				std::size_t index = context.fieldOptions().fieldIndex;
 				
@@ -236,12 +232,12 @@ public:
 				break;
 		}
 
-		if (*it == 'n') { // closing brackets options
+		if (*it == 'n') { // Closing brackets options
 			brackets = false;
 			++it;
 		}
 
-		switch (*it) { // parse range type and early exit
+		switch (*it) { // Parse range type and early exit
 			case '}':
 				return;
 

@@ -26,7 +26,7 @@ namespace lsd {
 
 namespace detail {
 
-// string formatter implementation
+// String formatter implementation
 
 template <class CharTy> struct StringFormatter {
 	using char_type = CharTy;
@@ -42,8 +42,7 @@ template <class CharTy> struct StringFormatter {
 
 		switch (spec.align) {
 			case '<':
-				if (inserter.done()) return;
-				writeToOutput<StringCharTy>(value, length, inserter, spec.typeFormat.empty() ? '\0' : spec.typeFormat[0]);
+				if (!writeToOutput<StringCharTy>(value, length, inserter)) return;
 
 				for (auto count = spec.width; !inserter.done() && count > length; count--) 
 					inserter = spec.fillChr;
@@ -51,10 +50,12 @@ template <class CharTy> struct StringFormatter {
 				break;
 
 			case '>':
-				for (auto count = spec.width; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; count > length; count--) {
+					if (inserter.done()) return;
 					inserter = spec.fillChr;
+				}
 
-				if (!inserter.done()) writeToOutput<StringCharTy>(value, length, inserter, spec.typeFormat.empty() ? '\0' : spec.typeFormat[0]);
+				writeToOutput<StringCharTy>(value, length, inserter);
 
 				break;
 
@@ -63,105 +64,48 @@ template <class CharTy> struct StringFormatter {
 					auto fillc = spec.width - length;
 					auto half = fillc / 2;
 					
-					for (auto count = fillc - half; !inserter.done() && count > 0; count--) inserter = spec.fillChr;
+					for (auto count = fillc - half; count > 0; count--) {
+						if (inserter.done()) return;
+						inserter = spec.fillChr;
+					}
 
-					if (inserter.done()) return;
-					writeToOutput<StringCharTy>(value, length, inserter, spec.typeFormat.empty() ? '\0' : spec.typeFormat[0]);
+					if (!writeToOutput<StringCharTy>(value, length, inserter)) return;
 
-					for (; !inserter.done() && half > 0; half--) inserter = spec.fillChr;
-				} else {
-					if (inserter.done()) return;
-					writeToOutput<StringCharTy>(value, length, inserter, spec.typeFormat.empty() ? '\0' : spec.typeFormat[0]);
-				}
-
-				break;
+					for (; half > 0; half--) {
+						if (inserter.done()) return;
+						inserter = spec.fillChr;
+					}
+				} else writeToOutput<StringCharTy>(value, length, inserter);
 		}
 	}
 
 private:
-	template <class StringCharTy> static void writeToOutput(
+	template <class StringCharTy> static bool writeToOutput(
 		StringCharTy* data,
 		std::size_t length, 
-		back_inserter& inserter, 
-		char_type typeOptions) {
-		switch (typeOptions) {
-			case '?':
-				for (std::size_t i = 0; !inserter.done() && i < length; i++) {
-					auto c = data[i];
-
-					switch (c) {
-						case '\t':
-							inserter = '\\';
-							if (inserter.done()) return;
-							inserter = 't';
-
-							break;
-
-						case '\n':
-							inserter = '\\';
-							if (inserter.done()) return;
-							inserter = 'n';
-
-							break;
-
-						case '\r':
-							inserter = '\\';
-							if (inserter.done()) return;
-							inserter = 'r';
-
-							break;
-
-						case '\"':
-							inserter = '\\';
-							if (inserter.done()) return;
-							inserter = '\"';
-
-							break;
-
-						case '\'':
-							inserter = '\\';
-							if (inserter.done()) return;
-							inserter = '\'';
-
-							break;
-
-						case '\\':
-							inserter = '\\';
-							if (inserter.done()) return;
-							inserter = '\\';
-
-							break;
-
-						default:
-							inserter = c;
-
-							break;
-					}
-				}
-
-				break;
-
-			default:
-				for (std::size_t i = 0; !inserter.done() && i < length; i++) inserter = data[i];
-
-				break;
+		back_inserter& inserter) {
+		for (std::size_t i = 0; i < length; i++) {
+			if (inserter.done()) return false;
+			inserter = data[i];
 		}
+
+		return true;
 	}
 };
 
 } // namespace detail
 
 
-// string formatters
+// String formatters
 
 template <class CharTy> struct Formatter<CharTy*, CharTy> {
 	void format(CharTy* value, BasicFormatContext<CharTy>& context) {
-		detail::StringFormatter<CharTy>::template format<CharTy>(value, std::strlen(value), context);
+		detail::StringFormatter<CharTy>::template format<CharTy>(value, stringLen(value), context);
 	}
 };
 template <class CharTy> struct Formatter<const CharTy*, CharTy> {
 	void format(const CharTy* value, BasicFormatContext<CharTy>& context) {
-		detail::StringFormatter<CharTy>::template format<const CharTy>(value, std::strlen(value), context);
+		detail::StringFormatter<CharTy>::template format<const CharTy>(value, stringLen(value), context);
 	}
 };
 

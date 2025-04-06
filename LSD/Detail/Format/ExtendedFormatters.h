@@ -24,7 +24,7 @@
 
 namespace lsd {
 
-// container formatter
+// Container formatter
 template <IteratableContainer ContainerType, class CharTy> struct Formatter<ContainerType, CharTy> {
 public:
 	using value_type = ContainerType;
@@ -45,8 +45,7 @@ public:
 
 		switch (spec.align) {
 			case '<':
-				if (inserter.done()) return;
-				writeResultToOutput(result, inserter);
+				if (!writeToOutput(result, inserter)) return;
 
 				for (auto count = spec.width; !inserter.done() && count > result.size(); count--) 
 					inserter = spec.fillChr;
@@ -54,10 +53,12 @@ public:
 				break;
 
 			case '>':
-				for (auto count = spec.width; !inserter.done() && count > result.size(); count--) 
-						inserter = spec.fillChr;
+				for (auto count = spec.width; count > result.size(); count--) {
+					if (inserter.done()) return;
+					inserter = spec.fillChr;
+				}
 
-				if (!inserter.done()) writeResultToOutput(result, inserter);
+				writeToOutput(result, inserter);
 
 				break;
 
@@ -66,18 +67,15 @@ public:
 					auto fillc = spec.width - result.size();
 					auto half = fillc / 2;
 					
-					for (auto count = fillc - half; !inserter.done() && count > 0; count--) inserter = spec.fillChr;
+					for (auto count = fillc - half; count > 0; count--) {
+						if (inserter.done()) return;
+						inserter = spec.fillChr;
+					}
 
-					if (inserter.done()) return;
-					writeResultToOutput(result, inserter);
+					if (!writeToOutput(result, inserter)) return;
 
 					for (; !inserter.done() && half > 0; half--) inserter = spec.fillChr;
-				} else {
-					if (inserter.done()) return;
-					writeToOutput(value, inserter, spec);
-				}
-
-				break;
+				} else writeToOutput(value, inserter, spec);
 		}
 	}
 
@@ -93,23 +91,110 @@ private:
 
 			case detail::RangeType::stringFormat:
 
+
 				break;
 
 			case detail::RangeType::escStringFormat:
 
+
 				break;
+
+			default:
+				
 		}
+
+		return result;
+
+
+
+		/*
+		switch (typeOptions) {
+			case '?':
+				for (std::size_t i = 0; !inserter.done() && i < length; i++) {
+					switch (auto c = data[i]; c) {
+						case '\t':
+							inserter = '\\';
+							if (inserter.done()) return;
+							inserter = 't';
+
+							break;
+
+						case '\n':
+							inserter = '\\';
+							if (inserter.done()) return;
+							inserter = 'n';
+
+							break;
+
+						case '\r':
+							inserter = '\\';
+							if (inserter.done()) return;
+							inserter = 'r';
+
+							break;
+
+						case '\"':
+							inserter = '\\';
+							if (inserter.done()) return;
+							inserter = '\"';
+
+							break;
+
+						case '\'':
+							inserter = '\\';
+							if (inserter.done()) return;
+							inserter = '\'';
+
+							break;
+
+						case '\\':
+							if (++i < length) {
+								if (inserter.done()) return;
+
+								switch (c = data[i]; c) {
+									case 't': inserter = '\t'; break;
+									case 'n': inserter = '\n'; break;
+									case 'r': inserter = '\r'; break;
+									case 'b': inserter = '\b'; break;
+									case 'f': inserter = '\f'; break;
+									case 'a': inserter = '\a'; break;
+									case 'v': inserter = '\v'; break;
+									case '\\': inserter = '\\'; break;
+									case '\'': inserter = '\''; break;
+									case '\"': inserter = '\"'; break;
+									default: inserter = 'c';
+								}
+							}
+
+							break;
+
+						default:
+							inserter = c;
+					}
+				}
+
+				break;
+
+			default:
+				for (std::size_t i = 0; !inserter.done() && i < length; i++) inserter = data[i];
+		}
+		*/
 	}
 	void writeElement(string_type& result, const typename value_type::value_type& elem, const elem_format_spec& spec) {
 
 	}
 
-	void writeResultToOutput(const string_type& result, back_inserter& inserter) {
+	bool writeToOutput(const string_type& result, back_inserter& inserter) {
+		for (auto c : result) {
+			if (!inserter.done()) return false;
+			inserter = c;
+		}
 
+		return true;
 	}
 };
 
-// special type erased argument store formatters
+// Special type erased argument store formatters
 
 template <class CharTy> struct Formatter<detail::TypeErasedFormatArg<BasicFormatContext<CharTy>>, CharTy> {
 	void format(

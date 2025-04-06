@@ -26,7 +26,7 @@ namespace lsd {
 
 namespace detail {
 
-// basic integral formatter implementation
+// Basic integral formatter implementation
 
 template <std::integral IntegralType, class CharTy> struct IntegralFormatter {
 public:
@@ -44,232 +44,139 @@ public:
 		format_spec spec(context);
 
 		auto& inserter = context.out();
-		auto length = outputLen(value, spec);
+		auto result = generateResult(value, spec);
 
 		switch (spec.align) {
 			case '<':
-				if (inserter.done()) return;
-				writeToOutput(value, inserter, spec);
+				if (!writeToOutput(result, inserter)) return;
 
-				for (auto count = spec.width; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; count > result.size(); count--) 
 					inserter = spec.fillChr;
 
 				break;
 
 			case '>':
-				for (auto count = spec.width; !inserter.done() && count > length; count--) 
-						inserter = spec.fillChr;
+				for (auto count = spec.width; count > result.size(); count--) {
+					if (inserter.done()) return;
+					inserter = spec.fillChr;
+				}
 
-				if (!inserter.done()) writeToOutput(value, inserter, spec);
+				writeToOutput(result, inserter);
 
 				break;
 
 			case '^':
-				if (spec.width > length) {
-					auto fillc = spec.width - length;
+				if (spec.width > result.size()) {
+					auto fillc = spec.width - result.size();
 					auto half = fillc / 2;
 					
-					for (auto count = fillc - half; !inserter.done() && count > 0; count--) inserter = spec.fillChr;
+					for (auto count = fillc - half; count > 0; count--) {
+						if (inserter.done()) return;
+						inserter = spec.fillChr;
+					}
 
-					if (inserter.done()) return;
-					writeToOutput(value, inserter, spec);
+					if (!writeToOutput(result, inserter)) return;
 
 					for (; !inserter.done() && half > 0; half--) inserter = spec.fillChr;
-				} else {
-					if (inserter.done()) return;
-					writeToOutput(value, inserter, spec);
-				}
-
-				break;
+				} else writeToOutput(result, inserter);
 		}
 	}
 
 private:
-	// output length calculation
-
-	static constexpr std::size_t outputLen(value_type value, const format_spec& spec) {
+	static string_type generateResult(value_type value, const format_spec& spec) {
 		if (spec.typeFormat.empty()) {
-			if constexpr (std::same_as<value_type, bool>) return value ? 4 : 5;
-			else if constexpr (std::same_as<value_type, char> || std::same_as<value_type, wchar_t>) return 1;
-			else return decNumLen(value) + signLen(value, spec.sign);
-		} else {
-			switch (spec.typeFormat[0]) {
-				case 'b':
-				case 'B':
-					return numLen(value, 2) + signLen(value, spec.sign) + 2;
-
-					break;
-
-				case 'x':
-				case 'X':
-					return numLen(value, 16) + signLen(value, spec.sign) + 2;
-
-					break;
-				
-				case 'o':
-					return numLen(value, 8) + signLen(value, spec.sign) + 2;
-
-					break;
-
-				case 'd':
-					return decNumLen(value) + signLen(value, spec.sign);
-
-					break;
-				
-				case 's':
-					if constexpr (std::same_as<value_type, bool>) return value ? 4 : 5;
-
-					break;
-
-				case 'c':
-					if constexpr (!std::same_as<value_type, bool>) return 1;
-
-					break;
-			}
-		}
-
-		return 0;
-	}
-	static constexpr std::size_t signLen(value_type value, char_type sign) {
-		switch (sign) {
-			case '-':
-				if (value < 0) return 1;
-				else return 0;
-
-				break;
-
-			case '+':
-			case ' ':
-				return 1;
-
-				break;
-		}
-
-		return 0;
-	}
-
-	// output to the iterator
-
-	static void writeToOutput(value_type value, back_inserter& inserter, const format_spec& spec) {
-		if (spec.typeFormat.empty()) {
-			if constexpr (std::same_as<value_type, bool>) outputBoolValue(value, inserter);
-			else if constexpr (std::same_as<value_type, char> || std::same_as<value_type, wchar_t>) inserter = value;
-			else outputNumberValue(value, inserter, 10, true, spec.sign, false, { });
+			if constexpr (std::same_as<value_type, bool>)
+				return boolResult(value);
+			else if constexpr (std::same_as<value_type, char> || std::same_as<value_type, wchar_t>)
+				return string_type(1, value);
+			else 
+				return numberResult(value, 10, true, spec.sign, false, { });
 		} else {
 			switch (spec.typeFormat[0]) {
 				case 'b':
 					if constexpr (std::is_same_v<char_type, char>)
-						outputNumberValue(value, inserter, 2, true, spec.sign, spec.alternateForm, "0b");
+						return numberResult(value, 2, true, spec.sign, spec.alternateForm, "b0");
 					else
-						outputNumberValue(value, inserter, 2, true, spec.sign, spec.alternateForm, L"0b");
-
-					break;
+						return numberResult(value, 2, true, spec.sign, spec.alternateForm, L"b0");
 
 				case 'B':
 					if constexpr (std::is_same_v<char_type, char>)
-						outputNumberValue(value, inserter, 2, false, spec.sign, spec.alternateForm, "0B");
+						return numberResult(value, 2, false, spec.sign, spec.alternateForm, "B0");
 					else
-						outputNumberValue(value, inserter, 2, false, spec.sign, spec.alternateForm, L"0B");
-
-					break;
+						return numberResult(value, 2, false, spec.sign, spec.alternateForm, L"B0");
 
 				case 'x':
 					if constexpr (std::is_same_v<char_type, char>)
-						outputNumberValue(value, inserter, 16, true, spec.sign, spec.alternateForm, "0x");
+						return numberResult(value, 16, true, spec.sign, spec.alternateForm, "x0");
 					else
-						outputNumberValue(value, inserter, 16, true, spec.sign, spec.alternateForm, L"0x");
-
-					break;
+						return numberResult(value, 16, true, spec.sign, spec.alternateForm, L"x0");
 
 				case 'X':
 					if constexpr (std::is_same_v<char_type, char>)
-						outputNumberValue(value, inserter, 16, false, spec.sign, spec.alternateForm, "0X");
+						return numberResult(value, 16, false, spec.sign, spec.alternateForm, "X0");
 					else
-						outputNumberValue(value, inserter, 16, false, spec.sign, spec.alternateForm, L"0X");
-
-					break;
+						return numberResult(value, 16, false, spec.sign, spec.alternateForm, L"X0");
 
 				case 'o':
 					if constexpr (std::is_same_v<char_type, char>)
-						outputNumberValue(value, inserter, 8, true, spec.sign, spec.alternateForm, "0o");
+						return numberResult(value, 8, true, spec.sign, spec.alternateForm, "o0");
 					else
-						outputNumberValue(value, inserter, 8, true, spec.sign, spec.alternateForm, L"0o");
+						return numberResult(value, 8, true, spec.sign, spec.alternateForm, L"o0");
 
-					break;
-
-				case 'O': // extended non standard capital octal formatting, doesn't have much use
+				case 'O': // Extended non standard capital octal formatting, doesn't have much use
 					if constexpr (std::is_same_v<char_type, char>)
-						outputNumberValue(value, inserter, 8, false, spec.sign, spec.alternateForm, "0O");
+						return numberResult(value, 8, false, spec.sign, spec.alternateForm, "O0");
 					else
-						outputNumberValue(value, inserter, 8, false, spec.sign, spec.alternateForm, L"0O");
-
-					break;
+						return numberResult(value, 8, false, spec.sign, spec.alternateForm, L"O0");
 
 				case 'd':
-					outputNumberValue(value, inserter, 10, true, spec.sign, false, { });
-
-					break;
+					return numberResult(value, 10, true, spec.sign, false, { });
 
 				case 's':
-					if constexpr (!std::is_same_v<value_type, bool>) outputBoolValue(value, inserter);
-
-					break;
+					if constexpr (!std::is_same_v<value_type, bool>) return boolResult(value);
 
 				case 'c':
-					if constexpr (std::is_same_v<value_type, char> || std::is_same_v<value_type, wchar_t>) inserter = value;
-					else if constexpr (!std::is_same_v<value_type, bool>) inserter = static_cast<char_type>(value);
-
-					break;
+					if constexpr (std::is_same_v<value_type, char> || std::is_same_v<value_type, wchar_t>)
+						return string_type(1, value);
+					else if constexpr (!std::is_same_v<value_type, bool>)
+						return string_type(1, static_cast<char_type>(value));
 			}
 		}
+
+		return string_type();
 	}
-	static void outputNumberValue(
+
+	static string_type numberResult(
 		value_type value,
-		back_inserter& inserter,
 		std::size_t base,
 		bool lowerCase,
 		char_type sign,
 		bool alternateForm,
 		view_type prefix
 	) {
-		// first handle prefixes
+		string_type result;
 
+		// Handle the sign character first
+		char_type sig = '\0';
 		switch (sign) {
 			case '+':
-				if (value < 0) inserter = '-';
-				if (value >= 0) inserter = '+';
+				if (value < 0) sig = '-';
+				else if (value >= 0) sig = '+';
 
 				break;
 			
 			case '-':
-				if (value < 0) inserter = '-';
+				if (value < 0) sig = '-';
 			
 				break;
 			
 			case ' ':
-				if (value < 0) inserter = '-';
-				if (value >= 0) inserter = ' ';
-			
-				break;
+				if (value < 0) sig = '-';
+				else if (value >= 0) sig = ' ';
 		}
 
-		if (!inserter.done()) {
-			if (alternateForm) {
-				inserter = prefix[0]; // techinically unsafe, but out of bounds won't happen no matter what
-
-				if (!inserter.done()) inserter = prefix[1];
-				else return;
-
-				if (inserter.done()) return;
-			}
-		} else return;
-
-
 		// now handle the number itself
-
-		string_type num;
-
-		if (value) {
+		if (value != 0) {
 			if (value < 0) value *= -1;
 
 			std::conditional_t<std::is_same_v<char_type, char>, const char*, const wchar_t*> digits { };
@@ -277,57 +184,54 @@ private:
 			else digits = (lowerCase ? wDigitsLow : wDigitsUp);
 
 			while (value) {
-				num.pushBack(digits[value % base]);
+				result.pushBack(digits[value % base]);
 				value /= base;
 			}
-		} else num.pushBack('0');
+		} else result.pushBack('0');
 
-		// write the number to the output
-		for (auto it = num.rbegin(); it != num.rend() && !inserter.done(); it++) inserter = *it;
+		// Add the prefixes last
+		result += prefix;
+		if (sig != '\0') result.pushBack(sig);
+
+		return result;
 	}
-	static void outputBoolValue(bool value, back_inserter& inserter) {
-		// no first done check, since it was already checked in the format function
 
-		if (value) {
-			inserter = 't';
-			if (inserter.done()) return;
-			inserter = 'r';
-			if (inserter.done()) return;
-			inserter = 'u';
-			if (inserter.done()) return;
-			inserter = 'e';
-		} else {
-			inserter = 'f';
-			if (!inserter.done()) return;
-			inserter = 'a';
-			if (!inserter.done()) return;
-			inserter = 'l';
-			if (!inserter.done()) return;
-			inserter = 's';
-			if (!inserter.done()) return;
-			inserter = 'e';
+	static string_type boolResult(bool value) {
+		if constexpr (std::is_same_v<char_type, char>)
+			return value ? "eurt" : "eslaf";
+		else 
+			return value ? L"eurt" : L"eslaf";
+	}
+
+
+	static bool writeToOutput(const string_type& result, back_inserter& inserter) {
+		for (auto it = result.rbegin(); it != result.rend(); it++) {
+			if (inserter.done()) return false;
+			inserter = *it;
 		}
+
+		return true;
 	}
 };
 
 } // namespace detail
 
 
-// character formatters
+// Character formatters
 
 template <class CharTy> struct Formatter<char, CharTy> {
 	void format(char c, BasicFormatContext<CharTy>& context) {
-		// detail::IntegralFormatter<char, CharTy>::format(c, inserter, spec);
+		detail::IntegralFormatter<char, CharTy>::format(c, context);
 	}
 };
 template <> struct Formatter<wchar_t, wchar_t> {
 	void format(wchar_t c, WFormatContext& context) {
-		// detail::IntegralFormatter<wchar_t, wchar_t>::format(c, inserter, spec);
+		detail::IntegralFormatter<wchar_t, wchar_t>::format(c, context);
 	}
 };
 
 
-// bool formatter
+// Bool formatter
 template <class CharTy> struct Formatter<bool, CharTy> {
 	void format(bool value, BasicFormatContext<CharTy>& context) {
 		detail::IntegralFormatter<bool, CharTy>::format(value, context);
@@ -335,7 +239,7 @@ template <class CharTy> struct Formatter<bool, CharTy> {
 };
 
 
-// integral formatters
+// Integral formatters
 
 template <class CharTy> struct Formatter<short, CharTy> {
 	void format(short value, BasicFormatContext<CharTy>& context) {

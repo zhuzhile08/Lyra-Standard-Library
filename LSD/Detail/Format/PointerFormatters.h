@@ -26,7 +26,7 @@ namespace lsd {
 
 namespace detail {
 
-// pointer formatter implementation
+// Pointer formatter implementation
 
 template <class CharTy> struct PointerFormatter {
 	using value_type = std::uintptr_t;
@@ -48,19 +48,20 @@ template <class CharTy> struct PointerFormatter {
 
 		switch (spec.align) {
 			case '<':
-				if (inserter.done()) return;
-				writeToOutput(value, inserter, spec);
+				if (!writeToOutput(value, inserter, spec)) return;
 
-				for (auto count = spec.width; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; count > length; count--) 
 					inserter = spec.fillChr;
 
 				break;
 
 			case '>':
-				for (auto count = spec.width; !inserter.done() && count > length; count--) 
-						inserter = spec.fillChr;
+				for (auto count = spec.width; count > length; count--) {
+					if (inserter.done()) return;
+					inserter = spec.fillChr;
+				}
 
-				if (!inserter.done()) writeToOutput(value, inserter, spec);
+				writeToOutput(value, inserter, spec);
 
 				break;
 
@@ -69,54 +70,45 @@ template <class CharTy> struct PointerFormatter {
 					auto fillc = spec.width - length;
 					auto half = fillc / 2;
 					
-					for (auto count = fillc - half; !inserter.done() && count > 0; count--) inserter = spec.fillChr;
+					for (auto count = fillc - half; count > 0; count--) {
+						if (inserter.done()) return;
+						inserter = spec.fillChr;
+					}
 
-					if (inserter.done()) return;
-					writeToOutput(value, inserter, spec);
+					if (!writeToOutput(value, inserter, spec)) return;
 
 					for (; !inserter.done() && half > 0; half--) inserter = spec.fillChr;
-				} else {
-					if (inserter.done()) return;
-					writeToOutput(value, inserter, spec);
-				}
-
-				break;
+				} else writeToOutput(value, inserter, spec);
 		}
 	}
 
 private:
-	// output to the iterator
-
-	static void writeToOutput(value_type value, back_inserter& inserter, const format_spec& spec) {
-		if (spec.typeFormat.empty()) outputNumberValue(value, inserter, true);
+	static bool writeToOutput(value_type value, back_inserter& inserter, const format_spec& spec) {
+		if (spec.typeFormat.empty()) return outputNumberValue(value, inserter, true);
 		else {
 			switch (spec.typeFormat[0]) {
 				case 'P':
-					outputNumberValue(value, inserter, false);
-
-					break;
+					return outputNumberValue(value, inserter, false);
 
 				case 'p':
-					outputNumberValue(value, inserter, true);
-
-					break;
+					return outputNumberValue(value, inserter, true);
 			}
 		}
+
+		return false;
 	}
-	static void outputNumberValue(
+
+	static bool outputNumberValue(
 		value_type value,
 		back_inserter& inserter,
 		bool lowerCase
 	) {
-		// first handle prefixes
-		if (!inserter.done()) {
-			inserter = '0'; // techinically unsafe, but out of bounds won't happen no matter what
+		// First handle prefixes
+		if (inserter.done()) return false;
+		inserter = '0';
 
-			if (!inserter.done()) inserter = (lowerCase ? 'x' : 'X');
-			else return;
-
-			if (inserter.done()) return;
-		} else return;
+		if (inserter.done()) return false;
+		inserter = (lowerCase ? 'x' : 'X');
 
 
 		// now handle the number itself
@@ -136,18 +128,26 @@ private:
 			}
 		}
 
-		// write padding zeros
-		for (auto i = pLength; i > num.size(); i--) inserter = '0';
+		// Write padding zeros
+		for (auto i = pLength; i > num.size(); i--) {
+			if (inserter.done()) return false;
+			inserter = '0';
+		}
 
-		// write the number to the output
-		for (auto it = num.rbegin(); it != num.rend() && !inserter.done(); it++) inserter = *it;
+		// Write the number to the output
+		for (auto it = num.rbegin(); it != num.rend(); it++) {
+			if (inserter.done()) return false;
+			inserter = *it;
+		}
+
+		return true;
 	}
 };
 
 } // namespace detail
 
 
-// pointer formatters
+// Pointer formatters
 
 template <class CharTy> struct Formatter<std::nullptr_t, CharTy> {
 	void format(std::nullptr_t, BasicFormatContext<CharTy>& context) {

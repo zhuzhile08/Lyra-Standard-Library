@@ -85,6 +85,34 @@ template <class TTy, class FTy> struct ValueConditional<false, TTy, FTy> {
 };
 
 
+// String length
+
+template <IteratableContainer Container>
+[[nodiscard]] constexpr std::size_t stringLen(const Container& container) requires std::is_integral_v<typename Container::value_type> {
+	std::size_t siz = 0;
+
+	auto it = std::begin(container);
+	while (it != std::end(container) && *it != '\0') {
+		++siz;
+		++it;
+	}
+
+	return siz;
+}
+
+template <std::integral CharType>
+[[nodiscard]] constexpr std::size_t stringLen(CharType* string) {
+	std::size_t siz = 0;
+
+	while (*string != '\0') {
+		++siz;
+		++string;
+	}
+
+	return siz;
+}
+
+
 // Equal-to helper class
 
 template <class Ty = void> class EqualTo {

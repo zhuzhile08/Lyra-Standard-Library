@@ -28,7 +28,7 @@ namespace lsd {
 
 namespace detail {
 
-// float formatting mode utility
+// Float formatting mode utility
 
 enum class FloatFormatMode {
 	regular,
@@ -36,7 +36,7 @@ enum class FloatFormatMode {
 	fixed
 };
 
-// floating point formatter implementation
+// Floating point formatter implementation
 
 template <std::floating_point FloatType, class CharTy> struct FloatFormatter {
 public:
@@ -53,132 +53,48 @@ public:
 		format_spec spec(context);
 
 		auto& inserter = context.out();
-		auto length = outputLength(value, spec);
+		auto result = generateResult(value, spec);
 
 		switch (spec.align) {
 			case '<':
-				if (inserter.done()) return;
-				writeToOutput(value, inserter, spec);
+				if (!writeToOutput(result, inserter)) return;
 
-				for (auto count = spec.width; !inserter.done() && count > length; count--) 
+				for (auto count = spec.width; !inserter.done() && count > result.size(); count--) 
 					inserter = spec.fillChr;
 
 				break;
 
 			case '>':
-				for (auto count = spec.width; !inserter.done() && count > length; count--) 
-						inserter = spec.fillChr;
+				for (auto count = spec.width; count > result.size(); count--) {
+					if (inserter.done()) return;
+					inserter = spec.fillChr;
+				}
 
-				if (!inserter.done()) writeToOutput(value, inserter, spec);
+				writeToOutput(result, inserter);
 
 				break;
 
 			case '^':
-				if (spec.width > length) {
-					auto fillc = spec.width - length;
+				if (spec.width > result.size()) {
+					auto fillc = spec.width - result.size();
 					auto half = fillc / 2;
 					
-					for (auto count = fillc - half; !inserter.done() && count > 0; count--) inserter = spec.fillChr;
+					for (auto count = fillc - half; count > 0; count--) {
+						if (inserter.done()) return;
+						inserter = spec.fillChr;
+					}
 
-					if (inserter.done()) return;
-					writeToOutput(value, inserter, spec);
+					if (!writeToOutput(result, inserter)) return;
 
 					for (; !inserter.done() && half > 0; half--) inserter = spec.fillChr;
-				} else {
-					if (inserter.done()) return;
-					writeToOutput(value, inserter, spec);
-				}
-
-				break;
+				} else writeToOutput(result, inserter);
 		}
 	}
 
 private:
-	// general calculations
-	static constexpr std::size_t sciExp(value_type value, std::size_t base) {
-		auto logAbs = logn(static_cast<value_type>(base), std::abs(value));
-
-		if (value > 1 || value < -1) return implicitCast<std::size_t>(logAbs);
-		else return implicitCast<std::size_t>(std::abs(logAbs)) + 1;
-	}
-
-	// output length calculation
-
-	static constexpr std::size_t outputLength(value_type value, const format_spec& spec) {
-		if (std::isinf(value) || std::isnan(value)) return 3;
-
-		if (spec.typeFormat.empty()) return signLen(value, spec.sign) + numLen(value, 10) + (spec.alternateForm ? (spec.precision + 1) : fracLen(value, 10, spec.precision, false));
-		else {
-			switch (spec.typeFormat[0]) {
-				case 'a':
-				case 'A':
-					return signLen(value, spec.sign) + 3 + fracLen(value, 16, spec.precision + 1, spec.alternateForm) + sciExpLen(value, 2);
-
-					break;
-
-				case 'e':
-				case 'E':
-					return signLen(value, spec.sign) + 3 + fracLen(value, 10, spec.precision + 1, spec.alternateForm) + sciExpLen(value, 10);
-
-					break;
-				
-				case 'f':
-				case 'F':
-					return signLen(value, spec.sign) + numLen(value, 10) + 1 + spec.precision;
-
-					break;
-
-				case 'g':
-				case 'G':
-					return signLen(value, spec.sign) + numLen(value, 10) + (spec.alternateForm ? (spec.precision + 1) : fracLen(value, 10, spec.precision, false));
-
-					break;
-			}
-		}
-
-		return 0;
-	}
-	static constexpr std::size_t signLen(value_type value, char_type sign) {
-		switch (sign) {
-			case '-':
-				if (value < 0) return 1;
-				else return 0;
-
-				break;
-
-			case '+':
-			case ' ':
-				return 1;
-
-				break;
-		}
-
-		return 0;
-	}
-	static constexpr std::size_t sciExpLen(value_type value, std::size_t base) {
-		return logn(base, sciExp(value, base));
-	}
-	static constexpr std::size_t fracLen(value_type value, std::size_t base, std::size_t precision, bool alternate) {
-		value = std::abs(value);
-		std::size_t l { };
-
-		for (
-			value_type diff { }; 
-			diff > std::numeric_limits<value_type>::epsilon() && precision > 0;
-			l++, value *= base, precision--) {
-			diff = value - std::floor(value);
-		}
-
-		if (l) return ++l;
-		else if (alternate) return 1;
-		else return 0;
-	}
-
-	// output to the iterator
-
-	static void writeToOutput(value_type value, back_inserter& inserter, const format_spec& spec) {
-		// special inf or nan output
-
+	static string_type generateResult(value_type value, const format_spec& spec) {
+		// Special inf or nan output
+		
 		if (auto inf = std::isinf(value), nan = std::isnan(value); inf || nan) {
 			bool up = false;
 
@@ -186,179 +102,175 @@ private:
 				auto c = spec.typeFormat[0];
 				up = (c == 'A' || c == 'E' || c == 'F' || c == 'G');
 			}
-
-			auto str = (inf ? (up ? infUp : infLow) : (up ? nanUp : nanLow));
-
-			inserter = str[0];
-			if (inserter.done()) return;
-			inserter = str[1];
-			if (inserter.done()) return;
-			inserter = str[2];
-
-			return;
+			
+			if constexpr (std::is_same_v<char_type, char>)
+				return (inf ? (up ? "INF" : "inf") : (up ? "NAN" : "nan"));
+			else
+				return (inf ? (up ? L"INF" : L"inf") : (up ? L"NAN" : L"nan"));
 		}
 
-		// format the number
-
-		if (spec.typeFormat.empty()) outputNumberValue(value, inserter, 10, 10, false, spec, FloatFormatMode::regular);
+		if (spec.typeFormat.empty()) return numberResult(value, 10, 10, false, spec, FloatFormatMode::regular);
 		else {
 			switch (spec.typeFormat[0]) {
 				case 'a':
-					outputNumberValue(value, inserter, 16, 2, true, spec, FloatFormatMode::scientific);
-
-					break;
+					return numberResult(value, 16, 2, true, spec, FloatFormatMode::scientific);
 
 				case 'A':
-					outputNumberValue(value, inserter, 16, 2, false, spec, FloatFormatMode::scientific);
-
-					break;
+					return numberResult(value, 16, 2, false, spec, FloatFormatMode::scientific);
 
 				case 'e':
-					outputNumberValue(value, inserter, 10, 10, true, spec, FloatFormatMode::scientific);
-
-					break;
+					return numberResult(value, 10, 10, true, spec, FloatFormatMode::scientific);
 
 				case 'E':
-					outputNumberValue(value, inserter, 10, 10, false, spec, FloatFormatMode::scientific);
-
-					break;
+					return numberResult(value, 10, 10, false, spec, FloatFormatMode::scientific);
 				
 				case 'f':
-					outputNumberValue(value, inserter, 10, 10, true, spec, FloatFormatMode::fixed);
-
-					break;
+					return numberResult(value, 10, 10, true, spec, FloatFormatMode::fixed);
 
 				case 'F':
-					outputNumberValue(value, inserter, 10, 10, false, spec, FloatFormatMode::fixed);
-
-					break;
+					return numberResult(value, 10, 10, false, spec, FloatFormatMode::fixed);
 
 				case 'g':
-					outputNumberValue(value, inserter, 10, 10, true, spec, FloatFormatMode::regular);
-
-					break;
+					return numberResult(value, 10, 10, true, spec, FloatFormatMode::regular);
 
 				case 'G':
-					outputNumberValue(value, inserter, 10, 10, false, spec, FloatFormatMode::regular);
-
-					break;
+					return numberResult(value, 10, 10, false, spec, FloatFormatMode::regular);
 			}
 		}
+
+		return string_type();
 	}
-	static void outputNumberValue(
+
+	static constexpr std::size_t sciExp(value_type value, std::size_t base) {
+		auto logAbs = logn(static_cast<value_type>(base), std::abs(value));
+
+		if (value > 1 || value < -1) return implicitCast<std::size_t>(logAbs);
+		else return implicitCast<std::size_t>(std::abs(logAbs)) + 1;
+	}
+
+	static string_type numberResult(
 		value_type value,
-		back_inserter& inserter,
 		std::size_t numBase,
 		std::size_t expBase,
 		bool lowerCase,
 		const format_spec& spec,
 		FloatFormatMode formatMode
 	) {
-		// first handle prefixes
+		// The number will generated written in reverse
+		string_type result;
 
+		// First, get the sign as a single character
+		char_type sign = '\0';
 		switch (spec.sign) {
 			case '+':
-				if (value < 0) inserter = '-';
-				if (value >= 0) inserter = '+';
+				if (value < 0) sign = '-';
+				else if (value >= 0) sign = '+';
 
 				break;
 			
 			case '-':
-				if (value < 0) inserter = '-';
+				if (value < 0) sign = '-';
 			
 				break;
 			
 			case ' ':
-				if (value < 0) inserter = '-';
-				if (value >= 0) inserter = ' ';
-			
-				break;
+				if (value < 0) sign = '-';
+				else if (value >= 0) sign = ' ';
 		}
-
-		// now handle the number itself
-
-		if (value < 0) value *= -1;
-
-		string_type num;
+		
+		value = std::abs(value);
 
 		std::conditional_t<std::is_same_v<char_type, char>, const char*, const wchar_t*> digits { };
 		if constexpr (std::is_same_v<char_type, char>) digits = (lowerCase ? digitsLow : digitsUp);
 		else digits = (lowerCase ? wDigitsLow : wDigitsUp);
 
-		if (formatMode == FloatFormatMode::scientific) {
-			// write exponent part
+		// Handle the number itself
 
-			auto exp = sciExp(value, expBase);
+		if (formatMode == FloatFormatMode::scientific) {
+			// Write exponent part
+
+			auto exp = 0;
 
 			if (exp > 0) {
 				while (exp > 0) {
-					num.pushBack(digits[static_cast<std::size_t>(exp % numBase)]);
+					result.pushBack(digits[static_cast<std::size_t>(exp % numBase)]);
 					exp /= numBase;
 				}
-			} else num.pushBack('0');
+			} else result.pushBack('0');
 
-			if (value < 1) num.pushBack('-');
-			else num.pushBack('+');
+			if (value < 1) result.pushBack('-');
+			else result.pushBack('+');
 
-			if (numBase == 16) num.pushBack('p');
-			else num.pushBack('e');
+			if (numBase == 16) result.pushBack('p');
+			else result.pushBack('e');
 
 
-			// handle the rest of the number
+			// Handle the rest of the number
 
 			auto numCount = spec.precision + 1;
 
 			auto sci = static_cast<std::size_t>(std::fmod(value, 1) * std::pow(10, numCount));
 
-			// skip zeros
+			// Skip zeros
 			for (; static_cast<std::size_t>(std::fmod(sci, numBase)) == 0; sci /= numBase, numCount--)
 			;
 
-			// write fractional part
+			// Write fractional part
 			for (; numCount > 1; numCount--) {
-				num.pushBack(digits[static_cast<std::size_t>(std::fmod(sci, numBase))]);
+				result.pushBack(digits[static_cast<std::size_t>(std::fmod(sci, numBase))]);
 				sci /= numBase;
 			}
 
-			// write decimal point
-			if (spec.alternateForm || !num.empty()) num.pushBack('.');
+			// Write decimal point
+			if (spec.alternateForm || !result.empty()) result.pushBack('.');
 
-			// write single integer
-			if (value >= 1) num.pushBack(digits[static_cast<std::size_t>(sci)]);
-			else num.pushBack('0');
-		} else {
-			auto fractional = static_cast<std::size_t>(std::fmod(value, 1) * std::pow(10, spec.precision));
+			// Write single integer
+			if (value >= 1) result.pushBack(digits[static_cast<std::size_t>(sci)]);
+			else result.pushBack('0');
+		} else if (formatMode == FloatFormatMode::fixed) {
+			FloatType integral = 0;
+			FloatType fractional = std::modf(value, &integral);
 
-			if (!spec.alternateForm && formatMode == FloatFormatMode::regular) for (; static_cast<std::size_t>(std::fmod(fractional, numBase)) == 0; fractional /= numBase)
-			;
-
-			// write fractional part
-			while (fractional > 0) {
-				num.pushBack(digits[static_cast<std::size_t>(std::fmod(fractional, numBase))]);
+			// Fractional part
+			for (fractional > 0) {
+				result.pushBack(digits[static_cast<std::size_t>(std::fmod(fractional, numBase))]);
 				fractional /= numBase;
 			}
 
-			// write decimal point
-			if (spec.alternateForm || !num.empty()) num.pushBack('.');
+			// Decimal point
+			if (spec.alternateForm || !result.empty()) result.pushBack('.');
 
-			// write integer part
+			// Whole part
 			if (value >= 1) {
 				while (value > 1) {
-					num.pushBack(digits[static_cast<std::size_t>(std::fmod(value, numBase))]);
+					result.pushBack(digits[static_cast<std::size_t>(std::fmod(integral, numBase))]);
 					value /= numBase;
 				}
-			} else num.pushBack('0');
+			} else result.pushBack('0');
+		} else {
+			
 		}
 
-		// write the number to the output
-		for (auto it = num.rbegin(); it != num.rend() && !inserter.done(); it++) inserter = *it;
+		if (sign != '\0') result.pushBack(sign);
+
+		return result;
+	}
+
+
+	static bool writeToOutput(const string_type& result, back_inserter& inserter) {
+		for (auto it = result.rbegin(); it != result.rend(); it++) {
+			if (!inserter.done()) return false;
+			inserter = *it;
+		}
+
+		return true;
 	}
 };
 
 } // namespace detail
 
 
-// floating point formatters
+// Floating point formatters
 
 template <class CharTy> struct Formatter<float, CharTy> {
 	void format(float value, BasicFormatContext<CharTy>& context) {

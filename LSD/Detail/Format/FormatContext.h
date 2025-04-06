@@ -22,7 +22,7 @@
 
 namespace lsd {
 
-// formatting context class
+// Formatting context class
 
 template <class CharTy> class BasicFormatContext {
 public:
@@ -46,10 +46,10 @@ public:
 			switch (*it) {
 				case '{':
 					if (m_formatArgs.size() > 0) {
-						parseReplacementField(it, fmt);
+						if (!parseReplacementField(it, fmt)) {
+							m_outputIt = '{';
+							++it;
 
-						if (!m_fieldOptions.isReplacementField) {
-							m_outputIt = *it;
 							break;
 						}
 
@@ -66,17 +66,21 @@ public:
 								} else formatter_type<arg_type>().format(value, *this);
 							}
 						});
+					} else {
+						m_outputIt = '{';
+						++it;
 					}
 
 					break;
 				
 				case '}':
-					m_outputIt = *++it; // the reason why I don't put an extra switch block here to check for syntax is because the string is already checked for validity
+					m_outputIt = '}'; // The reason why I don't put an extra switch block here to check for syntax is because the string is already checked for validity
+					++it;
+					
 					break;
 
 				default:
 					m_outputIt = *it;
-					break;
 			}
 		}
 	}
@@ -96,21 +100,20 @@ private:
 	constexpr BasicFormatContext& operator=(const BasicFormatContext&) = default;
 	constexpr BasicFormatContext& operator=(BasicFormatContext&&) = default;
 
-	constexpr void parseReplacementField(view_iterator& it, const view_type& fmt) {
+	constexpr bool parseReplacementField(view_iterator& it, const view_type& fmt) {
 		++m_fieldOptions.fieldIndex;
 
 		char_type* helper { };
 		
-		switch (*++it) { // since the second character only has a few valid options
+		switch (*++it) {
 			case '{':
-				m_fieldOptions.isReplacementField = false;
+				it += 3;
 				--m_fieldOptions.fieldIndex;
 
-				return;
+				return false;
 
-				break;
 			case '}':
-				return;
+				return true;
 
 				break;
 
@@ -122,32 +125,30 @@ private:
 
 			default:
 				auto fcRes = fromChars(it, fmt.end(), m_fieldOptions.argumentIndex);
-				// if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Format parameter index not valid!");
+				// If (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Format parameter index not valid!");
 				it = fcRes.ptr;
 
 				if (*it == '[') {
 					fcRes = fromChars(it + 1, fmt.end(), m_fieldOptions.arrayIndex);
-					// if (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Index into format parameter not valid!");
+					// If (fcRes.ec != std::errc { }) throw FormatError("lsd::BasicFormatContext::format(): Index into format parameter not valid!");
 					m_fieldOptions.hasArrayIndex = true;
 					it = fcRes.ptr + 1;
 				}
 
 				if (*it == ':') ++it;
-
-				break;
 		}
 
-		m_fieldOptions.formatSpec = view_type(it, fmt.begin() + fmt.find('}', it - fmt.begin()));
+		auto end = fmt.begin() + fmt.find('}', it - fmt.begin());
+		m_fieldOptions.formatSpec = view_type(it, end);
+		it = end;
 
-		std::basic_format_args<BasicFormatContext<char_type>> args;
+		return true;
 	}
 
 	iterator m_outputIt;
 	format_args m_formatArgs;
 	field_options m_fieldOptions { };
 
-
-	// friend classes
 
 	template <class... FmtArgs> friend String format(FormatString<FmtArgs...>, FmtArgs&&...);
 	template <class... FmtArgs> friend WString format(WFormatString<FmtArgs...>, FmtArgs&&...);

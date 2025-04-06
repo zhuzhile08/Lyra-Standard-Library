@@ -21,7 +21,7 @@
 
 namespace lsd {
 
-// forward declarations
+// Forward declarations
 
 class FormatError;
 
@@ -56,7 +56,7 @@ template <class, class...> class BasicFormatArgStore;
 }
 
 
-// formatting exception
+// Formatting exception
 class FormatError : public std::runtime_error {
 public:
 	FormatError(const lsd::String& message) : std::runtime_error(message.cStr()) {
@@ -76,21 +76,19 @@ public:
 	}
 
 private:
-	lsd::String m_message { "Program terminated with lyra::FormatError: " }; // disregards the standard requirement that the formatting error has to equal the message
+	lsd::String m_message { "Program terminated with lyra::FormatError: " }; // Disregards the standard requirement that the formatting error has to equal the message
 };
 
 
 namespace detail {
 
-// replacement field parsed options
+// Replacement field parsed options
 
 template <class CharTy> struct BasicFieldOptions {
 	using char_type = CharTy;
 
-	bool isReplacementField = true; // false means that the inserted character is just an escaped '{'
-
-	std::size_t fieldIndex = std::numeric_limits<std::size_t>::max(); // index of the current field in the format string
-	std::size_t argumentIndex = 0; // index of the requested formatting argument
+	std::size_t fieldIndex = std::numeric_limits<std::size_t>::max(); // Index of the current field in the format string
+	std::size_t argumentIndex = 0; // Index of the requested formatting argument
 
 	bool hasArrayIndex = false;
 	std::size_t arrayIndex = 0;
@@ -102,22 +100,41 @@ using FieldOptions = BasicFieldOptions<char>;
 using WFieldOptions = BasicFieldOptions<wchar_t>;
 
 
-// type-errased back insert iterater
+// Type-errased back insert iterater
 
 template <class CharTy> class BasicFormatBackInserter {
+private:
+	class Counter {
+	public:
+		template <class Done> Counter(Done&& d, std::size_t count) :
+			m_done(std::forward<Done>(d)),
+			m_count(count) { }
+		constexpr Counter(Counter&&) = default;
+		
+		constexpr bool operator()(void* container) {
+			return m_done(container, m_count);
+		}
+
+	private:
+		bool (*m_done)(void*, std::size_t&);
+
+		std::size_t m_count;
+	};
+
 public:
 	static_assert(std::is_same_v<CharTy, char> || std::is_same_v<CharTy, wchar_t>, "lsd::detail::BasicFormatBackInserter: Format back insert iterator only accepts char and wchar_t as valid types for template argument CharTy!");
 
 	using char_type = CharTy;
 	using container = BasicFormatBackInserter;
 
-	template <class PushBack, class Done> constexpr BasicFormatBackInserter(void* const container, PushBack&& pb, Done&& d) : 
+	template <class PushBack, class Done> constexpr BasicFormatBackInserter(void* const container, PushBack&& pb, Done&& d, std::size_t count = 0) : 
 		m_container(container), 
 		m_pushBack(std::forward<PushBack>(pb)), 
-		m_done(std::forward<Done>(d)) { }
-	constexpr BasicFormatBackInserter(BasicFormatBackInserter&& other) : m_container(other.m_container), m_pushBack(other.m_pushBack), m_done(std::move(other.m_done)) { }
+		m_done(std::forward<Done>(d), count) { }
+	constexpr BasicFormatBackInserter(BasicFormatBackInserter&& other) = default;
+
 	constexpr container& operator=(char_type value) {
-		m_pushBack(m_container, value); // do not check for doneness since the formatter and context does that
+		m_pushBack(m_container, value); // Do not check for doneness since the formatter and context does that
 		return *this;
 	}
 
@@ -125,21 +142,24 @@ public:
 	constexpr container& operator++() { return *this; }
 	constexpr container& operator++(int) { return *this; }
 
+	template <class Container> constexpr Container& get() {
+		return *static_cast<Container*>(m_container);
+	}
 	constexpr bool done() {
 		return m_done(m_container);
 	}
 
 private:
 	void* const m_container;
-	void (*m_pushBack)(void*, const char_type&); // this is not a lsd::Function because it's always stateless
-	Function<bool(void*)> m_done;
+	void (*m_pushBack)(void*, const char_type&);
+	Counter m_done;
 };
 
 using FormatBackInserter = BasicFormatBackInserter<char>;
 using WFormatBackInserter = BasicFormatBackInserter<wchar_t>;
 
 
-// format verifier
+// Format verifier
 
 template <class CharTy, class... Args> class BasicFormatVerifier {
 public:
@@ -170,7 +190,7 @@ using FormatVerifier = BasicFormatVerifier<char>;
 using WFormatVerifier = BasicFormatVerifier<wchar_t>;
 
 
-// runtime checked formatting string type
+// Runtime checked formatting string type
 
 template <class CharTy> struct BasicRuntimeFormatString {
 public:
@@ -196,9 +216,9 @@ using RuntimeFormatString = BasicRuntimeFormatString<char>;
 using WRuntimeFormatString = BasicRuntimeFormatString<wchar_t>;
 
 
-// formatter utility
+// Formatter utility
 
-// utility variables
+// Utility variables
 
 static constexpr auto digitsLow = "0123456789abcdefghijklmnopqrstuvpxyz";
 static constexpr auto digitsUp = "0123456789ABCDEFGHIJKLMNOPQRSTUVPXYZ";
@@ -206,16 +226,10 @@ static constexpr auto digitsUp = "0123456789ABCDEFGHIJKLMNOPQRSTUVPXYZ";
 static constexpr auto wDigitsLow = L"0123456789abcdefghijklmnopqrstuvpxyz";
 static constexpr auto wDigitsUp = L"0123456789ABCDEFGHIJKLMNOPQRSTUVPXYZ";
 
-static constexpr auto infLow = "inf";
-static constexpr auto infUp = "INF";
-
-static constexpr auto nanLow = "nan";
-static constexpr auto nanUp = "NAN";
-
 } // namespace detail
 
 
-// formatting string types
+// Formatting string types
 
 [[nodiscard]] inline detail::RuntimeFormatString runtimeFormat(StringView fmt) noexcept {
 	return detail::RuntimeFormatString(fmt);
@@ -231,7 +245,7 @@ static constexpr auto nanUp = "NAN";
 }
 
 
-// formatting string
+// Formatting string
 
 template <class CharTy, class... Args> struct BasicFormatString {
 public:
