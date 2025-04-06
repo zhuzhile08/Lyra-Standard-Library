@@ -422,7 +422,7 @@ private:
 	pointer m_end { };
 	pointer m_cap { };
 
-	constexpr void smartReserve(size_type size) noexcept {
+	constexpr void smartReserve(size_type size) {
 		auto cap = capacity();
 
 		if (size > cap) {

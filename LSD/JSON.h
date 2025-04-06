@@ -48,7 +48,7 @@ public:
 
 	using key_type = string_type;
 	using key_reference = key_type&;
-	using const_key_reference = const key_reference;
+	using const_key_reference = const key_type&;
 
 	using json_type = BasicJson;
 	using pointer = json_type*;

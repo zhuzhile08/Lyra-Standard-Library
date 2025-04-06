@@ -12,6 +12,9 @@
 #pragma once
 
 #include "Detail/BasicUnorderedDense.h"
+#include "Detail/CoreUtility.h"
+
+#include <memory>
 
 namespace lsd {
 

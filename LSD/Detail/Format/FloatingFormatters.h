@@ -232,7 +232,7 @@ private:
 			FloatType fractional = std::modf(value, &integral);
 
 			// Fractional part
-			for (fractional > 0) {
+			while (fractional > 0) {
 				result.pushBack(digits[static_cast<std::size_t>(std::fmod(fractional, numBase))]);
 				fractional /= numBase;
 			}

@@ -91,7 +91,7 @@ public:
 	}
 
 	constexpr void swap(container& second) noexcept {
-		m_callable.swap(second->m_callable);
+		m_callable.swap(second.m_callable);
 	}
 
 	[[deprecated]] constexpr const std::type_info& standardTargetType() const noexcept {

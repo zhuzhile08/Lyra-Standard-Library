@@ -11,15 +11,10 @@
 
 #pragma once
 
+#include "Detail/BasicUnorderedDense.h"
 #include "Detail/CoreUtility.h"
-#include "Iterators.h"
-#include "Vector.h"
-#include "Hash.h"
-#include "ForwardList.h"
 
-#include <initializer_list>
-#include <functional>
-#include <utility>
+#include <memory>
 
 namespace lsd {
 

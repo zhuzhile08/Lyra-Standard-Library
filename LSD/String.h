@@ -1512,6 +1512,10 @@ template <class C> struct Hash<BasicString<C>> {
 	constexpr std::size_t operator()(const view_type& v) const noexcept {
 		return Hash<view_type>()(v);
 	}
+
+	constexpr std::size_t operator()(const C* str) const noexcept {
+		return Hash<view_type>()(str);
+	}
 };
 
 
