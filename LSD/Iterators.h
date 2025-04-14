@@ -27,10 +27,8 @@ public:
 	using value_type = Ty;
 	using const_value = const value_type;
 	using pointer = value_type*;
-	using const_pointer = const pointer;
 	using pointer_const = const_value*;
 	using reference = value_type&;
-	using const_reference = const_value&;
 
 	using container = Iterator;
 	using container_reference = container&;
@@ -39,6 +37,7 @@ public:
 	constexpr Iterator() noexcept = default;
 	constexpr Iterator(pointer pointer) noexcept : m_pointer(pointer) { }
 	explicit constexpr Iterator(reference reference) noexcept : m_pointer(&reference) { }
+
 
 	constexpr reference operator*() const { return *m_pointer; }
 	constexpr pointer operator->() const noexcept { return m_pointer; }
@@ -100,7 +99,7 @@ public:
 	constexpr explicit operator pointer() noexcept {
 		return m_pointer;
 	}
-	constexpr explicit operator const_pointer() const noexcept {
+	constexpr explicit operator pointer_const() const noexcept {
 		return m_pointer;
 	}
 
@@ -119,10 +118,8 @@ public:
 	using value_type = Ty;
 	using const_value = const value_type;
 	using pointer = value_type*;
-	using const_pointer = const pointer;
 	using pointer_const = const_value*;
 	using reference = value_type&;
-	using const_reference = const_value&;
 
 	using container = ReverseIterator;
 	using container_reference = container&;
@@ -131,6 +128,7 @@ public:
 	constexpr ReverseIterator() noexcept = default;
 	constexpr ReverseIterator(pointer pointer) noexcept : m_pointer(pointer) { }
 	explicit constexpr ReverseIterator(reference reference) noexcept : m_pointer(&reference) { }
+
 
 	constexpr reference operator*() const { return *m_pointer; }
 	constexpr pointer operator->() const noexcept { return m_pointer; }
@@ -192,7 +190,7 @@ public:
 	constexpr explicit operator pointer() noexcept {
 		return m_pointer;
 	}
-	constexpr explicit operator const_pointer() const noexcept {
+	constexpr explicit operator pointer_const() const noexcept {
 		return m_pointer;
 	}
 
@@ -201,54 +199,6 @@ public:
 
 private:
 	pointer m_pointer;
-};
-
-template <class Ty> class ForwardListIterator {
-public:
-	using difference_type = std::ptrdiff_t;
-	using iterator_category = std::forward_iterator_tag;
-
-	using value_type = Ty;
-	using const_value = const value_type;
-	using pointer = value_type*;
-	using const_pointer = const pointer;
-	using reference = value_type&;
-	using const_reference = const_value&;
-
-	using node_base = detail::ForwardListNodeBase;
-	using node_type = detail::ForwardListNode<value_type>;
-	using node_pointer = node_type*;
-
-	using container = ForwardListIterator;
-	using container_reference = container&;
-	using const_container_reference = const container&;
-
-	constexpr ForwardListIterator() noexcept = default;
-	constexpr ForwardListIterator(node_base* pointer) noexcept : m_pointer(pointer) { }
-
-	constexpr reference operator*() const { return static_cast<node_pointer>(m_pointer)->value; }
-	constexpr pointer operator->() const noexcept { return &static_cast<node_pointer>(m_pointer)->value; }
-	constexpr node_base* get() noexcept { return m_pointer; }
-	constexpr const node_base* get() const noexcept { return m_pointer; }
-
-	constexpr container_reference operator++() noexcept { 
-		m_pointer = m_pointer->next; 
-		return *this; 
-	}
-	constexpr container operator++(int) noexcept { 
-		container tmp = *this; 
-		++(*this); 
-		return tmp; 
-	}
-
-	constexpr operator ForwardListIterator<const_value>() const noexcept {
-		return m_pointer;
-	}
-
-	friend constexpr bool operator==(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer == second.m_pointer; }
-
-private:
-	node_base* m_pointer;
 };
 
 
@@ -267,7 +217,7 @@ public:
 	using reference = void;
 	using container_type = Ty;
 
-	constexpr explicit BackInsertIterator(container_type& c) : m_container(&c) { }
+	constexpr explicit BackInsertIterator(container_type& c) noexcept : m_container(&c) { }
 
 	constexpr BackInsertIterator& operator=(const typename container_type::value_type& value) {
 		m_container->push_back(value);

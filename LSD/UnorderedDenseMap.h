@@ -2,10 +2,9 @@
  * @file UnorderedDenseMap.h
  * @author Zhile Zhu (zhuzhile08@gmail.com)
  * 
- * @brief Unordered Sparse Map implementation
+ * @brief Unordered dense map
  * 
  * @date 2024-02-24
- * 
  * @copyright Copyright (c) 2024
  *************************/
 
@@ -24,6 +23,6 @@ template <
 	class Hash = Hash<Key>,
 	class Equal = EqualTo<Key>,
 	class Alloc = std::allocator<std::pair<Key, Ty>>
-> using UnorderedDenseMap = detail::BasicUnorderedDense<Key, Ty, Hash, Equal, Alloc>;
+> using UnorderedDenseMap = unordered_dense::BasicUnorderedDense<Key, Ty, Hash, Equal, Alloc>;
 
 } // namespace lsd

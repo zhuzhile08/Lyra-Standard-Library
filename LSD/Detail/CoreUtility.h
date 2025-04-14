@@ -48,7 +48,7 @@ template <class Alloc> inline constexpr bool allocatorPropagationNecessary(const
 	using traits_type = std::allocator_traits<Alloc>;
 
 	if constexpr (traits_type::is_always_equal::value) return false;
-	else return traits_type::propagate_on_container_move_assignment::value && !(a1 == a2);
+	else return traits_type::propagate_on_container_move_assignment::value;
 }
 
 } // namespace detail

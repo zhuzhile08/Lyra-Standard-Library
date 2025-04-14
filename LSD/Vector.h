@@ -109,20 +109,17 @@ public:
 		return *this;
 	}
 	constexpr container_reference operator=(container_rvreference other) noexcept {
-		if (detail::allocatorPropagationNecessary(other.m_alloc, m_alloc)) {
+		if constexpr (detail::allocatorPropagationNecessary(other.m_alloc, m_alloc)) {
 			clear();
 			moveAssign(other.m_begin, other.m_end, other.m_alloc);
-		} else {
-			std::swap(other.m_alloc, m_alloc);
-			std::swap(other.m_begin, m_begin);
-			std::swap(other.m_end, m_end);
-			std::swap(other.m_cap, m_cap);
-		}
+		} else swap(other);
 
 		return *this;
 	}
 	constexpr container_reference operator=(init_list ilist) {
+		clear();
 		assign(ilist.begin(), ilist.end());
+
 		return *this;
 	}
 
@@ -148,6 +145,9 @@ public:
 		std::swap(m_begin, other.m_begin);
 		std::swap(m_end, other.m_end);
 		std::swap(m_cap, other.m_cap);
+
+		if constexpr (detail::allocatorPropagationNecessary(other.m_alloc, m_alloc))
+			std::swap(m_alloc, other.m_alloc);
 	}
 
 	[[nodiscard]] constexpr iterator begin() noexcept {
@@ -368,7 +368,7 @@ public:
 		return m_end - m_begin;
 	}
 	[[nodiscard]] constexpr size_type maxSize() const noexcept {
-		return std::min<size_type>(-1, allocator_traits::max_size(m_alloc));
+		return allocator_traits::max_size(m_alloc);
 	}
 	[[deprecated]] [[nodiscard]] constexpr size_type max_size() const noexcept {
 		return maxSize();

@@ -1128,7 +1128,7 @@ public:
 		return smallStringMode() ? smallStringSize() : (m_long.end - m_long.begin);
 	}
 	[[nodiscard]] constexpr size_type maxSize() const noexcept {
-		return std::min<size_type>(-1, allocator_traits::max_size(m_alloc));
+		return allocator_traits::max_size(m_alloc);
 	}
 	[[deprecated]] [[nodiscard]] constexpr size_type max_size() const noexcept {
 		return maxSize();

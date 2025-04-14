@@ -117,7 +117,7 @@ template <class Ty, std::size_t Size> struct Array {
 		return Size;
 	}
 	[[nodiscard]] constexpr size_type maxSize() const noexcept {
-		return std::numeric_limits<size_type>::max();
+		return std::numeric_limits<size_type>::max() / sizeof(value_type);
 	}
 	[[nodiscard]] [[deprecated]] constexpr size_type max_size() const noexcept {
 		return maxSize();

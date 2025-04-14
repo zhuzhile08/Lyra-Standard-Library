@@ -2,10 +2,9 @@
  * @file UnorderedDenseSet.h
  * @author Zhile Zhu (zhuzhile08@gmail.com)
  * 
- * @brief Unordered Sparse Set implementation
+ * @brief Unordered dense set
  * 
  * @date 2024-02-24
- * 
  * @copyright Copyright (c) 2024
  *************************/
 
@@ -23,6 +22,6 @@ template <
 	class Hash = Hash<Key>,
 	class Equal = EqualTo<Key>,
 	class Alloc = std::allocator<Key>
-> using UnorderedDenseSet = detail::BasicUnorderedDense<Key, void, Hash, Equal, Alloc>;
+> using UnorderedDenseSet = unordered_dense::BasicUnorderedDense<Key, void, Hash, Equal, Alloc>;
 
 } // namespace lsd
