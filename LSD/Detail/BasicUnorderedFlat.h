@@ -297,7 +297,7 @@ private:
 			m_metadata += metadata_group::groupSize;
 			m_pointer += metadata_group::bucketSize;
 
-			occupied = metadata->matchOccupied();
+			occupied = (++metadata)->matchOccupied();
 		}
 
 		auto emptyCount = std::countr_zero(occupied);
@@ -359,28 +359,7 @@ public:
 	using container_rvreference = container&&;
 	using init_list = std::initializer_list<value_type>;
 
-private:
-	static constexpr lsd::Array<size_type, 64> powersOfTwo {
-		size_type { 1 } << 0, size_type { 1 } << 1, size_type { 1 } << 2, size_type { 1 } << 3,
-		size_type { 1 } << 4, size_type { 1 } << 5, size_type { 1 } << 6, size_type { 1 } << 7,
-		size_type { 1 } << 8, size_type { 1 } << 9, size_type { 1 } << 10, size_type { 1 } << 11,
-		size_type { 1 } << 12, size_type { 1 } << 13, size_type { 1 } << 14, size_type { 1 } << 15,
-		size_type { 1 } << 16, size_type { 1 } << 17, size_type { 1 } << 18, size_type { 1 } << 19,
-		size_type { 1 } << 20, size_type { 1 } << 21, size_type { 1 } << 22, size_type { 1 } << 23,
-		size_type { 1 } << 24, size_type { 1 } << 25, size_type { 1 } << 26, size_type { 1 } << 27,
-		size_type { 1 } << 28, size_type { 1 } << 29, size_type { 1 } << 30, size_type { 1 } << 31,
-		size_type { 1 } << 32, size_type { 1 } << 33, size_type { 1 } << 34, size_type { 1 } << 35,
-		size_type { 1 } << 36, size_type { 1 } << 37, size_type { 1 } << 38, size_type { 1 } << 39,
-		size_type { 1 } << 40, size_type { 1 } << 41, size_type { 1 } << 42, size_type { 1 } << 43,
-		size_type { 1 } << 44, size_type { 1 } << 45, size_type { 1 } << 46, size_type { 1 } << 47,
-		size_type { 1 } << 48, size_type { 1 } << 49, size_type { 1 } << 50, size_type { 1 } << 51,
-		size_type { 1 } << 52, size_type { 1 } << 53, size_type { 1 } << 54, size_type { 1 } << 55,
-		size_type { 1 } << 56, size_type { 1 } << 56, size_type { 1 } << 58, size_type { 1 } << 59,
-		size_type { 1 } << 60, size_type { 1 } << 61, size_type { 1 } << 62, size_type { 1 } << 63
-	};
-
 public:
-
 	// Construction and assignment
 
 	constexpr BasicUnorderedFlat() {
@@ -971,12 +950,12 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
 
-		const auto* metadataIt = m_metadata + bucketIndex;
-		const auto* const begin = metadataIt;
+		for (size_type i = 0; i < m_bucketCount; i++) {
+			auto location = prober(bucketIndex, i);
+			const auto* metadataIt = m_metadata + location;
 
-		do {
 			if (auto match = metadataIt->match(shortHash); match != 0) {
-				auto it = m_array + bucketIndex * 15;
+				auto it = m_array + location * 15;
 
 				do {
 					auto toNext = std::countr_zero(match);
@@ -991,10 +970,7 @@ public:
 			}
 
 			if (!metadataIt->overflowed(shortHash)) return iterator { };
-
-			(bucketIndex += 1) &= (m_bucketCount - 1);
-			metadataIt = m_metadata + bucketIndex;
-		} while (metadataIt != begin);
+		}
 
 		return iterator { };
 	}
@@ -1005,12 +981,12 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
 
-		const auto* metadataIt = m_metadata + bucketIndex;
-		const auto* const begin = metadataIt;
+		for (size_type i = 0; i < m_bucketCount; i++) {
+			auto location = prober(bucketIndex, i);
+			const auto* metadataIt = m_metadata + location;
 
-		do {
 			if (auto match = metadataIt->match(shortHash); match != 0) {
-				const auto* it = m_array + bucketIndex * 15;
+				const auto* it = m_array + location * 15;
 
 				do {
 					auto toNext = std::countr_zero(match);
@@ -1025,10 +1001,7 @@ public:
 			}
 
 			if (!metadataIt->overflowed(shortHash)) return const_iterator { };
-
-			(bucketIndex += 1) &= (m_bucketCount - 1);
-			metadataIt = m_metadata + bucketIndex;
-		} while (metadataIt != begin);
+		}
 
 		return const_iterator { };
 	}
@@ -1067,13 +1040,12 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
 
-		const auto* metadataIt = m_metadata + bucketIndex;
-		const auto* const begin = metadataIt;
-		const auto* const end = m_metadata + m_bucketCount;
+		for (size_type i = 0; i < m_bucketCount; i++) {
+			auto location = prober(bucketIndex, i);
+			const auto* metadataIt = m_metadata + location;
 
-		do {
 			if (auto match = metadataIt->match(shortHash); match != 0) {
-				const auto* it = m_array + bucketIndex * 15;
+				const auto* it = m_array + location * 15;
 
 				do {
 					auto toNext = std::countr_zero(match);
@@ -1086,12 +1058,7 @@ public:
 			}
 
 			if (!metadataIt->overflowed(shortHash)) return false;
-
-			if (++metadataIt == end) {
-				metadataIt = m_metadata;
-				bucketIndex = 0;
-			} else ++bucketIndex;
-		} while (metadataIt != begin);
+		}
 
 		return false;
 	}
@@ -1103,11 +1070,10 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
 
-		const auto* metadataIt = m_metadata + bucketIndex;
-		const auto* const begin = metadataIt;
-		const auto* const end = m_metadata + m_bucketCount;
+		for (size_type i = 0; i < m_bucketCount; i++) {
+			auto location = prober(bucketIndex, i);
+			const auto* metadataIt = m_metadata + location;
 
-		do {
 			if (auto match = metadataIt->match(shortHash); match != 0) {
 				const auto* it = m_array + bucketIndex * 15;
 
@@ -1122,12 +1088,7 @@ public:
 			}
 
 			if (!metadataIt->overflowed(shortHash)) return 0;
-
-			if (++metadataIt == end) {
-				metadataIt = m_metadata;
-				bucketIndex = 0;
-			} else ++bucketIndex;
-		} while (metadataIt != begin);
+		}
 
 		return 0;
 	}
@@ -1271,16 +1232,20 @@ private:
 		else return m_hasher(v.first);
 	}
 
+	constexpr size_type prober(size_type base, size_type index) const noexcept {
+		return (base + (index * (index + 1) >> 1)) & (m_bucketCount - 1);
+	}
+
 
 	template <class K> [[nodiscard]] constexpr iterator find(size_type hash, size_type shortHash, size_type bucketIndex, const K& key) noexcept {
 		if (m_bucketCount == 0) return iterator { };
 
-		const auto* metadataIt = m_metadata + bucketIndex;
-		const auto* const begin = metadataIt;
+		for (size_type i = 0; i < m_bucketCount; i++) {
+			auto location = prober(bucketIndex, i);
+			const auto* metadataIt = m_metadata + location;
 
-		do {
 			if (auto match = metadataIt->match(shortHash); match != 0) {
-				auto it = m_array + bucketIndex * 15;
+				auto it = m_array + location * 15;
 
 				do {
 					auto toNext = std::countr_zero(match);
@@ -1295,10 +1260,7 @@ private:
 			}
 
 			if (!metadataIt->overflowed(shortHash)) return iterator { };
-
-			(bucketIndex += 1) &= (m_bucketCount - 1);
-			metadataIt = m_metadata + bucketIndex;
-		} while (metadataIt != begin);
+		}
 
 		return iterator { };
 	}
@@ -1332,13 +1294,10 @@ private:
 		auto metadataIt = m_metadata + bucketIndex;
 		auto occupied = metadataIt->matchOccupied();
 
-		while (occupied == metadata_group::full) {
+		size_type location = bucketIndex;
+		for (size_type i = 1; occupied == metadata_group::full && i < m_bucketCount; i++) {
 			metadataIt->markOverflow(shortHash);
-			
-			if (metadataIt->isSentinel(metadata_group::sentinelIndex)) {
-				metadataIt = m_metadata;
-				bucketIndex = 0;
-			} else ++metadataIt, ++bucketIndex;
+			metadataIt = m_metadata + (location = prober(bucketIndex, i));
 
 			occupied = metadataIt->matchOccupied();
 		}
@@ -1347,19 +1306,16 @@ private:
 		auto groupIndex = std::countr_one(occupied);
 		metadataIt->insert(groupIndex, shortHash);
 
-		return m_array + bucketIndex * 15 + groupIndex;
+		return m_array + location * 15 + groupIndex;
 	}
 	constexpr iterator insertShortHashAndGetIterator(size_type shortHash, size_type bucketIndex) noexcept {
 		auto metadataIt = m_metadata + bucketIndex;
 		auto occupied = metadataIt->matchOccupied();
 
-		while (occupied == metadata_group::full) {
+		size_type location = bucketIndex;
+		for (size_type i = 1; occupied == metadata_group::full && i < m_bucketCount; i++) {
 			metadataIt->markOverflow(shortHash);
-			
-			if (metadataIt->isSentinel(metadata_group::sentinelIndex)) {
-				metadataIt = m_metadata;
-				bucketIndex = 0;
-			} else ++metadataIt, ++bucketIndex;
+			metadataIt = m_metadata + (location = prober(bucketIndex, i));
 
 			occupied = metadataIt->matchOccupied();
 		}
@@ -1368,36 +1324,36 @@ private:
 		auto groupIndex = std::countr_one(occupied);
 		metadataIt->insert(groupIndex, shortHash);
 
-		return iterator { LSD_UNORDERED_FLAT_TO_BYTE(metadataIt) + groupIndex, m_array + bucketIndex * 15 + groupIndex };
+		return iterator { LSD_UNORDERED_FLAT_TO_BYTE(metadataIt) + groupIndex, m_array + location * 15 + groupIndex };
 	}
 
 
 	constexpr void basicRehash(size_type bucketCount) {
 		if (bucketCount > maxBucketCount()) throw std::length_error("lsd::BasicUnorderedFlat::basicRehash(): Requested size larger than the maximum size of the container!");
+		std::swap(m_bucketCount, bucketCount); // Some functions down the line have m_bucketCount as a dependency
 
-		auto oldMetadata = std::exchange(m_metadata, metadata_allocator_traits::allocate(m_metadataAlloc, bucketCount));
-		auto oldArray = std::exchange(m_array, allocator_traits::allocate(m_alloc, bucketCount * 15));
+		auto oldMetadata = std::exchange(m_metadata, metadata_allocator_traits::allocate(m_metadataAlloc, m_bucketCount));
+		auto oldArray = std::exchange(m_array, allocator_traits::allocate(m_alloc, m_bucketCount * 15));
 
 		// Initialize all metadata groups
-		for (auto metadataIt = m_metadata, end = m_metadata + bucketCount; metadataIt != end; metadataIt++)
+		for (auto metadataIt = m_metadata, end = m_metadata + m_bucketCount; metadataIt != end; metadataIt++)
 			allocator_traits::construct(m_alloc, metadataIt);
 
 		// Set sentinel at end
-		(m_metadata + (bucketCount - 1))->insertSentinel();
+		(m_metadata + (m_bucketCount - 1))->insertSentinel();
 
 		for (auto it = iterator(oldMetadata, oldArray); it.m_pointer != nullptr; it++) {
 			const auto hash = valueToHash(*it);
 			const auto shortHash = metadata_group::hashToMetadata(hash);
 
-			allocator_traits::construct(m_alloc, insertShortHashAndGetRawIt(hash, hash & (bucketCount - 1)), std::move(*it));
+			allocator_traits::construct(m_alloc, insertShortHashAndGetRawIt(shortHash, hash & (m_bucketCount - 1)), std::move(*it));
 			allocator_traits::destroy(m_alloc, it.m_pointer);
 		}
 
-		metadata_allocator_traits::deallocate(m_metadataAlloc, oldMetadata, m_bucketCount);
-		allocator_traits::deallocate(m_alloc, oldArray, m_bucketCount * 15);
-
-		m_bucketCount = bucketCount;
 		m_loadFactor = (maxLFactor * m_bucketCount) * 15;
+
+		metadata_allocator_traits::deallocate(m_metadataAlloc, oldMetadata, bucketCount);
+		allocator_traits::deallocate(m_alloc, oldArray, bucketCount * 15);
 	}
 	constexpr void basicInplaceRehash() {
 		// Reset all overflow bytes
@@ -1416,8 +1372,10 @@ private:
 			if (metadataFromIt != metadataIt) { // Attempts to find a new location for values not in the original bucket
 				metadataFromIt->erase(diff);
 
-				if (auto newIt = insertShortHashAndGetRawIt(hash, bucketIndex); newIt != it)
+				if (auto newIt = insertShortHashAndGetRawIt(shortHash, bucketIndex); newIt != it.m_pointer) {
 					allocator_traits::construct(m_alloc, newIt, std::move(*it));
+					allocator_traits::destroy(m_alloc, it.m_pointer);
+				}
 			}
 		}
 
