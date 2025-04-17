@@ -25,11 +25,9 @@
 #include <type_traits>
 
 
-#define LSD_UNORDERED_FLAT_BUCKET_INDEX(hash) hash & (m_bucketCount - 1)
 #define LSD_UNORDERED_FLAT_TO_BYTE(metadata) reinterpret_cast<metadata_group::byte_pointer>(metadata)
-
 #define LSD_UNORDERED_FLAT_IS_SET constexpr (std::is_void_v<mapped_type>)
-#define LSD_UNORDERED_FLAT_REQUIRES_MAP requires(std::is_void_v<mapped_type>)
+#define LSD_UNORDERED_FLAT_REQUIRES_MAP requires(!std::is_void_v<mapped_type>)
 #define LSD_UNORDERED_FLAT_SET_OR_MAP(set, map) [&]() { if constexpr(std::is_void_v<mapped_type>) return set; else return map; }();
 
 
@@ -99,7 +97,7 @@ public:
 		basicInsert(15, available);
 	}
 	constexpr bool overflowed(size_type hash) const noexcept {
-		return !(reinterpret_cast<const uint16_t*>(m_metadata.data())[hash & 7] & 0x8000);
+		return reinterpret_cast<const uint16_t*>(m_metadata.data())[hash & 7] & 0x8000;
 	}
 
 	constexpr std::uint32_t match(size_type hash) const noexcept {
@@ -328,7 +326,7 @@ public:
 	template <class First, class Second> using pair_type = std::pair<First, Second>;
 
 	static constexpr float maxLFactor = 0.875;
-	static constexpr size_type bucketMinCount = 4;
+	static constexpr size_type bucketMinCount = 1;
 
 	using key_type = Key;
 	using mapped_type = Ty;
@@ -606,7 +604,7 @@ public:
 	constexpr pair_type<iterator, bool> insert(const_reference value) {
 		const auto hash = valueToHash(value);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
-		const auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		const auto bucketIndex = hashToBucket(hash);
 		auto it = LSD_UNORDERED_FLAT_SET_OR_MAP((find(hash, shortHash, bucketIndex, value)), (find(hash, shortHash, bucketIndex, value.first)));
 		
 		if (it.m_pointer != nullptr) return { it, false };
@@ -615,44 +613,34 @@ public:
 	template <class Value> constexpr pair_type<iterator, bool> insert(Value&& value) requires(std::is_constructible_v<value_type, Value&&>) {
 		const auto hash = valueToHash(value);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
-		const auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		const auto bucketIndex = hashToBucket(hash);
 
-		value_type v = std::move(value);
+		value_type v = std::forward<Value>(value);
 		auto it = LSD_UNORDERED_FLAT_SET_OR_MAP((find(hash, shortHash, bucketIndex, value)), (find(hash, shortHash, bucketIndex, v.first)));
 		
 		if (it.m_pointer != nullptr) return { it, false };
 		else return { basicInsert(hash, shortHash, bucketIndex, std::move(v)), true };
 	}
-
-	/*
 	constexpr iterator insert(const_iterator hint, const_reference value) {
-		if constexpr (std::is_void_v<mapped_type>) {
-			auto it = findWrap(hint, value);
-
-			if (it != m_array.end()) return { it, false };
-			return { basicInsert(hint, value), true };
-		} else {
-			auto it = findWrap(hint, value.first);
-
-			if (it != m_array.end()) return { it, false };
-			return { basicInsert(hint, value), true };
-		}
+		const auto hash = valueToHash(value);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hint.m_metadata - m_metadata;
+		auto it = LSD_UNORDERED_FLAT_SET_OR_MAP((find(hash, shortHash, bucketIndex, value)), (find(hash, shortHash, bucketIndex, value.first)));
+		
+		if (it.m_pointer != nullptr) return { it, false };
+		else return { basicInsert(hash, shortHash, bucketIndex, value), true };
 	}
 	template <class Value> constexpr iterator insert(const_iterator hint, Value&& value) requires(std::is_constructible_v<value_type, Value&&>) {
-		if constexpr (std::is_void_v<mapped_type>) {
-			auto it = findWrap(hint, value);
+		const auto hash = valueToHash(value);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-			if (it != m_array.end()) return { it, false };
-			return { basicInsert(hint, std::forward<Value>(value)), true };
-		} else {
-			auto it = findWrap(hint, value.first);
-
-			if (it != m_array.end()) return { it, false };
-			return { basicInsert(hint, std::forward<Value>(value)), true };
-		}
+		value_type v = std::forward<Value>(value);
+		auto it = LSD_UNORDERED_FLAT_SET_OR_MAP((find(hash, shortHash, bucketIndex, value)), (find(hash, shortHash, bucketIndex, v.first)));
+		
+		if (it.m_pointer != nullptr) return { it, false };
+		else return { basicInsert(hash, shortHash, bucketIndex, std::move(v)), true };
 	}
-	*/
-
 	template <IteratorType It> constexpr void insert(It first, It last) {
 		for (; first != last; first++) insert(*first);
 	}
@@ -661,94 +649,77 @@ public:
 	}
 
 
-	/*
 	template <class V>
-	constexpr pair_type<iterator, bool> insertOrAssign(const key_type& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+	constexpr pair_type<iterator, bool> insertOrAssign(const key_type& key, V&& value) LSD_UNORDERED_FLAT_REQUIRES_MAP {
+		const auto hash = valueToHash(key);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hashToBucket(hash);
 
-		if (it != m_array.end()) {
-			*it = std::move(value_type(key, std::forward<V>(value)));
-			
-			return { it, false };
-		} return { basicEmplace(baseIt, key, std::forward<V>(value)), true };
-	}
-	template <class V>
-	constexpr pair_type<iterator, bool> insertOrAssign(key_type&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+		auto it = find(hash, shortHash, bucketIndex, key);
 
-		if (it != m_array.end()) {
-			*it = std::move(value_type(std::move(key), std::forward<V>(value)));
-			
+		if (it.m_pointer != nullptr) {
+			*it = value_type(key, std::forward<V>(value));
+
 			return { it, false };
-		} return { basicEmplace(baseIt, std::move(key), std::forward<V>(value)), true };
+		} else return { basicInsert(hash, shortHash, bucketIndex, value_type(key, std::forward<V>(value))), true };
 	}
 	template <class K, class V>
-	constexpr pair_type<iterator, bool> insertOrAssign(K&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+	constexpr pair_type<iterator, bool> insertOrAssign(K&& key, V&& value) LSD_UNORDERED_FLAT_REQUIRES_MAP {
+		const auto hash = valueToHash(key);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hashToBucket(hash);
 
-		if (it != m_array.end()) {
-			*it = std::move(value_type(std::forward<K>(key), std::forward<V>(value)));
-			
+		auto it = find(hash, shortHash, bucketIndex, key);
+
+		if (it.m_pointer != nullptr) {
+			*it = value_type(std::forward<K>(key), std::forward<V>(value));
+
 			return { it, false };
-		} return { basicEmplace(baseIt, std::forward<K>(key), std::forward<V>(value)), true };
+		} else return { basicInsert(hash, shortHash, bucketIndex, value_type(std::forward<K>(key), std::forward<V>(value))), true };
 	}
 	template <class V>
-	constexpr pair_type<iterator, bool> insertOrAssign(const_iterator hint, const key_type& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto it = findWrap(hint, key);
+	constexpr pair_type<iterator, bool> insertOrAssign(const_iterator hint, const key_type& key, V&& value) LSD_UNORDERED_FLAT_REQUIRES_MAP {
+		const auto hash = valueToHash(key);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-		if (it != m_array.end()) {
-			*it = std::move(value_type(key, std::forward<V>(value)));
-			
-			return { it, false };
-		} return { basicEmplace(hint, key, std::forward<V>(value)), true };
-	}
-	template <class V>
-	constexpr pair_type<iterator, bool> insertOrAssign(const_iterator hint, key_type&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto it = findWrap(hint, key);
+		auto it = find(hash, shortHash, bucketIndex, key);
 
-		if (it != m_array.end()) {
-			*it = std::move(value_type(std::move(key), std::forward<V>(value)));
-			
+		if (it.m_pointer != nullptr) {
+			*it = value_type(key, std::forward<V>(value));
+
 			return { it, false };
-		} return { basicEmplace(hint, std::move(key), std::forward<V>(value)), true };
+		} else return { basicInsert(hash, shortHash, bucketIndex, std::move(value_type(key, std::forward<V>(value)))), true };
 	}
 	template <class K, class V>
-	constexpr pair_type<iterator, bool> insertOrAssign(const_iterator hint, K&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto it = findWrap(hint, key);
+	constexpr pair_type<iterator, bool> insertOrAssign(const_iterator hint, K&& key, V&& value) LSD_UNORDERED_FLAT_REQUIRES_MAP {
+		const auto hash = valueToHash(key);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-		if (it != m_array.end()) {
-			*it = std::move(value_type(std::forward<K>(key), std::forward<V>(value)));
-			
+		auto it = find(hash, shortHash, bucketIndex, key);
+
+		if (it.m_pointer != nullptr) {
+			*it = value_type(std::forward<K>(key), std::forward<V>(value));
+
 			return { it, false };
-		} return { basicEmplace(hint, std::forward<K>(key), std::forward<V>(value)), true };
+		} else return { basicInsert(hash, shortHash, bucketIndex, value_type(std::forward<K>(key), std::forward<V>(value))), true };
 	}
-	*/
 
 	template <class V>
-	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(const key_type& key, V&& value) requires(!std::is_void_v<mapped_type>) {
+	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(const key_type& key, V&& value) LSD_UNORDERED_FLAT_REQUIRES_MAP {
 		return insertOrAssign(key, std::forward<V>(value));
 	}
-	template <class V>
-	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(key_type&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		return insertOrAssign(std::move(key), std::forward<V>(value));
-	}
 	template <class K, class V>
-	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(K&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
+	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(K&& key, V&& value) LSD_UNORDERED_FLAT_REQUIRES_MAP {
 		return insertOrAssign(std::forward<K>(key), std::forward<V>(value));
 	}
 	template <class V>
-	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(const_iterator hint, const key_type& key, V&& value) requires(!std::is_void_v<mapped_type>) {
+	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(const_iterator hint, const key_type& key, V&& value) LSD_UNORDERED_FLAT_REQUIRES_MAP {
 		return insertOrAssign(hint, key, std::forward<V>(value));
 	}
-	template <class V>
-	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(const_iterator hint, key_type&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		return insertOrAssign(hint, move(key), std::forward<V>(value));
-	}
 	template <class K, class V>
-	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(const_iterator hint, K&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
+	[[deprecated]] constexpr pair_type<iterator, bool> insert_or_assign(const_iterator hint, K&& key, V&& value) LSD_UNORDERED_FLAT_REQUIRES_MAP {
 		return insertOrAssign(hint, std::forward<K>(key), std::forward<V>(value));
 	}
 
@@ -764,76 +735,65 @@ public:
 	}
 
 
-	/*
 	template <class K, class... Args>
-	constexpr pair_type<iterator, bool> tryEmplace(const key_type& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+	constexpr pair_type<iterator, bool> tryEmplace(const key_type& key, Args&&... args) LSD_UNORDERED_FLAT_REQUIRES_MAP {
+		const auto hash = valueToHash(key);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hashToBucket(hash);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(baseIt, key, std::forward<Args>(args)...), true };
+		auto it = find(hash, shortHash, bucketIndex, key);
+
+		if (it.m_pointer != nullptr) return { it, false };
+		else return { basicInsert(hash, shortHash, bucketIndex, value_type(key, mapped_type(std::forward<Args>(args)...))), true };
 	}
 	template <class K, class... Args>
-	constexpr pair_type<iterator, bool> tryEmplace(key_type&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+	constexpr pair_type<iterator, bool> tryEmplace(K&& key, Args&&... args) LSD_UNORDERED_FLAT_REQUIRES_MAP {
+		const auto hash = valueToHash(key);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hashToBucket(hash);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(baseIt, std::move(key), std::forward<Args>(args)...), true };
+		auto it = find(hash, shortHash, bucketIndex, key);
+
+		if (it.m_pointer != nullptr) return { it, false };
+		else return { basicInsert(hash, shortHash, bucketIndex, value_type(key, mapped_type(std::forward<Args>(args)...))), true };
 	}
 	template <class K, class... Args>
-	constexpr pair_type<iterator, bool> tryEmplace(K&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+	constexpr iterator tryEmplace(const_iterator hint, const key_type& key, Args&&... args) LSD_UNORDERED_FLAT_REQUIRES_MAP {
+		const auto hash = valueToHash(key);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(baseIt, std::forward<K>(key), std::forward<Args>(args)...), true };
+		auto it = find(hash, shortHash, bucketIndex, key);
+
+		if (it.m_pointer != nullptr) return { it, false };
+		else return { basicInsert(hash, shortHash, bucketIndex, value_type(key, mapped_type(std::forward<Args>(args)...))), true };
 	}
 	template <class K, class... Args>
-	constexpr iterator tryEmplace(const_iterator hint, const key_type& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto it = findWrap(hint, key);
+	constexpr iterator tryEmplace(const_iterator hint, K&& key, Args&&... args) LSD_UNORDERED_FLAT_REQUIRES_MAP {
+		const auto hash = valueToHash(key);
+		const auto shortHash = metadata_group::hashToMetadata(hash);
+		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(hint, key, std::forward<Args>(args)...), true };
-	}
-	template <class K, class... Args>
-	constexpr iterator tryEmplace(const_iterator hint, key_type&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto it = findWrap(hint, key);
+		auto it = find(hash, shortHash, bucketIndex, key);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(hint, std::move(key), std::forward<Args>(args)...), true };
+		if (it.m_pointer != nullptr) return { it, false };
+		else return { basicInsert(hash, shortHash, bucketIndex, value_type(key, mapped_type(std::forward<Args>(args)...))), true };
 	}
-	template <class K, class... Args>
-	constexpr iterator tryEmplace(const_iterator hint, K&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto it = findWrap(hint, key);
-
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(hint, std::forward<K>(key), std::forward<Args>(args)...), true };
-	}
-	*/
 
 	template <class... Args>
-	[[deprecated]] constexpr iterator try_emplace(const key_type& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
+	[[deprecated]] constexpr iterator try_emplace(const key_type& key, Args&&... args) LSD_UNORDERED_FLAT_REQUIRES_MAP {
 		tryEmplace(key, args...);
 	}
-	template <class... Args>
-	[[deprecated]] constexpr iterator try_emplace(key_type&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		tryEmplace(std::move(key), std::move(args)...);
-	}
 	template <class K, class... Args>
-	[[deprecated]] constexpr iterator try_emplace(K&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
+	[[deprecated]] constexpr iterator try_emplace(K&& key, Args&&... args) LSD_UNORDERED_FLAT_REQUIRES_MAP {
 		tryEmplace(std::forward<K>(key), std::forward<Args>(args)...);
 	}
 	template <class... Args>
-	[[deprecated]] constexpr iterator try_emplace(const_iterator hint, const key_type& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
+	[[deprecated]] constexpr iterator try_emplace(const_iterator hint, const key_type& key, Args&&... args) LSD_UNORDERED_FLAT_REQUIRES_MAP {
 		tryEmplace(hint, key, args...);
 	}
-	template <class... Args>
-	[[deprecated]] constexpr iterator try_emplace(const_iterator hint, key_type&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		tryEmplace(hint, std::move(key), std::move(args)...);
-	}
 	template <class K, class... Args>
-	[[deprecated]] constexpr iterator try_emplace(const_iterator hint, K&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
+	[[deprecated]] constexpr iterator try_emplace(const_iterator hint, K&& key, Args&&... args) LSD_UNORDERED_FLAT_REQUIRES_MAP {
 		tryEmplace(hint, std::forward<K>(key), std::forward<Args>(args)...);
 	}
 
@@ -924,18 +884,17 @@ public:
 	}
 
 	constexpr void clear() noexcept {
-		const auto metadataEnd = m_metadata + (m_bucketCount - 1);
+		for (auto it = begin(); it.m_pointer != nullptr; it++)
+			allocator_traits::destroy(m_alloc, it.m_pointer);
 		
+		const auto metadataEnd = m_metadata + (m_bucketCount - 1);
 		auto metadata = m_metadata;
+
 		while (metadata != metadataEnd) {
 			metadata->clear();
 			++metadata;
 		}
 		metadata->clearExceptSentinel();
-
-		const auto end = m_array + m_bucketCount * 15;
-		for (auto it = m_array; it != end; it++)
-			allocator_traits::destroy(m_alloc, it);
 
 		m_size = 0;
 	}
@@ -948,7 +907,7 @@ public:
 
 		const auto hash = m_hasher(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
-		auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		auto bucketIndex = hashToBucket(hash);
 
 		for (size_type i = 0; i < m_bucketCount; i++) {
 			auto location = prober(bucketIndex, i);
@@ -969,7 +928,8 @@ public:
 				} while (match != 0);
 			}
 
-			if (!metadataIt->overflowed(shortHash)) return iterator { };
+			if (!metadataIt->overflowed(shortHash))
+				return iterator { };
 		}
 
 		return iterator { };
@@ -979,7 +939,7 @@ public:
 
 		const auto hash = m_hasher(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
-		auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		auto bucketIndex = hashToBucket(hash);
 
 		for (size_type i = 0; i < m_bucketCount; i++) {
 			auto location = prober(bucketIndex, i);
@@ -1019,12 +979,6 @@ public:
 		return { it, it + 1 };
 	}
 
-	[[deprecated]] [[nodiscard]] constexpr auto equal_range(const key_type& key) noexcept {
-		return equalRange(key);
-	}
-	[[deprecated]] [[nodiscard]] constexpr auto equal_range(const key_type& key) const noexcept {
-		return equalRange(key);
-	}
 	template <class K> [[deprecated]] [[nodiscard]] constexpr auto equal_range(const K& key) noexcept {
 		return equalRange(key);
 	}
@@ -1038,7 +992,7 @@ public:
 
 		const auto hash = m_hasher(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
-		auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		auto bucketIndex = hashToBucket(hash);
 
 		for (size_type i = 0; i < m_bucketCount; i++) {
 			auto location = prober(bucketIndex, i);
@@ -1068,7 +1022,7 @@ public:
 
 		const auto hash = m_hasher(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
-		auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		auto bucketIndex = hashToBucket(hash);
 
 		for (size_type i = 0; i < m_bucketCount; i++) {
 			auto location = prober(bucketIndex, i);
@@ -1098,24 +1052,24 @@ public:
 		auto it = find(key);
 		if (it.m_pointer == nullptr) throw std::out_of_range("lsd::BasicUnorderedFlat::at(): Specified key could not be found in container!");
 
-		if constexpr (std::is_void_v<mapped_type>) return *it;
+		if LSD_UNORDERED_FLAT_IS_SET return *it;
 		else return it->second;
 	}
 	template <class K> [[nodiscard]] constexpr const auto& at(const K& key) const {
 		auto it = find(key);
 		if (it.m_pointer == nullptr) throw std::out_of_range("lsd::BasicUnorderedFlat::at(): Specified key could not be found in container!");
 
-		if constexpr (std::is_void_v<mapped_type>) return *it;
+		if LSD_UNORDERED_FLAT_IS_SET return *it;
 		else return it->second;
 	}
 
 	[[nodiscard]] constexpr auto& operator[](const key_type& key) {
 		const auto hash = m_hasher(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
-		const auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		const auto bucketIndex = hashToBucket(hash);
 		auto it = find(hash, shortHash, bucketIndex, key);
 
-		if constexpr (std::is_void_v<mapped_type>)
+		if LSD_UNORDERED_FLAT_IS_SET
 			return (it.m_pointer == nullptr) ? *basicInsert(hash, shortHash, bucketIndex, key) : *it;
 		else
 			return (it.m_pointer == nullptr) ? basicEmplace(hash, shortHash, bucketIndex, key, mapped_type())->second : it->second;
@@ -1123,10 +1077,10 @@ public:
 	template <class K> [[nodiscard]] constexpr auto& operator[](K&& key) {
 		const auto hash = m_hasher(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
-		const auto bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		const auto bucketIndex = hashToBucket(hash);
 		auto it = find(hash, shortHash, bucketIndex, key);
 
-		if constexpr (std::is_void_v<mapped_type>)
+		if LSD_UNORDERED_FLAT_IS_SET
 			return (it.m_pointer == nullptr) ? *basicInsert(hash, shortHash, bucketIndex, std::forward<K>(key)) : *it;
 		else
 			return (it.m_pointer == nullptr) ? basicEmplace(hash, shortHash, bucketIndex, std::forward<K>(key), mapped_type())->second : it->second;
@@ -1197,10 +1151,10 @@ public:
 
 
 	[[nodiscard]] constexpr float loadFactor() const noexcept {
-		return m_loadFactor;
+		return m_size / (m_bucketCount * 15);
 	}
 	[[deprecated]] [[nodiscard]] constexpr float load_factor() const noexcept {
-		return m_loadFactor;
+		return loadFactor();
 	}
 	[[nodiscard]] consteval float maxLoadFactor() const noexcept {
 		return maxLFactor;
@@ -1236,6 +1190,10 @@ private:
 		return (base + (index * (index + 1) >> 1)) & (m_bucketCount - 1);
 	}
 
+	constexpr size_type hashToBucket(size_type hash) const noexcept {
+		return (m_bucketCount == 1) ? 0 : (hash >> (std::countl_zero(m_bucketCount) + 1));
+	}
+
 
 	template <class K> [[nodiscard]] constexpr iterator find(size_type hash, size_type shortHash, size_type bucketIndex, const K& key) noexcept {
 		if (m_bucketCount == 0) return iterator { };
@@ -1264,31 +1222,6 @@ private:
 
 		return iterator { };
 	}
-
-	/*
-	[[nodiscard]] constexpr iterator findWrap(size_type hash, size_type bucketIndex, const key_type& key) noexcept {
-		auto base = it;
-		
-		for (; it != m_buckets.end() && it->index != bucket_type::empty; it++)
-			if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key)) return arrIt;
-
-		for (it = m_buckets.begin(); it != base; it++)
-			if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key)) return arrIt;
-
-		return m_array.end();
-	}
-	template <class K> [[nodiscard]] constexpr iterator findWrap(size_type hash, size_type bucketIndex, const K& key) noexcept {
-		auto base = it;
-		
-		for (; it != m_buckets.end() && it->index != bucket_type::empty; it++)
-			if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key)) return arrIt;
-
-		for (it = m_buckets.begin(); it != base; it++)
-			if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key)) return arrIt;
-
-		return m_array.end();
-	}
-*/
 
 	constexpr pointer insertShortHashAndGetRawIt(size_type shortHash, size_type bucketIndex) noexcept {
 		auto metadataIt = m_metadata + bucketIndex;
@@ -1346,7 +1279,7 @@ private:
 			const auto hash = valueToHash(*it);
 			const auto shortHash = metadata_group::hashToMetadata(hash);
 
-			allocator_traits::construct(m_alloc, insertShortHashAndGetRawIt(shortHash, hash & (m_bucketCount - 1)), std::move(*it));
+			allocator_traits::construct(m_alloc, insertShortHashAndGetRawIt(shortHash, hashToBucket(hash)), std::move(*it));
 			allocator_traits::destroy(m_alloc, it.m_pointer);
 		}
 
@@ -1364,7 +1297,7 @@ private:
 			const auto hash = valueToHash(*it);
 			const auto shortHash = metadata_group::hashToMetadata(hash);
 
-			size_type bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+			size_type bucketIndex = hashToBucket(hash);
 			auto metadataIt = m_metadata + bucketIndex;
 
 			auto diff = reinterpret_cast<uintptr_t>(it.m_metadata) & metadata_group::bucketSize;
@@ -1384,7 +1317,7 @@ private:
 
 
 	constexpr iterator basicInsert(size_type hash, size_type shortHash, size_type bucketIndex, const value_type& value) {
-		if (reserve(++m_size)) bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		if (reserve(++m_size)) bucketIndex = hashToBucket(hash);
 
 		auto it = insertShortHashAndGetIterator(shortHash, bucketIndex);
 		allocator_traits::construct(m_alloc, it.m_pointer, value);
@@ -1392,7 +1325,7 @@ private:
 		return it;
 	}
 	constexpr iterator basicInsert(size_type hash, size_type shortHash, size_type bucketIndex, value_type&& value) {
-		if (reserve(++m_size)) bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		if (reserve(++m_size)) bucketIndex = hashToBucket(hash);
 
 		auto it = insertShortHashAndGetIterator(shortHash, bucketIndex);
 		allocator_traits::construct(m_alloc, it.m_pointer, std::move(value));
@@ -1401,9 +1334,9 @@ private:
 	}
 	template <class K, class... Args>
 	constexpr iterator basicEmplace(size_type hash, size_type shortHash, size_type bucketIndex, K&& key, Args&&... args)
-		requires(!std::is_void_v<mapped_type>)
+		LSD_UNORDERED_FLAT_REQUIRES_MAP
 	{
-		if (reserve(++m_size)) bucketIndex = LSD_UNORDERED_FLAT_BUCKET_INDEX(hash);
+		if (reserve(++m_size)) bucketIndex = hashToBucket(hash);
 
 		auto it = insertShortHashAndGetIterator(shortHash, bucketIndex);
 		allocator_traits::construct(m_alloc, it.m_pointer, std::forward<K>(key), mapped_type(std::forward<Args>(args)...));
