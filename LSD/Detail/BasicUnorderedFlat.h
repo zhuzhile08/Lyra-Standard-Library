@@ -905,16 +905,16 @@ public:
 	template <class K> [[nodiscard]] constexpr iterator find(const K& key) noexcept {
 		if (m_bucketCount == 0) return iterator { };
 
-		const auto hash = m_hasher(key);
+		const auto hash = postMixOrHash(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		auto bucketIndex = hashToBucket(hash);
 
 		for (size_type i = 0; i < m_bucketCount; i++) {
 			auto location = prober(bucketIndex, i);
-			const auto* metadataIt = m_metadata + location;
+			const auto* const metadataIt = m_metadata + location;
 
 			if (auto match = metadataIt->match(shortHash); match != 0) {
-				auto it = m_array + location * 15;
+				auto* const it = m_array + location * 15;
 
 				do {
 					auto toNext = std::countr_zero(match);
@@ -928,8 +928,7 @@ public:
 				} while (match != 0);
 			}
 
-			if (!metadataIt->overflowed(shortHash))
-				return iterator { };
+			if (!metadataIt->overflowed(shortHash)) return iterator { };
 		}
 
 		return iterator { };
@@ -937,16 +936,16 @@ public:
 	template <class K> [[nodiscard]] constexpr const_iterator find(const K& key) const noexcept {
 		if (m_bucketCount == 0) return const_iterator { };
 
-		const auto hash = m_hasher(key);
+		const auto hash = postMixOrHash(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		auto bucketIndex = hashToBucket(hash);
 
 		for (size_type i = 0; i < m_bucketCount; i++) {
 			auto location = prober(bucketIndex, i);
-			const auto* metadataIt = m_metadata + location;
+			const auto* const metadataIt = m_metadata + location;
 
 			if (auto match = metadataIt->match(shortHash); match != 0) {
-				const auto* it = m_array + location * 15;
+				const auto* const it = m_array + location * 15;
 
 				do {
 					auto toNext = std::countr_zero(match);
@@ -990,7 +989,7 @@ public:
 	template <class K> [[nodiscard]] constexpr bool contains(const K& key) const noexcept {
 		if (m_bucketCount == 0) return false;
 
-		const auto hash = m_hasher(key);
+		const auto hash = postMixOrHash(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		auto bucketIndex = hashToBucket(hash);
 
@@ -1006,8 +1005,8 @@ public:
 					match &= match - 1;
 
 					if LSD_UNORDERED_FLAT_IS_SET {
-						if (m_equal(*(it + toNext), key)) return true;
-					} else if (m_equal((it + toNext)->first, key)) return true;
+						if (m_equal(it[toNext], key)) return true;
+					} else if (m_equal(it[toNext].first, key)) return true;
 				} while (match != 0);
 			}
 
@@ -1020,7 +1019,7 @@ public:
 	template <class K> [[nodiscard]] constexpr size_type count(const K& key) const noexcept {
 		if (m_bucketCount == 0) return false;
 
-		const auto hash = m_hasher(key);
+		const auto hash = postMixOrHash(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		auto bucketIndex = hashToBucket(hash);
 
@@ -1036,8 +1035,8 @@ public:
 					match &= match - 1;
 
 					if LSD_UNORDERED_FLAT_IS_SET {
-						if (m_equal(*(it + toNext), key)) return 1;
-					} else if (m_equal((it + toNext)->first, key)) return 1;
+						if (m_equal(it[toNext], key)) return 1;
+					} else if (m_equal(it[toNext].first, key)) return 1;
 				} while (match != 0);
 			}
 
@@ -1064,7 +1063,7 @@ public:
 	}
 
 	[[nodiscard]] constexpr auto& operator[](const key_type& key) {
-		const auto hash = m_hasher(key);
+		const auto hash = postMixOrHash(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
 		auto it = find(hash, shortHash, bucketIndex, key);
@@ -1075,7 +1074,7 @@ public:
 			return (it.m_pointer == nullptr) ? basicEmplace(hash, shortHash, bucketIndex, key, mapped_type())->second : it->second;
 	}
 	template <class K> [[nodiscard]] constexpr auto& operator[](K&& key) {
-		const auto hash = m_hasher(key);
+		const auto hash = postMixOrHash(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
 		auto it = find(hash, shortHash, bucketIndex, key);
@@ -1181,15 +1180,39 @@ private:
 
 	// Utility and base functions
 
-	constexpr size_type valueToHash(const value_type& v) {
-		if LSD_UNORDERED_FLAT_IS_SET return m_hasher(v);
-		else return m_hasher(v.first);
-	}
+	template <class K> constexpr size_type postMixOrHash(const K& key) const noexcept {
+		if constexpr (hashNeedsPostMixValue<hasher>) {
+#if UINTPTR_MAX == UINT64_MAX
+			static constexpr std::size_t bHi = std::size_t { 0x9E3779B97F4A7C15 } >> 32;
+			static constexpr std::size_t bLo = std::size_t { 0x9E3779B97F4A7C15 } &0xFFFFFFFF;
 
+			auto hLo = m_hasher(key);
+			std::size_t hHi = hLo >> 32;
+			hLo &= 0xFFFFFFFF;
+
+			auto p0 = hLo * bLo;
+			auto p1 = hHi * bHi;
+			auto cross = (hLo + hHi) * (bLo + bHi) - p1 - p0;
+
+			auto low = p0 + (cross << 32);
+
+			return low ^ (p1 + (cross >> 32) + (low < p0)); // Discards a overflow byte
+#elif UINTPTR_MAX == UINT32_MAX
+			std::uint64_t r = static_cast<std::uint64_t>(i) * 0xE817FB2D;
+			return static_cast<size_t>(r) ^ static_cast<size_t>(r >> 32);
+#else
+#error "lsd::unordered_flat::BasicUnorderedFlat::operator(): Container only supports systems with 64-bit or 32-bit word size!"
+			return 0;
+#endif
+		} else return m_hasher(key);
+	}
+	constexpr size_type valueToHash(const value_type& v) {
+		if LSD_UNORDERED_FLAT_IS_SET return postMixOrHash(v);
+		else return postMixOrHash(v.first);
+	}
 	constexpr size_type prober(size_type base, size_type index) const noexcept {
 		return (base + (index * (index + 1) >> 1)) & (m_bucketCount - 1);
 	}
-
 	constexpr size_type hashToBucket(size_type hash) const noexcept {
 		return (m_bucketCount == 1) ? 0 : (hash >> (std::countl_zero(m_bucketCount) + 1));
 	}
