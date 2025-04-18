@@ -13,6 +13,7 @@
 
 #include "Operators.h"
 #include "Detail/CoreUtility.h"
+#include "Detail/BasicStringHash.h"
 
 #include <type_traits>
 #include <concepts>
@@ -84,9 +85,8 @@ template <detail::BigInt Integral> struct Hash<Integral> {
 		// It is hereon assumed that std::size_t is 32 bits, and the input is 64 bits
 		static_assert(sizeof(std::size_t) == 4 && sizeof(Integral) == 8, "lsd::Hash<Integral>()::operator(): When std::size_t is smaller than the input, it has to be 32 bits wide and the input has to be 64 wide!");
 
-		i ^= i >> 33;
-		i *= 0xFF51ADF7ED558CCD;
-		return static_cast<std::size_t>(i ^ i >> 33);
+		i = (i ^ (i >> 33)) * 0xFF51ADF7ED558CCD;
+		return static_cast<std::size_t>(i ^ (i >> 33));
 	}
 };
 
@@ -116,6 +116,15 @@ template <> struct Hash<std::nullptr_t> {
 
 	consteval std::size_t operator()(std::nullptr_t) const noexcept {
 		return underlying_hash()(0u);
+	}
+};
+
+
+// C-String hashers
+
+template <std::integral Char> struct Hash<Char*> {
+	constexpr std::size_t operator()(Char* str) const noexcept {
+		return detail::basicStringHash(str, stringLen(str));
 	}
 };
 

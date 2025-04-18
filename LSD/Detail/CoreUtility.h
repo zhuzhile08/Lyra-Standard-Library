@@ -96,8 +96,8 @@ template <IteratableContainer Container>
 	return siz;
 }
 
-template <std::integral CharType>
-[[nodiscard]] constexpr std::size_t stringLen(CharType* string) {
+template <std::integral Char>
+[[nodiscard]] constexpr std::size_t stringLen(Char* string) {
 	std::size_t siz = 0;
 
 	while (*string != '\0') {

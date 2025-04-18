@@ -12,8 +12,8 @@
 #pragma once
 
 #include "Detail/CoreUtility.h"
+#include "Detail/BasicStringHash.h"
 #include "Utility.h"
-#include "Hash.h"
 #include "Iterators.h"
 #include "CharTraits.h"
 #include "StringView.h"
@@ -1490,23 +1490,7 @@ template <class C> struct Hash<BasicString<C>> {
 	using view_type = BasicStringView<C>;
 
 	constexpr std::size_t operator()(const string_type& s) const noexcept { // Uses the djb2 instead of murmur- or CityHash
-		std::size_t hash = 5381; 
-
-#ifdef DJB2_HASH_MULTIPLY_33
-#ifdef DJB2_HASH_ADD_CHARACTER
-		for (auto it = s.begin(); it != s.end(); it++) hash = hash * 33 + *it;
-#else
-		for (auto it = s.begin(); it != s.end(); it++) hash = hash * 33 ^ *it;
-#endif
-#else
-#ifdef DJB2_HASH_ADD_CHARACTER
-		for (auto it = s.begin(); it != s.end(); it++) hash = ((hash << 5) + hash) + *it;
-#else
-		for (auto it = s.begin(); it != s.end(); it++) hash = ((hash << 5) + hash) ^ *it;
-#endif
-#endif
-
-		return hash;
+		return detail::basicStringHash(s.data(), s.size());
 	}
 
 	constexpr std::size_t operator()(const view_type& v) const noexcept {
@@ -1514,7 +1498,7 @@ template <class C> struct Hash<BasicString<C>> {
 	}
 
 	constexpr std::size_t operator()(const C* str) const noexcept {
-		return Hash<view_type>()(str);
+		return Hash<const C*>()(str);
 	}
 };
 

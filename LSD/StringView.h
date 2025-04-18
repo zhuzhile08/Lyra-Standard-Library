@@ -483,44 +483,11 @@ template <class C> struct Hash<BasicStringView<C>> {
 	using traits_type = view_type::traits_type;
 
 	constexpr std::size_t operator()(view_type s) const noexcept { // Uses the djb2 instead of murmur- or CityHash
-		std::size_t hash = 5381; 
-
-#ifdef DJB2_HASH_MULTIPLY_33
-#ifdef DJB2_HASH_ADD_CHARACTER
-		for (auto it = s.begin(); it != s.end(); it++) hash = hash * 33 + *it;
-#else
-		for (auto it = s.begin(); it != s.end(); it++) hash = hash * 33 ^ *it;
-#endif
-#else
-#ifdef DJB2_HASH_ADD_CHARACTER
-		for (auto it = s.begin(); it != s.end(); it++) hash = ((hash << 5) + hash) + *it;
-#else
-		for (auto it = s.begin(); it != s.end(); it++) hash = ((hash << 5) + hash) ^ *it;
-#endif
-#endif
-
-		return hash;
+		return detail::basicStringHash(s.data(), s.size());
 	}
 
 	constexpr std::size_t operator()(const C* s) const noexcept {
-		std::size_t hash = 5381;
-		const auto end = s + traits_type::length(s);
-
-#ifdef DJB2_HASH_MULTIPLY_33
-#ifdef DJB2_HASH_ADD_CHARACTER
-		for (; s != end; s++) hash = hash * 33 + *s;
-#else
-		for (; s != end; s++) hash = hash * 33 ^ *s;
-#endif
-#else
-#ifdef DJB2_HASH_ADD_CHARACTER
-		for (; s != end; s++) hash = ((hash << 5) + hash) + *s;
-#else
-		for (; s != end; s++) hash = ((hash << 5) + hash) ^ *s;
-#endif
-#endif
-
-		return hash;
+		return Hash<const C*>()(s);
 	}
 };
 
