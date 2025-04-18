@@ -31,6 +31,8 @@ template <class Ty> concept IteratableContainer = requires(Ty c1, Ty c2) {
 	std::end(c1);
 };
 
+template <class Ty> concept PointerType = std::is_pointer_v<Ty>;
+
 
 namespace detail {
 

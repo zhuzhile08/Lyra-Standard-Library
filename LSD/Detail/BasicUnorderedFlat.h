@@ -28,7 +28,6 @@
 #define LSD_UNORDERED_FLAT_TO_BYTE(metadata) reinterpret_cast<metadata_group::byte_pointer>(metadata)
 #define LSD_UNORDERED_FLAT_IS_SET constexpr (std::is_void_v<mapped_type>)
 #define LSD_UNORDERED_FLAT_REQUIRES_MAP requires(!std::is_void_v<mapped_type>)
-#define LSD_UNORDERED_FLAT_SET_OR_MAP(set, map) [&]() { if constexpr(std::is_void_v<mapped_type>) return set; else return map; }();
 
 
 namespace lsd {
@@ -605,41 +604,71 @@ public:
 		const auto hash = valueToHash(value);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
-		auto it = LSD_UNORDERED_FLAT_SET_OR_MAP((find(hash, shortHash, bucketIndex, value)), (find(hash, shortHash, bucketIndex, value.first)));
-		
-		if (it.m_pointer != nullptr) return { it, false };
-		else return { basicInsert(hash, shortHash, bucketIndex, value), true };
+
+		if LSD_UNORDERED_FLAT_IS_SET {
+			auto it = find(hash, shortHash, bucketIndex, value);
+			
+			if (it.m_pointer != nullptr) return { it, false };
+			else return { basicInsert(hash, shortHash, bucketIndex, value), true };
+		} else {
+			auto it = find(hash, shortHash, bucketIndex, value.first);
+			
+			if (it.m_pointer != nullptr) return { it, false };
+			else return { basicInsert(hash, shortHash, bucketIndex, value), true };
+		}
 	}
 	template <class Value> constexpr pair_type<iterator, bool> insert(Value&& value) requires(std::is_constructible_v<value_type, Value&&>) {
 		const auto hash = valueToHash(value);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
 
-		value_type v = std::forward<Value>(value);
-		auto it = LSD_UNORDERED_FLAT_SET_OR_MAP((find(hash, shortHash, bucketIndex, value)), (find(hash, shortHash, bucketIndex, v.first)));
-		
-		if (it.m_pointer != nullptr) return { it, false };
-		else return { basicInsert(hash, shortHash, bucketIndex, std::move(v)), true };
+		if LSD_UNORDERED_FLAT_IS_SET {
+			auto it = find(hash, shortHash, bucketIndex, value);
+
+			if (it.m_pointer != nullptr) return { it, false };
+			else return { basicInsert(hash, shortHash, bucketIndex, std::forward<Value>(value)), true };
+		} else {
+			value_type v = std::forward<Value>(value);
+			auto it = find(hash, shortHash, bucketIndex, v.first);
+
+			if (it.m_pointer != nullptr) return { it, false };
+			else return { basicInsert(hash, shortHash, bucketIndex, std::move(v)), true };
+		}
 	}
 	constexpr iterator insert(const_iterator hint, const_reference value) {
 		const auto hash = valueToHash(value);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hint.m_metadata - m_metadata;
-		auto it = LSD_UNORDERED_FLAT_SET_OR_MAP((find(hash, shortHash, bucketIndex, value)), (find(hash, shortHash, bucketIndex, value.first)));
-		
-		if (it.m_pointer != nullptr) return { it, false };
-		else return { basicInsert(hash, shortHash, bucketIndex, value), true };
+
+		if LSD_UNORDERED_FLAT_IS_SET {
+			auto it = find(hash, shortHash, bucketIndex, value);
+			
+			if (it.m_pointer != nullptr) return { it, false };
+			else return { basicInsert(hash, shortHash, bucketIndex, value), true };
+		} else {
+			auto it = find(hash, shortHash, bucketIndex, value.first);
+			
+			if (it.m_pointer != nullptr) return { it, false };
+			else return { basicInsert(hash, shortHash, bucketIndex, value), true };
+		}
 	}
 	template <class Value> constexpr iterator insert(const_iterator hint, Value&& value) requires(std::is_constructible_v<value_type, Value&&>) {
 		const auto hash = valueToHash(value);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-		value_type v = std::forward<Value>(value);
-		auto it = LSD_UNORDERED_FLAT_SET_OR_MAP((find(hash, shortHash, bucketIndex, value)), (find(hash, shortHash, bucketIndex, v.first)));
-		
-		if (it.m_pointer != nullptr) return { it, false };
-		else return { basicInsert(hash, shortHash, bucketIndex, std::move(v)), true };
+		if LSD_UNORDERED_FLAT_IS_SET {
+			auto it = find(hash, shortHash, bucketIndex, value);
+
+			if (it.m_pointer != nullptr) return { it, false };
+			else return { basicInsert(hash, shortHash, bucketIndex, std::forward<Value>(value)), true };
+		} else {
+			value_type v = std::forward<Value>(value);
+			auto it = find(hash, shortHash, bucketIndex, v.first);
+
+			if (it.m_pointer != nullptr) return { it, false };
+			else return { basicInsert(hash, shortHash, bucketIndex, std::move(v)), true };
+		}
 	}
 	template <IteratorType It> constexpr void insert(It first, It last) {
 		for (; first != last; first++) insert(*first);
@@ -1181,7 +1210,7 @@ private:
 	// Utility and base functions
 
 	template <class K> constexpr size_type postMixOrHash(const K& key) const noexcept {
-		if constexpr (hashNeedsPostMixValue<hasher>) {
+		if constexpr (hashRequiresPostMixValue<hasher>) {
 #if UINTPTR_MAX == UINT64_MAX
 			static constexpr std::size_t bHi = std::size_t { 0x9E3779B97F4A7C15 } >> 32;
 			static constexpr std::size_t bLo = std::size_t { 0x9E3779B97F4A7C15 } &0xFFFFFFFF;

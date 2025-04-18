@@ -70,8 +70,8 @@ public:
 	>;
 
 private:
-	CUSTOM_HASHER(Hasher, const BasicJson&, const view_type&, Hash<view_type>{}, .m_name)
-	CUSTOM_EQUAL(Equal, const BasicJson&, const view_type&, .m_name)
+	LSD_CUSTOM_HASHER(Hasher, const BasicJson&, const view_type&, Hash<view_type>{}, .m_name)
+	LSD_CUSTOM_EQUAL(Equal, const BasicJson&, const view_type&, .m_name)
 
 public:
 	
