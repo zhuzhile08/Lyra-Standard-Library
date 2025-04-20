@@ -5,7 +5,6 @@
  * @brief a basic array implementation
  * 
  * @date 2022-12-24
- * 
  * @copyright Copyright (c) 2022
  *************************/
 #pragma once

@@ -5,7 +5,6 @@
  * @brief a iterator base class
  * 
  * @date 2023-03-06
- * 
  * @copyright Copyright (c) 2023
  *************************/
 

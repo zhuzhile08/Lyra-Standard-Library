@@ -5,7 +5,6 @@
  * @brief a basic container around a C style function pointer
  * 
  * @date 2022-12-05
- * 
  * @copyright Copyright (c) 2022
  *************************/
 

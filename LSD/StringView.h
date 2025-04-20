@@ -5,7 +5,6 @@
  * @brief String view implementation
  * 
  * @date 2024-06-12
- * 
  * @copyright Copyright (c) 2024
  ************************/
 

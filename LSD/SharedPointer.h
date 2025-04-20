@@ -5,7 +5,6 @@
  * @brief An implementation for a shared pointer
  * 
  * @date 2023-5-10
- * 
  * @copyright Copyright (c) 2023
 *************************/
 

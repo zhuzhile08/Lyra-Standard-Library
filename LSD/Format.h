@@ -9,7 +9,6 @@
  * @brief formatSpec		::= <view in Detail/Format/FormatSpecs.h>
  * 
  * @date 2024-06-18
- * 
  * @copyright Copyright (c) 2024
  *************************/
 

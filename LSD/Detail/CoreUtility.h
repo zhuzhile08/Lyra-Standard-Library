@@ -5,7 +5,6 @@
  * @brief Core utility headers for the library with minimal dependencies
  * 
  * @date 2024-06-23
- * 
  * @copyright Copyright (c) 2024
  *************************/
 

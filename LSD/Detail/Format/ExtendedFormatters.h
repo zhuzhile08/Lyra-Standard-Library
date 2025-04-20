@@ -5,7 +5,6 @@
  * @brief Implementation for all formatter classes
  * 
  * @date 2024-10-31
- * 
  * @copyright Copyright (c) 2024
  *************************/
 

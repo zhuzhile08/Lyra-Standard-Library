@@ -5,7 +5,6 @@
  * @brief Format argument storage
  * 
  * @date 2024-08-20
- * 
  * @copyright Copyright (c) 2024
  *************************/
 

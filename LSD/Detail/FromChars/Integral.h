@@ -5,7 +5,6 @@
  * @brief From-Chars functions for integral types
  * 
  * @date 2024-08-08
- * 
  * @copyright Copyright (c) 2024
  *************************/
 

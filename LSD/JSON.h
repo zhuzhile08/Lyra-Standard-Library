@@ -5,7 +5,6 @@
  * @brief A JSON parser and writer
  * 
  * @date 2023-07-25
- * 
  * @copyright Copyright (c) 2023
  **************************/
 

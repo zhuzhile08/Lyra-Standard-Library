@@ -5,7 +5,6 @@
  * @brief A custom smart pointer implementation
  * 
  * @date 2022-10-11
- * 
  * @copyright Copyright (c) 2022
  *************************/
 

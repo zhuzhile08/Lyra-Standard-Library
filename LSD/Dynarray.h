@@ -5,7 +5,6 @@
  * @brief a (slightly stupid) array masked as a vector
  * 
  * @date 2023-01-14
- * 
  * @copyright Copyright (c) 2023
  ************************/
 

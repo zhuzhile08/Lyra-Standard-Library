@@ -5,7 +5,6 @@
  * @brief Core utility and structures for the From-Chars library
  * 
  * @date 2024-08-08
- * 
  * @copyright Copyright (c) 2024
  *************************/
 

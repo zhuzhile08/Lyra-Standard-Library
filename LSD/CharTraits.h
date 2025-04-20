@@ -5,7 +5,6 @@
  * @brief Character traits
  * 
  * @date 2024-06-10
- * 
  * @copyright Copyright (c) 2024
  *************************/
 

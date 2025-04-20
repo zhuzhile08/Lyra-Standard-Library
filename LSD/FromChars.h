@@ -5,7 +5,6 @@
  * @brief Implementation for the from_chars() function
  * 
  * @date 2024-08-04
- * 
  * @copyright Copyright (c) 2024
  *************************/
 

@@ -5,7 +5,6 @@
  * @brief Basic forward list node
  * 
  * @date 2024-04-10
- * 
  * @copyright Copyright (c) 2024
  *************************/
 
