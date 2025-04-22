@@ -1200,11 +1200,11 @@ private:
 
 	size_type m_loadFactor { };
 
-	[[no_unique_address]] allocator_type m_alloc { };
-	[[no_unique_address]] metadata_allocator_type m_metadataAlloc { };
-
 	[[no_unique_address]] hasher m_hasher { };
 	[[no_unique_address]] key_equal m_equal { };
+
+	[[no_unique_address]] allocator_type m_alloc { };
+	[[no_unique_address]] metadata_allocator_type m_metadataAlloc { };
 
 
 	// Utility and base functions
