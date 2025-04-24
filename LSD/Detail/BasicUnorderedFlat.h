@@ -376,7 +376,7 @@ public:
 		size_type bucketCount,
 		const allocator_type& alloc,
 		const metadata_allocator_type& metadataAlloc
-	) : m_alloc(alloc), m_metadataAlloc(alloc) {
+	) : m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		basicRehash(std::max(size_type { 1 }, bucketCount));
 	}
 	constexpr BasicUnorderedFlat(
@@ -384,11 +384,11 @@ public:
 		const hasher& hasher,
 		const allocator_type& alloc,
 		const metadata_allocator_type& metadataAlloc
-	) : m_hasher(hasher), m_alloc(alloc), m_metadataAlloc(alloc) {
+	) : m_hasher(hasher), m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		basicRehash(std::max(size_type { 1 }, bucketCount));
 	}
 	constexpr BasicUnorderedFlat(const allocator_type& alloc, const metadata_allocator_type& metadataAlloc) :
-		m_alloc(alloc), m_metadataAlloc(alloc) {
+		m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		basicRehash(1);
 	}
 
