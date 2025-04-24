@@ -12,15 +12,12 @@
 
 #include "CoreUtility.h"
 #include "../Iterators.h"
-#include "../Vector.h"
 #include "../Array.h"
 #include "../Hash.h"
 
 #include <cstdint>
 #include <utility>
-#include <limits>
 #include <bit>
-#include <functional>
 #include <initializer_list>
 #include <type_traits>
 
@@ -1185,7 +1182,7 @@ public:
 
 
 	[[nodiscard]] constexpr float loadFactor() const noexcept {
-		return m_size / (m_bucketCount * 15);
+		return m_size / static_cast<float>(m_bucketCount * 15);
 	}
 	[[deprecated]] [[nodiscard]] constexpr float load_factor() const noexcept {
 		return loadFactor();

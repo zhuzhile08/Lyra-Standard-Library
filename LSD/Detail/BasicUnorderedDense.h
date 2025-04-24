@@ -784,7 +784,7 @@ public:
 		return m_buckets[index] == bucket_type::empty;
 	}
 	[[deprecated]] [[nodiscard]] consteval size_type bucket_size(size_type index) const noexcept {
-		return bucketSize();
+		return bucketSize(index);
 	}
 
 	[[nodiscard]] constexpr bucket_allocator_type bucketAllocator() const noexcept {
