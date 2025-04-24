@@ -401,6 +401,7 @@ public:
 		const metadata_allocator_type& metadataAlloc = metadata_allocator_type()
 	) : m_hasher(hash), m_equal(keyEqual), m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		insert(first, last);
+		if (m_bucketCount < bucketCount) basicRehash(bucketCount);
 	}
 	template <ContinuousIteratorType It> constexpr BasicUnorderedFlat(
 		It first, It last,
@@ -409,6 +410,7 @@ public:
 		const metadata_allocator_type& metadataAlloc
 	) : m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		insert(first, last);
+		if (m_bucketCount < bucketCount) basicRehash(bucketCount);
 	}
 	template <ContinuousIteratorType It> constexpr BasicUnorderedFlat(
 		It first, It last, 
@@ -418,6 +420,7 @@ public:
 		const metadata_allocator_type& metadataAlloc
 	) : m_hasher(hash), m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		insert(first, last);
+		if (m_bucketCount < bucketCount) basicRehash(bucketCount);
 	}
 		
 	constexpr BasicUnorderedFlat(const_container_reference other) {
@@ -461,6 +464,7 @@ public:
 		const metadata_allocator_type& metadataAlloc = metadata_allocator_type()
 	) : m_hasher(hash), m_equal(keyEqual), m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		insert(ilist.begin(), ilist.end());
+		if (m_bucketCount < bucketCount) basicRehash(bucketCount);
 	}
 	constexpr BasicUnorderedFlat(
 		init_list ilist,
@@ -469,7 +473,8 @@ public:
 		const metadata_allocator_type& metadataAlloc = metadata_allocator_type()
 	) : m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		insert(ilist.begin(), ilist.end());
-	} 
+		if (m_bucketCount < bucketCount) basicRehash(bucketCount);
+	}
 	constexpr BasicUnorderedFlat(
 		init_list ilist,
 		size_type bucketCount,
@@ -478,6 +483,7 @@ public:
 		const metadata_allocator_type& metadataAlloc = metadata_allocator_type()
 	) : m_hasher(hash), m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		insert(ilist.begin(), ilist.end());
+		if (m_bucketCount < bucketCount) basicRehash(bucketCount);
 	}
 	
 	constexpr ~BasicUnorderedFlat() {
@@ -606,12 +612,12 @@ public:
 		const auto bucketIndex = hashToBucket(hash);
 
 		if LSD_UNORDERED_FLAT_IS_SET {
-			auto it = find(hash, shortHash, bucketIndex, value);
+			auto it = find(shortHash, bucketIndex, value);
 			
 			if (it.m_pointer != nullptr) return { it, false };
 			else return { basicInsert(hash, shortHash, bucketIndex, value), true };
 		} else {
-			auto it = find(hash, shortHash, bucketIndex, value.first);
+			auto it = find(shortHash, bucketIndex, value.first);
 			
 			if (it.m_pointer != nullptr) return { it, false };
 			else return { basicInsert(hash, shortHash, bucketIndex, value), true };
@@ -623,13 +629,13 @@ public:
 		const auto bucketIndex = hashToBucket(hash);
 
 		if LSD_UNORDERED_FLAT_IS_SET {
-			auto it = find(hash, shortHash, bucketIndex, value);
+			auto it = find(shortHash, bucketIndex, value);
 
 			if (it.m_pointer != nullptr) return { it, false };
 			else return { basicInsert(hash, shortHash, bucketIndex, std::forward<Value>(value)), true };
 		} else {
 			value_type v = std::forward<Value>(value);
-			auto it = find(hash, shortHash, bucketIndex, v.first);
+			auto it = find(shortHash, bucketIndex, v.first);
 
 			if (it.m_pointer != nullptr) return { it, false };
 			else return { basicInsert(hash, shortHash, bucketIndex, std::move(v)), true };
@@ -641,12 +647,12 @@ public:
 		const auto bucketIndex = hint.m_metadata - m_metadata;
 
 		if LSD_UNORDERED_FLAT_IS_SET {
-			auto it = find(hash, shortHash, bucketIndex, value);
+			auto it = find(shortHash, bucketIndex, value);
 			
 			if (it.m_pointer != nullptr) return { it, false };
 			else return { basicInsert(hash, shortHash, bucketIndex, value), true };
 		} else {
-			auto it = find(hash, shortHash, bucketIndex, value.first);
+			auto it = find(shortHash, bucketIndex, value.first);
 			
 			if (it.m_pointer != nullptr) return { it, false };
 			else return { basicInsert(hash, shortHash, bucketIndex, value), true };
@@ -658,13 +664,13 @@ public:
 		const auto bucketIndex = hint.m_metadata - m_metadata;
 
 		if LSD_UNORDERED_FLAT_IS_SET {
-			auto it = find(hash, shortHash, bucketIndex, value);
+			auto it = find(shortHash, bucketIndex, value);
 
 			if (it.m_pointer != nullptr) return { it, false };
 			else return { basicInsert(hash, shortHash, bucketIndex, std::forward<Value>(value)), true };
 		} else {
 			value_type v = std::forward<Value>(value);
-			auto it = find(hash, shortHash, bucketIndex, v.first);
+			auto it = find(shortHash, bucketIndex, v.first);
 
 			if (it.m_pointer != nullptr) return { it, false };
 			else return { basicInsert(hash, shortHash, bucketIndex, std::move(v)), true };
@@ -684,7 +690,7 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
 
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if (it.m_pointer != nullptr) {
 			*it = value_type(key, std::forward<V>(value));
@@ -698,7 +704,7 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
 
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if (it.m_pointer != nullptr) {
 			*it = value_type(std::forward<K>(key), std::forward<V>(value));
@@ -712,7 +718,7 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if (it.m_pointer != nullptr) {
 			*it = value_type(key, std::forward<V>(value));
@@ -726,7 +732,7 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if (it.m_pointer != nullptr) {
 			*it = value_type(std::forward<K>(key), std::forward<V>(value));
@@ -770,7 +776,7 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
 
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if (it.m_pointer != nullptr) return { it, false };
 		else return { basicInsert(hash, shortHash, bucketIndex, value_type(key, mapped_type(std::forward<Args>(args)...))), true };
@@ -781,7 +787,7 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
 
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if (it.m_pointer != nullptr) return { it, false };
 		else return { basicInsert(hash, shortHash, bucketIndex, value_type(key, mapped_type(std::forward<Args>(args)...))), true };
@@ -792,7 +798,7 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if (it.m_pointer != nullptr) return { it, false };
 		else return { basicInsert(hash, shortHash, bucketIndex, value_type(key, mapped_type(std::forward<Args>(args)...))), true };
@@ -803,7 +809,7 @@ public:
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hint.m_metadata - m_metadata;
 
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if (it.m_pointer != nullptr) return { it, false };
 		else return { basicInsert(hash, shortHash, bucketIndex, value_type(key, mapped_type(std::forward<Args>(args)...))), true };
@@ -1095,7 +1101,7 @@ public:
 		const auto hash = postMixOrHash(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if LSD_UNORDERED_FLAT_IS_SET
 			return (it.m_pointer == nullptr) ? *basicInsert(hash, shortHash, bucketIndex, key) : *it;
@@ -1106,7 +1112,7 @@ public:
 		const auto hash = postMixOrHash(key);
 		const auto shortHash = metadata_group::hashToMetadata(hash);
 		const auto bucketIndex = hashToBucket(hash);
-		auto it = find(hash, shortHash, bucketIndex, key);
+		auto it = find(shortHash, bucketIndex, key);
 
 		if LSD_UNORDERED_FLAT_IS_SET
 			return (it.m_pointer == nullptr) ? *basicInsert(hash, shortHash, bucketIndex, std::forward<K>(key)) : *it;
@@ -1247,7 +1253,7 @@ private:
 	}
 
 
-	template <class K> [[nodiscard]] constexpr iterator find(size_type hash, size_type shortHash, size_type bucketIndex, const K& key) noexcept {
+	template <class K> [[nodiscard]] constexpr iterator find(size_type shortHash, size_type bucketIndex, const K& key) noexcept {
 		if (m_bucketCount == 0) return iterator { };
 
 		for (size_type i = 0; i < m_bucketCount; i++) {
