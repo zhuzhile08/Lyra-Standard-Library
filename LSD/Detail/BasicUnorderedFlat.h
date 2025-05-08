@@ -433,10 +433,10 @@ public:
 		m_size(other.m_size),
 		m_bucketCount(other.m_bucketCount),
 		m_loadFactor(other.m_loadFactor),
-		m_alloc(std::move(other.m_alloc)),
-		m_metadataAlloc(std::move(other.m_metadataAlloc)),
 		m_hasher(std::move(other.m_hasher)),
-		m_equal(std::move(other.m_equal)) { }
+		m_equal(std::move(other.m_equal)),
+		m_alloc(std::move(other.m_alloc)),
+		m_metadataAlloc(std::move(other.m_metadataAlloc)) { }
 	constexpr BasicUnorderedFlat(container_rvreference other, const allocator_type& alloc, const metadata_allocator_type& metadataAlloc) :
 		m_alloc(alloc), m_metadataAlloc(metadataAlloc) {
 		if constexpr (lsd::detail::allocatorPropagationNecessary(other.m_alloc, alloc))
