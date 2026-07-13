@@ -10,10 +10,10 @@
 
 #pragma once
 
-#include "CoreUtility.h"
-#include "../Iterators.h"
-#include "../Vector.h"
-#include "../Hash.h"
+#include "../CoreUtility.hpp"
+#include "../../Iterators.h"
+#include "../../Vector.h"
+#include "../../Hash.h"
 
 #include <cstdint>
 #include <utility>
@@ -46,23 +46,21 @@ template <
 > class BasicUnorderedDense {
 public:
 	// Type aliases and constants
-	
-	using size_type = std::size_t;
-	using difference_type = std::ptrdiff_t;
-	template <class First, class Second> using pair_type = std::pair<First, Second>;
-
-	static constexpr float maxLFactor = 0.8;
-	static constexpr size_type bucketMinCount = 4;
 
 	using key_type = Key;
 	using mapped_type = Ty;
 	using allocator_type = Alloc;
+	template <class First, class Second> using pair_type = std::pair<First, Second>;
 
-	using value_type = std::conditional_t<std::is_void_v<mapped_type>, key_type, pair_type<key_type, mapped_type>>;
+	using value_type = std::conditional_t<std::is_void_v<mapped_type>, key_type, pair_type<const key_type, mapped_type>>;
+	using pointer = value_type*;
 	using reference = value_type&;
 	using const_reference = const value_type&;
 	using rvreference = value_type&&;
 	using array = Vector<value_type>;
+
+	using size_type = typename array::size_type;
+	using difference_type = typename array::difference_type;
 
 	using bucket_type = UnorderedDenseBucket;
 	using bucket_allocator_type = std::allocator_traits<allocator_type>::template rebind_alloc<bucket_type>;
@@ -85,123 +83,139 @@ public:
 	using init_list = std::initializer_list<value_type>;
 
 
+private:
+	static constexpr double maxLFactor = 0.8;
+	static constexpr size_type bucketMinCount = 4;
+
+
+	class WrappingIter {
+	public:
+		constexpr WrappingIter() = default;
+		constexpr WrappingIter(const_iterator first) : first(first), iter(const_cast<pointer>(first.get())) { }
+
+		constexpr bool nextToEnd(const_iterator end) {
+			return iter != end && iter->index != bucket_type::empty;
+		}
+
+		constexpr bool beginToFirst() {
+			return iter != first && iter->index != bucket_type::empty;
+		}
+
+		const const_bucket_iterator first { };
+		bucket_iterator iter { };
+	};
+
+public:
 	// Construction and assignment
 
 	constexpr BasicUnorderedDense() : m_buckets(bucketMinCount) { }
 
-	explicit constexpr BasicUnorderedDense(
-		size_type bucketCount, 
-		const hasher& hash = hasher(), 
-		const key_equal& keyEqual = key_equal(), 
-		const allocator_type& alloc = allocator_type(),
-		const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
+	explicit constexpr BasicUnorderedDense(size_type bucketCount,
+										   const hasher& hash = hasher(), 
+										   const key_equal& keyEqual = key_equal(),
+										   const allocator_type& alloc = allocator_type(),
+										   const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
 	) : m_array(alloc),
-		m_buckets(std::min(std::max(bucketMinCount, bucketCount), bucket_type::empty - 1), bucketAlloc), 
+		m_buckets(std::max(bucketMinCount, bucketCount), bucketAlloc), 
 		m_hasher(hash), 
-		m_equal(keyEqual) { } 
+		m_equal(keyEqual) { }
+
+	constexpr explicit BasicUnorderedDense(const allocator_type& alloc, const bucket_allocator_type& bucketAlloc = bucket_allocator_type()) 
+		: BasicUnorderedDense(0, hasher(), key_equal(), alloc, bucketAlloc) { }
 	constexpr BasicUnorderedDense(
 		size_type bucketCount,
 		const allocator_type& alloc,
-		const bucket_allocator_type& bucketAlloc
-	) : m_array(alloc),
-		m_buckets(std::min(std::max(bucketMinCount, bucketCount), bucket_type::empty - 1), bucketAlloc) { }
+		const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
+	) : BasicUnorderedDense(bucketCount, hasher(), key_equal(), alloc, bucketAlloc) { }
 	constexpr BasicUnorderedDense(
 		size_type bucketCount,
 		const hasher& hasher,
 		const allocator_type& alloc,
-		const bucket_allocator_type& bucketAlloc
-	) : m_array(alloc),
-		m_buckets(std::min(std::max(bucketMinCount, bucketCount), bucket_type::empty - 1), bucketAlloc),
-		m_hasher(hasher) { }
-	constexpr BasicUnorderedDense(const allocator_type& alloc, const bucket_allocator_type& bucketAlloc) : 
-		m_array(alloc), m_buckets(bucketMinCount, bucketAlloc) { }
-	
-	template <ContinuousIteratorType It> constexpr BasicUnorderedDense(
-		It first, It last, 
-		size_type bucketCount = bucketMinCount,
-		const hasher& hash = hasher(), 
-		const key_equal& keyEqual = key_equal(), 
-		const allocator_type& alloc = allocator_type(),
 		const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
-	) : m_array(alloc),
-		m_buckets(std::max(bucketCount, std::distance(first, last)), bucketAlloc), 
-		m_hasher(hash), 
-		m_equal(keyEqual)
-	{
-		insert(first, last);
-	}
-	template <ContinuousIteratorType It> constexpr BasicUnorderedDense(
-		It first, It last,
-		size_type bucketCount,
-		const allocator_type& alloc,
-		const bucket_allocator_type& bucketAlloc
-	) : m_array(alloc), m_buckets(std::max(bucketCount, std::distance(first, last)), bucketAlloc) {
-		insert(first, last);
-	}
-	template <ContinuousIteratorType It> constexpr BasicUnorderedDense(
-		It first, It last, 
-		size_type bucketCount,
-		const hasher& hash,
-		const allocator_type& alloc,
-		const bucket_allocator_type& bucketAlloc
-	) : m_array(alloc),
-		m_buckets(std::max(bucketCount, std::distance(first, last)), bucketAlloc), 
-		m_hasher(hash)
-	{
-		insert(first, last);
-	}
-		
-	constexpr BasicUnorderedDense(const_container_reference other) :
-		m_array(other.m_array), m_buckets(other.m_buckets) { }
-	constexpr BasicUnorderedDense(const_container_reference other, const allocator_type& alloc, const bucket_allocator_type& bucketAlloc) :
-		m_array(other.m_array, alloc), m_buckets(other.m_buckets, bucketAlloc) { }
-	constexpr BasicUnorderedDense(container_rvreference other) noexcept : 
-		m_array(std::move(other.m_array)), m_buckets(std::move(other.m_buckets)) { }
-	constexpr BasicUnorderedDense(container_rvreference other, const allocator_type& alloc, const bucket_allocator_type& bucketAlloc) : 
-		m_array(std::move(other.m_array), alloc), m_buckets(std::move(other.m_array), bucketAlloc) { }
-	
-	constexpr BasicUnorderedDense(
-		init_list ilist, 
-		size_type bucketCount = bucketMinCount,
-		const hasher& hash = hasher(), 
-		const key_equal& keyEqual = key_equal(), 
-		const allocator_type& alloc = allocator_type(),
-		const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
-	) : m_array(alloc),
-		m_buckets(std::max(bucketCount, ilist.size()), bucketAlloc),
+	) : BasicUnorderedDense(bucketCount, hasher, key_equal(), alloc, bucketAlloc) { }
+
+
+	template <std::input_iterator Iter> constexpr BasicUnorderedDense(Iter first, Iter last,
+																	  size_type bucketCount = bucketMinCount,
+																	  const hasher& hash = hasher(),
+																	  const key_equal& keyEqual = key_equal(),
+																	  const allocator_type& alloc = allocator_type(),
+																	  const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
+	) : m_array(first, last, alloc),
+		m_buckets(std::max(std::max(bucketMinCount, bucketCount), m_array.capacity()), bucketAlloc),
 		m_hasher(hash),
 		m_equal(keyEqual)
 	{
-		insert(ilist.begin(), ilist.end());
+		basicRehash(m_buckets.size());
 	}
-	constexpr BasicUnorderedDense(
-		init_list ilist,
-		size_type bucketCount,
-		const allocator_type& alloc,
-		const bucket_allocator_type& bucketAlloc
-	) : m_array(alloc), m_buckets(std::max(bucketCount, ilist.size()), bucketAlloc) {
-		insert(ilist.begin(), ilist.end());
-	} 
-	constexpr BasicUnorderedDense(
-		init_list ilist,
-		size_type bucketCount,
-		const hasher& hash,
-		const allocator_type& alloc,
-		const bucket_allocator_type& bucketAlloc
-	) : m_array(alloc), m_buckets(std::max(bucketCount, ilist.size()), bucketAlloc), m_hasher(hash) {
-		insert(ilist.begin(), ilist.end());
-	}
+
+	template <std::input_iterator It> constexpr BasicUnorderedDense(It first, It last,
+																	size_type bucketCount,
+																	const allocator_type& alloc,
+																	const bucket_allocator_type& bucketAlloc = bucket_allocator_type())
+		: BasicUnorderedDense(first, last, bucketCount, hasher(), key_equal(), alloc, bucketAlloc) { }
+	template <std::input_iterator It> constexpr BasicUnorderedDense(It first, It last, 
+																	size_type bucketCount,
+																	const hasher& hash,
+																	const allocator_type& alloc,
+																	const bucket_allocator_type& bucketAlloc = bucket_allocator_type())
+		: BasicUnorderedDense(first, last, bucketCount, hash, key_equal(), alloc, bucketAlloc) { }
+
+	constexpr BasicUnorderedDense(init_list ilist, 
+								  size_type bucketCount = bucketMinCount,
+								  const hasher& hash = hasher(), 
+								  const key_equal& keyEqual = key_equal(), 
+								  const allocator_type& alloc = allocator_type(),
+								  const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
+	) : BasicUnorderedDense(ilist.begin(), ilist.end(), bucketCount, hash, keyEqual, alloc, bucketAlloc) { }
+	constexpr BasicUnorderedDense(init_list ilist,
+								  size_type bucketCount,
+								  const allocator_type& alloc,
+								  const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
+	) : BasicUnorderedDense(ilist.begin(), ilist.end(), bucketCount, hasher(), key_equal(), alloc, bucketAlloc) { }
+	constexpr BasicUnorderedDense(init_list ilist,
+								  size_type bucketCount,
+								  const hasher& hash,
+								  const allocator_type& alloc,
+								  const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
+	) : BasicUnorderedDense(ilist.begin(), ilist.end(), bucketCount, hash, key_equal(), alloc, bucketAlloc) { }
+
+
+	constexpr BasicUnorderedDense(const_container_reference other) :
+		m_array(other.m_array), m_buckets(other.m_buckets) { }
+	constexpr BasicUnorderedDense(const_container_reference other, 
+								  const allocator_type& alloc, 
+								  const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
+	) : m_array(other.m_array, alloc), m_buckets(other.m_buckets, bucketAlloc) { }
+	constexpr BasicUnorderedDense(container_rvreference other) noexcept : 
+		m_array(std::move(other.m_array)), m_buckets(std::move(other.m_buckets)) { }
+	constexpr BasicUnorderedDense(container_rvreference other,
+								  const allocator_type& alloc,
+								  const bucket_allocator_type& bucketAlloc = bucket_allocator_type()
+	) : m_array(std::move(other.m_array), alloc), m_buckets(std::move(other.m_array), bucketAlloc) { }
+
 
 	constexpr ~BasicUnorderedDense() = default;
 
 	constexpr BasicUnorderedDense& operator=(const_container_reference other) noexcept {
-		clear();
-		insert(other.begin(), other.end());
+		m_array = other.m_array;
+		m_buckets = other.m_buckets;
+
+		if constexpr (!std::is_empty_v<hasher>)
+			m_hasher = other.m_hasher;
+		if constexpr (!std::is_empty_v<key_equal>)
+			m_equal = other.m_equal;
 
 		return *this;
 	}
 	constexpr BasicUnorderedDense& operator=(container_rvreference other) noexcept {
-		swap(other);
+		m_array = std::move(other.m_array);
+		m_buckets = std::move(other.m_buckets);
+
+		if constexpr (!std::is_empty_v<hasher>)
+			m_hasher = std::move(other.m_hasher);
+		if constexpr (!std::is_empty_v<key_equal>)
+			m_equal = std::move(other.m_equal);
 
 		return *this;
 	}
@@ -216,8 +230,10 @@ public:
 		std::swap(m_array, other.m_array);
 		std::swap(m_buckets, other.m_buckets);
 
-		if constexpr (!std::is_empty_v<hasher>) std::swap(m_hasher, other.m_hasher);
-		if constexpr (!std::is_empty_v<key_equal>) std::swap(m_equal, other.m_equal);
+		if constexpr (!std::is_empty_v<hasher>)
+			std::swap(m_hasher, other.m_hasher);
+		if constexpr (!std::is_empty_v<key_equal>)
+			std::swap(m_equal, other.m_equal);
 	}
 
 
@@ -317,7 +333,8 @@ public:
 	// Capacity modification
 
 	constexpr void rehash(size_type count) {
-		if (count >= m_array.size() / maxLFactor) basicRehash(count);
+		m_buckets.clear();
+		basicRehash(std::max(count, m_array.size() / maxLFactor));
 	}
 
 	constexpr void reserve(size_type count) {
@@ -329,34 +346,44 @@ public:
 	// Insertion
 
 	constexpr pair_type<iterator, bool> insert(const_reference value) {
-		auto baseIt = findBaseBucket(value);
-		auto it = find(baseIt, value);
+		const auto baseIt = findBaseBucket(value);
+		const auto it = find(baseIt, value);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicInsert(baseIt, value), true };
+		if (it != m_array.cend())
+			return { it, false };
+		return { insertBasic(baseIt, value), true };
 	}
 	template <class Value> constexpr pair_type<iterator, bool> insert(Value&& value) requires(std::is_constructible_v<value_type, Value&&>) {
-		auto baseIt = findBaseBucket(value);
-		auto it = find(baseIt, value);
+		const auto baseIt = findBaseBucket(value);
+		const auto it = find(baseIt, value);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicInsert(baseIt, std::forward<Value>(value)), true };
+		if (it != m_array.end())
+			return { it, false };
+		return { insertBasic(baseIt, std::forward<Value>(value)), true };
 	}
 	constexpr iterator insert(const_iterator hint, const_reference value) {
-		auto it = find(hint, value);
+		const auto it = find(hint, value);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicInsert(hint, value), true };
+		if (it != m_array.end())
+			return { it, false };
+		return { insertBasic(hint, value), true };
 	}
 	template <class Value> constexpr iterator insert(const_iterator hint, Value&& value) requires(std::is_constructible_v<value_type, Value&&>) {
-		auto it = find(hint, value);
+		const auto it = find(hint, value);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicInsert(hint, std::forward<Value>(value)), true };
+		if (it != m_array.end())
+			return { it, false };
+		return { insertBasic(hint, std::forward<Value>(value)), true };
 	}
 
-	template <IteratorType It> constexpr void insert(It first, It last) {
-		for (; first != last; first++) insert(*first);
+	template <std::input_iterator Iter> constexpr void insert(Iter first, Iter last) {
+		if constexpr (std::contiguous_iterator<Iter>) {
+			const auto dist = std::distance(first, last);
+			m_array.reserve(dist);
+		}
+
+		for (; first != last; first++)
+			insert(*first);
 	}
 	constexpr void insert(init_list ilist) {
 		insert(ilist.begin(), ilist.end());
@@ -365,45 +392,45 @@ public:
 
 	template <class V>
 	constexpr pair_type<iterator, bool> insertOrAssign(const key_type& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+		const auto baseIt = findBaseBucket(key);
+		const auto it = find(baseIt, key);
 
 		if (it != m_array.end()) {
 			*it = std::move(value_type(key, std::forward<V>(value)));
 			
 			return { it, false };
-		} return { basicEmplace(baseIt, key, std::forward<V>(value)), true };
+		} return { emplaceBasic(baseIt, key, std::forward<V>(value)), true };
 	}
 	template <class K, class V>
 	constexpr pair_type<iterator, bool> insertOrAssign(K&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+		const auto baseIt = findBaseBucket(key);
+		const auto it = find(baseIt, key);
 
 		if (it != m_array.end()) {
 			*it = std::move(value_type(std::forward<K>(key), std::forward<V>(value)));
 			
 			return { it, false };
-		} return { basicEmplace(baseIt, std::forward<K>(key), std::forward<V>(value)), true };
+		} return { emplaceBasic(baseIt, std::forward<K>(key), std::forward<V>(value)), true };
 	}
 	template <class V>
 	constexpr pair_type<iterator, bool> insertOrAssign(const_iterator hint, const key_type& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto it = find(hint, key);
+		const auto it = find(hint, key);
 
 		if (it != m_array.end()) {
 			*it = std::move(value_type(key, std::forward<V>(value)));
 			
 			return { it, false };
-		} return { basicEmplace(hint, key, std::forward<V>(value)), true };
+		} return { emplaceBasic(hint, key, std::forward<V>(value)), true };
 	}
 	template <class K, class V>
 	constexpr pair_type<iterator, bool> insertOrAssign(const_iterator hint, K&& key, V&& value) requires(!std::is_void_v<mapped_type>) {
-		auto it = find(hint, key);
+		const auto it = find(hint, key);
 
 		if (it != m_array.end()) {
 			*it = std::move(value_type(std::forward<K>(key), std::forward<V>(value)));
 			
 			return { it, false };
-		} return { basicEmplace(hint, std::forward<K>(key), std::forward<V>(value)), true };
+		} return { emplaceBasic(hint, std::forward<K>(key), std::forward<V>(value)), true };
 	}
 
 	template <class V>
@@ -437,50 +464,54 @@ public:
 
 	template <class K, class... Args>
 	constexpr pair_type<iterator, bool> tryEmplace(const key_type& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+		const auto baseIt = findBaseBucket(key);
+		const auto it = find(baseIt, key);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(baseIt, key, std::forward<Args>(args)...), true };
+		if (it != m_array.end())
+			return { it, false };
+		return { emplaceBasic(baseIt, key, std::forward<Args>(args)...), true };
 	}
 	template <class K, class... Args>
 	constexpr pair_type<iterator, bool> tryEmplace(K&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto baseIt = findBaseBucket(key);
-		auto it = find(baseIt, key);
+		const auto baseIt = findBaseBucket(key);
+		const auto it = find(baseIt, key);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(baseIt, std::forward<K>(key), std::forward<Args>(args)...), true };
+		if (it != m_array.end())
+			return { it, false };
+		return { emplaceBasic(baseIt, std::forward<K>(key), std::forward<Args>(args)...), true };
 	}
 	template <class K, class... Args>
 	constexpr iterator tryEmplace(const_iterator hint, const key_type& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto it = find(hint, key);
+		const auto it = find(hint, key);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(hint, key, std::forward<Args>(args)...), true };
+		if (it != m_array.end())
+			return { it, false };
+		return { emplaceBasic(hint, key, std::forward<Args>(args)...), true };
 	}
 	template <class K, class... Args>
 	constexpr iterator tryEmplace(const_iterator hint, K&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		auto it = find(hint, key);
+		const auto it = find(hint, key);
 
-		if (it != m_array.end()) return { it, false };
-		return { basicEmplace(hint, std::forward<K>(key), std::forward<Args>(args)...), true };
+		if (it != m_array.end())
+			return { it, false };
+		return { emplaceBasic(hint, std::forward<K>(key), std::forward<Args>(args)...), true };
 	}
 
 	template <class... Args>
 	[[deprecated]] constexpr iterator try_emplace(const key_type& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		tryEmplace(key, args...);
+		return tryEmplace(key, args...);
 	}
 	template <class K, class... Args>
 	[[deprecated]] constexpr iterator try_emplace(K&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		tryEmplace(std::forward<K>(key), std::forward<Args>(args)...);
+		return tryEmplace(std::forward<K>(key), std::forward<Args>(args)...);
 	}
 	template <class... Args>
 	[[deprecated]] constexpr iterator try_emplace(const_iterator hint, const key_type& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		tryEmplace(hint, key, args...);
+		return tryEmplace(hint, key, args...);
 	}
 	template <class K, class... Args>
 	[[deprecated]] constexpr iterator try_emplace(const_iterator hint, K&& key, Args&&... args) requires(!std::is_void_v<mapped_type>) {
-		tryEmplace(hint, std::forward<K>(key), std::forward<Args>(args)...);
+		return tryEmplace(hint, std::forward<K>(key), std::forward<Args>(args)...);
 	}
 
 
@@ -495,10 +526,9 @@ public:
 	// Erasure
 
 	constexpr iterator erase(const_iterator pos) {
-		assert((pos != m_array.end()) && "lsd::UnorderedDenseMap::erase(): Illegal end iterator was passed to the function!");
+		assert((pos != m_array.end()) && "lsd::UnorderedDenseMap::erase(): Illegal past end iterator!");
 
-		auto index = pos - m_array.cbegin();
-
+		const auto index = pos - m_array.cbegin();
 		for (auto bucketIt = findBaseBucket(*pos); bucketIt != m_buckets.cend(); bucketIt++) {
 			if (bucketIt->index == index) {
 				eraseBucket(bucketIt);
@@ -507,22 +537,22 @@ public:
 			}
 		}
 
-		auto it = m_array.begin() + index;
-		auto lastIt = m_array.rbegin();
 
-		if (it.get() == lastIt.get()) {
+		if (m_array.size() == 1) {
 			m_array.popBack();
-
-			return iterator { };
+			return;
 		}
 
-		*it = std::move(*lastIt);
+		// Instead of erasing the element with vector.erase, the last element gets shifted to the erased position
+
+		iterator it { const_cast<pointer>(pos.get()) };
+		*it = std::move(m_array.back());
 		m_array.popBack();
 		
-		auto base = findBaseBucket(*it);
+		const auto base = findBaseBucket(*it);
 
 		for (auto bucketIt = base; bucketIt != m_buckets.end(); bucketIt++) {
-			if (bucketIt->index == m_array.size()) {
+			if (bucketIt->index == m_array.size()) { // array size corresponds with the old largest index of the array
 				bucketIt->index = index;
 
 				return it;
@@ -533,17 +563,18 @@ public:
 			if (bucketIt->index == m_array.size()) {
 				bucketIt->index = index;
 
-				return it;
+				break;
 			}
 		}
 
-		return it; // This shouldn't be reached under normal conditions
+		return it;
 	}
 	constexpr iterator erase(iterator pos) {
 		return erase(const_iterator { pos });
 	}
 	constexpr iterator erase(const_iterator first, const_iterator last) {
-		for (; first != last; first++) erase(first);
+		for (; first != last; first++)
+			erase(first);
 		return m_array.begin() + (last - first);
 	}
 	constexpr size_type erase(const key_type& key) {
@@ -571,11 +602,13 @@ public:
 		return res;
 	}
 	constexpr value_type extract(const key_type& key) {
-		if (auto it = find(key); it != m_array.end()) return extract(it);
+		if (auto it = find(key); it != m_array.end())
+			return extract(it);
 		return value_type();
 	} 
 	template <class K> constexpr value_type extract(K&& key) {
-		if (auto it = find(std::forward<K>(key)); it != m_array.end()) return extract(it);
+		if (auto it = find(std::forward<K>(key)); it != m_array.end())
+			return extract(it);
 		return value_type();
 	}
 
@@ -588,39 +621,43 @@ public:
 	// Lookup
 	
 	template <class K> [[nodiscard]] constexpr iterator find(const K& key) noexcept {
-		auto base = findBaseBucket(key);
+		const auto base = findBaseBucket(key);
 
 		for (auto it = base; it != m_buckets.end() && it->index != bucket_type::empty; it++) {
 			if constexpr (std::is_void_v<mapped_type>) {
-				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, key)) return arrIt;
-			} else
-				if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key)) return arrIt;
+				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, key))
+					return arrIt;
+			} else if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key))
+				return arrIt;
 		}
 
 		for (auto it = m_buckets.begin(); it != base && it->index != bucket_type::empty; it++) {
 			if constexpr (std::is_void_v<mapped_type>) {
-				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, key)) return arrIt;
-			} else
-				if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key)) return arrIt;
+				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, key))
+					return arrIt;
+			} else if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key))
+				return arrIt;
 		}
 
 		return m_array.end();
 	}
 	template <class K> [[nodiscard]] constexpr const_iterator find(const K& key) const noexcept {
-		auto base = findCBaseBucket(key);
+		const auto base = findCBaseBucket(key);
 
 		for (auto it = base; it != m_buckets.cend() && it->index != bucket_type::empty; it++) {
 			if constexpr (std::is_void_v<mapped_type>) {
-				if (auto arrIt = m_array.cbegin() + it->index; m_equal(*arrIt, key)) return arrIt;
+				if (auto arrIt = m_array.cbegin() + it->index; m_equal(*arrIt, key))
+					return arrIt;
 			} else
 				if (auto arrIt = m_array.cbegin() + it->index; m_equal(arrIt->first, key)) return arrIt;
 		}
 
 		for (auto it = m_buckets.cbegin(); it != base && it->index != bucket_type::empty; it++) {
 			if constexpr (std::is_void_v<mapped_type>) {
-				if (auto arrIt = m_array.cbegin() + it->index; m_equal(*arrIt, key)) return arrIt;
-			} else
-				if (auto arrIt = m_array.cbegin() + it->index; m_equal(arrIt->first, key)) return arrIt;
+				if (auto arrIt = m_array.cbegin() + it->index; m_equal(*arrIt, key))
+					return arrIt;
+			} else if (auto arrIt = m_array.cbegin() + it->index; m_equal(arrIt->first, key))
+				return arrIt;
 		}
 
 		return m_array.cend();
@@ -693,15 +730,19 @@ public:
 		auto it = find(key);
 		if (it == m_array.end()) throw std::out_of_range("lsd::BasicUnorderedDense::at(): Specified key could not be found in container!");
 
-		if constexpr (std::is_void_v<mapped_type>) return *it;
-		else return it->second;
+		if constexpr (std::is_void_v<mapped_type>)
+			return *it;
+		else
+			return it->second;
 	}
 	template <class K> [[nodiscard]] constexpr const auto& at(const K& key) const {
 		auto it = find(key);
 		if (it == m_array.cend()) throw std::out_of_range("lsd::BasicUnorderedDense::at(): Specified key could not be found in container!");
 
-		if constexpr (std::is_void_v<mapped_type>) return *it;
-		else return it->second;
+		if constexpr (std::is_void_v<mapped_type>)
+			return *it;
+		else
+			return it->second;
 	}
 
 	[[nodiscard]] constexpr auto& operator[](const key_type& key) {
@@ -709,18 +750,18 @@ public:
 		auto it = find(baseIt, key);
 
 		if constexpr (std::is_void_v<mapped_type>)
-			return (it == m_array.end()) ? *basicInsert(baseIt, key) : *it;
+			return (it == m_array.end()) ? *insertBasic(baseIt, key) : *it;
 		else
-			return (it == m_array.end()) ? basicEmplace(baseIt, key, mapped_type())->second : it->second;
+			return (it == m_array.end()) ? emplaceBasic(baseIt, key, mapped_type())->second : it->second;
 	}
 	template <class K> [[nodiscard]] constexpr auto& operator[](K&& key) {
 		auto baseIt = findBaseBucket(key);
 		auto it = find(baseIt, key);
 
 		if constexpr (std::is_void_v<mapped_type>)
-			return (it == m_array.end()) ? *basicInsert(baseIt, std::forward<K>(key)) : *it;
+			return (it == m_array.end()) ? *insertBasic(baseIt, std::forward<K>(key)) : *it;
 		else
-			return (it == m_array.end()) ? basicEmplace(baseIt, std::forward<K>(key), mapped_type())->second : it->second;
+			return (it == m_array.end()) ? emplaceBasic(baseIt, std::forward<K>(key), mapped_type())->second : it->second;
 	}
 
 	
@@ -729,16 +770,18 @@ public:
 
 		for (auto it = base; it != m_buckets.cend() && it->index != bucket_type::empty; it++) {
 			if constexpr (std::is_void_v<mapped_type>) {
-				if (m_equal(m_array[it->index], key)) return *it;
-			} else
-				if (m_equal(m_array[it->index].first, key)) return *it;
+				if (m_equal(m_array[it->index], key))
+					return *it;
+			} else if (m_equal(m_array[it->index].first, key))
+				return *it;
 		}
 
 		for (auto it = m_buckets.cbegin(); it != base && it->index != bucket_type::empty; it++) {
 			if constexpr (std::is_void_v<mapped_type>) {
-				if (m_equal(m_array[it->index], key)) return *it;
-			} else
-				if (m_equal(m_array[it->index].first, key)) return *it;
+				if (m_equal(m_array[it->index], key))
+					return *it;
+			} else if (m_equal(m_array[it->index].first, key))
+				return *it;
 		}
 
 		throw std::out_of_range("lsd::BasicUnorderedDense::bucket(): Bucket pointing to element with requested key doesn't exist!");
@@ -775,7 +818,7 @@ public:
 		return bucketSize();
 	}
 	[[nodiscard]] constexpr size_type maxBucketSize() const noexcept {
-		return m_buckets.maxSize() - 1;
+		return m_buckets.maxSize();
 	}
 	[[deprecated]] [[nodiscard]] constexpr size_type max_bucket_count() const noexcept {
 		return maxBucketSize();
@@ -816,7 +859,7 @@ public:
 		return maxLFactor;
 	}
 	[[deprecated]] [[nodiscard]] consteval float max_load_factor() const noexcept {
-		return maxLoadFactor();
+		return maxLFactor;
 	}
 
 private:
@@ -838,21 +881,19 @@ private:
 			return m_buckets.begin() + (m_hasher(value.first) % m_buckets.size());
 	}
 
-	[[nodiscard]] constexpr iterator find(const_bucket_iterator it, const value_type& value) noexcept {
-		auto base = it;
+	[[nodiscard]] constexpr iterator find(const_bucket_iterator it, const value_type& value) noexcept
+		requires (!std::is_void_v<mapped_type>)
+	{
+		const auto base = it;
 
 		for (; it != m_buckets.end() && it->index != bucket_type::empty; it++) {
-			if constexpr (std::is_void_v<mapped_type>) {
-				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, value)) return arrIt;
-			} else
-				if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, value.first)) return arrIt;
+			if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, value.first))
+				return arrIt;
 		}
 
 		for (it = m_buckets.begin(); it != base && it->index != bucket_type::empty; it++) {
-			if constexpr (std::is_void_v<mapped_type>) {
-				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, value)) return arrIt;
-			} else
-				if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, value.first)) return arrIt;
+			if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, value.first))
+				return arrIt;
 		}
 
 		return m_array.end();
@@ -868,20 +909,22 @@ private:
 	}
 
 	template <class K> [[nodiscard]] constexpr iterator find(const_bucket_iterator it, const K& key) noexcept {
-		auto base = it;
-		
+		const auto base = it;
+
 		for (; it != m_buckets.end() && it->index != bucket_type::empty; it++) {
 			if constexpr (std::is_void_v<mapped_type>) {
-				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, key)) return arrIt;
-			} else
-				if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key)) return arrIt;
+				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, key))
+					return arrIt;
+			} else if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key))
+				return arrIt;
 		}
 
 		for (it = m_buckets.begin(); it != base && it->index != bucket_type::empty; it++) {
 			if constexpr (std::is_void_v<mapped_type>) {
-				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, key)) return arrIt;
-			} else
-				if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key)) return arrIt;
+				if (auto arrIt = m_array.begin() + it->index; m_equal(*arrIt, key))
+					return arrIt;
+			} else if (auto arrIt = m_array.begin() + it->index; m_equal(arrIt->first, key))
+				return arrIt;
 		}
 
 		return m_array.end();
@@ -890,63 +933,75 @@ private:
 
 	// Bucket insert
 
-	constexpr void insertBucket(bucket_iterator it, size_type index, size_type offset = 0) {
-		auto base = it;
+	constexpr void insertBucket(bucket_iterator it, size_type index) noexcept {
+		const const_bucket_iterator base { it };
+		const auto bucketEnd = m_buckets.cend();
+
+		size_type offset { };
 		do {
-			if (it->index == bucket_type::empty) {
-				*it = bucket_type { index, offset };
+			do { // m_buckets.end() will never be passed to this function
+				if (it->index == bucket_type::empty) {
+					*it = bucket_type { index, offset };
 
-				return;
-			}
+					return;
+				}
 
-			if (offset > it->offset) {
-				bucket_type tmp = *it;
-				*it = { index, offset };
+				if (offset > it->offset) {
+					bucket_type tmp = *it;
+					*it = { index, offset };
 
-				index = tmp.index;
-				offset = tmp.offset;
-			}
+					index = tmp.index;
+					offset = tmp.offset;
+				}
 
-			++offset;
-			if (++it == m_buckets.end()) it = m_buckets.begin();
-		} while (it != base);
+				++offset;
+			} while (it != bucketEnd);
+
+			it = m_buckets.begin();
+
+			// In theory, iteration should stop once it has reached its original position, but that is
+			// guaranteed to happen as there will always be at least the same amount of buckets as elements
+		} while (true);
 	}
 	constexpr void eraseBucket(bucket_iterator it) noexcept {
-		auto last = it;
+		const const_bucket_iterator base { it };
+		const auto target = m_buckets.cend();
+
 		*it = bucket_type { };
-		
+
 		do {
-			if (++it == m_buckets.end()) it = m_buckets.begin();
+			for (auto last = it++; it != target && it->index != bucket_type::empty && it->offset > 0; it++, last++) {
+				*last = *it;
+				--(last->offset);
+			}
 
-			*last = *it;
-			--(last->offset);
-
-			last = it;
-		} while (it->index != bucket_type::empty && it->offset > 0);
+			it = m_buckets.begin();
+		} while (true);
 	}
 
 
 	// Rehash
 
 	constexpr void basicRehash(size_type count) {
-		if (count >= bucket_type::empty) throw std::length_error("lsd::BasicUnorderedDense::basicRehash(): Requested rehash size larger than the maximum size of the container!");
-
-		m_buckets.clear();
-		m_buckets.resize(count);
+		try {
+			m_buckets.resize(std::min(count, m_buckets.maxSize()));
+		} catch(std::length_error) {
+			throw std::length_error("lsd::unordered_dense::BasicUnorderedDense::basicRehash(): Size exceeded maximum possible size!");
+		}
 
 		size_type index = 0;
-
-		for (auto it = m_array.cbegin(); it != m_array.cend(); it++, index++)
+		const auto arrayEnd = m_array.cend();
+		for (auto it = m_array.cbegin(); it != arrayEnd; it++, index++)
 			insertBucket(findBaseBucket(*it), index);
 	}
 	constexpr bool rehashIfNecessary(size_type count) {
-		if (m_buckets.size() != m_buckets.maxSize() - 1 && count > m_buckets.size() * maxLFactor) {
-			auto countMax = count / maxLFactor; // Emulates constexpr ceil
-			auto trunc = static_cast<size_type>(countMax);
+		// count represents the requested element count, whilst bucket size * max load factor represents the ideal element count
+		if (count >= m_buckets.size() * maxLFactor) {
+			m_buckets.clear();
 
 			basicRehash(std::max(
 				m_buckets.size() * 2,
-				(countMax > trunc) ? trunc + 1 : trunc
+				static_cast<size_type>(count / maxLFactor)
 			));
 
 			return true;
@@ -958,7 +1013,7 @@ private:
 
 	// Insert and Emplace
 
-	constexpr iterator basicInsert(bucket_iterator bucketIt, const value_type& value) {
+	constexpr iterator insertBasic(bucket_iterator bucketIt, const value_type& value) {
 		if (rehashIfNecessary(m_array.size() + 1))
 			insertBucket(findBaseBucket(value), m_array.size());
 		else
@@ -966,7 +1021,7 @@ private:
 
 		return &m_array.emplaceBack(value);
 	}
-	constexpr iterator basicInsert(bucket_iterator bucketIt, value_type&& value) {
+	constexpr iterator insertBasic(bucket_iterator bucketIt, value_type&& value) {
 		if (rehashIfNecessary(m_array.size() + 1))
 			insertBucket(findBaseBucket(value), m_array.size());
 		else
@@ -974,8 +1029,8 @@ private:
 
 		return &m_array.emplaceBack(std::move(value));
 	}
-	template <class K, class... Args> constexpr iterator basicEmplace(bucket_iterator bucketIt, K&& key, Args&&... args)
-		requires(!std::is_void_v<mapped_type>)
+	template <class K, class... Args> constexpr iterator emplaceBasic(bucket_iterator bucketIt, K&& key, Args&&... args)
+		requires (!std::is_void_v<mapped_type>)
 	{
 		if (rehashIfNecessary(m_array.size() + 1))
 			insertBucket(findBaseBucket(key), m_array.size());

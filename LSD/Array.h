@@ -12,7 +12,6 @@
 #include "Iterators.h"
 
 #include <cassert>
-#include <utility>
 #include <algorithm>
 #include <stdexcept>
 
@@ -32,10 +31,10 @@ template <class Ty, std::size_t Size> struct Array {
 	using array = value_type[Size];
 	using container = Array<value_type, Size>;
 
-	using iterator = Iterator<value_type>;
-	using const_iterator = Iterator<const_value>; 
-	using reverse_iterator = ReverseIterator<value_type>;
-	using const_reverse_iterator = ReverseIterator<const_value>; 
+	using iterator = ContinuousIterator<value_type>;
+	using const_iterator = ContinuousIterator<const_value>; 
+	using reverse_iterator = ReverseContinuousIterator<value_type>;
+	using const_reverse_iterator = ReverseContinuousIterator<const_value>; 
 
 	constexpr void fill(const_reference value) { 
 		std::fill_n(begin(), Size, value);
@@ -52,10 +51,10 @@ template <class Ty, std::size_t Size> struct Array {
 		return *m_array;
 	}
 	[[nodiscard]] constexpr reference back() {
-		return *--(m_array + Size);
+		return *(m_array + Size - 1);
 	}
 	[[nodiscard]] constexpr const_reference back() const {
-		return *--(m_array + Size);
+		return *(m_array + Size - 1);
 	}
 
 	[[nodiscard]] constexpr iterator begin() noexcept {
@@ -96,19 +95,19 @@ template <class Ty, std::size_t Size> struct Array {
 	}
 
 	[[nodiscard]] constexpr reference operator[](size_type index) noexcept {
-		assert((index < Size) && "lsd::Array::operator[]: Index exceded array bounds!");
+		assert((index < Size) && "lsd::Array::operator[]: Index exceeded array bounds!");
 		return m_array[index];
 	}
 	[[nodiscard]] constexpr const_reference operator[](size_type index) const noexcept {
-		assert((index < Size) && "lsd::Array::operator[]: Index exceded array bounds!");
+		assert((index < Size) && "lsd::Array::operator[]: Index exceeded array bounds!");
 		return m_array[index];
 	}
 	[[nodiscard]] constexpr reference at(size_type index) {
-		if (index > Size) throw std::out_of_range("lsd::Array::at: Index exceded array bounds!");
+		if (index > Size) throw std::out_of_range("lsd::Array::at: Index exceeded array bounds!");
 		return m_array[index];
 	}
 	[[nodiscard]] constexpr const_reference at(size_type index) const {
-		if (index > Size) throw std::out_of_range("lsd::Array::at: Index exceded array bounds!");
+		if (index > Size) throw std::out_of_range("lsd::Array::at: Index exceeded array bounds!");
 		return m_array[index];
 	}
 
@@ -130,6 +129,10 @@ template <class Ty, std::size_t Size> struct Array {
 
 	array m_array;
 };
+
+// Deduction guide
+template <class Ty, class... Values> requires(std::is_same_v<Ty, Values> && ...)
+Array(Ty, Values...) -> Array<Ty, 1 + sizeof...(Values)>;
 
 
 // Array type trait

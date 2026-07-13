@@ -11,8 +11,8 @@
 #pragma once
 
 #include "Operators.h"
-#include "Detail/CoreUtility.h"
-#include "Detail/BasicStringHash.h"
+#include "Detail/CoreUtility.hpp"
+#include "Detail/String/BasicStringHash.hpp"
 
 #include <type_traits>
 #include <concepts>

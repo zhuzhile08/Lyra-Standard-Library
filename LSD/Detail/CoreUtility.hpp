@@ -1,5 +1,5 @@
 /*************************
- * @file CoreUtility.h
+ * @file CoreUtility.hpp
  * @author Zhile Zhu (zhuzhile08@gmail.com)
  * 
  * @brief Core utility headers for the library with minimal dependencies
@@ -10,13 +10,11 @@
 
 #pragma once
 
-#include "../MathExt.h"
-
 #include <cstddef>
 #include <type_traits>
 #include <concepts>
+#include <iterator>
 
-#include <memory>
 
 namespace lsd {
 
@@ -25,7 +23,7 @@ namespace lsd {
 template <class Ty> concept IteratableContainer = requires(Ty c1, Ty c2) {
 	typename Ty::size_type;
 	typename Ty::value_type;
-	std::swap(c1, c2);
+	c1.swap(c2);
 	std::begin(c1);
 	std::end(c1);
 };
@@ -40,16 +38,6 @@ namespace detail {
 
 template <std::integral Integer> inline constexpr Integer sizeToIndex(Integer size) noexcept {
 	return (size == 0) ? 0 : size - 1;
-}
-
-
-// Check allocator propagation
-
-template <class Alloc> inline constexpr bool allocatorPropagationNecessary(const Alloc& a1, const Alloc& a2) {
-	using traits_type = std::allocator_traits<Alloc>;
-
-	if constexpr (traits_type::is_always_equal::value) return false;
-	else return traits_type::propagate_on_container_move_assignment::value;
 }
 
 } // namespace detail
@@ -76,6 +64,22 @@ template <class TTy, class FTy> struct ValueConditional<true, TTy, FTy> {
 template <class TTy, class FTy> struct ValueConditional<false, TTy, FTy> {
 	template <TTy, FTy FalseVal> [[nodiscard]] consteval static decltype(auto) get() noexcept {
 		return FalseVal;
+	}
+};
+
+
+// Compile time min and max
+
+template <std::three_way_comparable Ty> struct ValueComparison {
+	template <Ty a, Ty b> [[nodiscard]] consteval static decltype(auto) min() noexcept {
+		if constexpr (a > b)
+			return b;
+		return a;
+	}
+	template <Ty a, Ty b> [[nodiscard]] consteval static decltype(auto) max() noexcept {
+		if constexpr (a > b)
+			return a;
+		return b;
 	}
 };
 

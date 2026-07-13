@@ -1,5 +1,5 @@
 /*************************
- * @file UnorderedDenseSet.h
+ * @file UnorderedDenseSet.hpp
  * @author Zhile Zhu (zhuzhile08@gmail.com)
  * 
  * @brief Unordered dense set
@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "Detail/BasicUnorderedDense.h"
-#include "Detail/CoreUtility.h"
+#include "Detail/HashTables/BasicUnorderedDense.hpp"
+#include "Hash.h"
 
 #include <memory>
 

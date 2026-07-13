@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "Detail/BasicUnorderedDense.h"
-#include "Detail/CoreUtility.h"
+#include "Detail/HashTables/BasicUnorderedDense.hpp"
+#include "Hash.h"
 
 #include <memory>
 

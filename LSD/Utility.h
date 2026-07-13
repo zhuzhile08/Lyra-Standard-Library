@@ -10,15 +10,9 @@
 
 #pragma once
 
-#include "Iterators.h"
-#include "Detail/CoreUtility.h"
-
-#include <limits>
-#include <functional>
+#include "Detail/CoreUtility.hpp"
 
 #include <cstring>
-
-#include <system_error>
 
 namespace lsd {
 
@@ -36,7 +30,7 @@ template <class> struct TypeId {
 private:
 	constexpr static char m_id { };
 
-	template <class> friend constexpr type_id typeId() noexcept;
+	template <class> friend constexpr type_id typeId();
 };
 
 template <class Ty> constexpr type_id typeId() noexcept {

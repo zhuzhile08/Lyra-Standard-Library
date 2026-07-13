@@ -10,16 +10,20 @@
 
 #pragma once
 
-#include "Detail/CoreUtility.h"
-#include "Detail/BasicStringHash.h"
+#include "Detail/CoreUtility.hpp"
 #include "Utility.h"
 #include "Iterators.h"
 #include "CharTraits.h"
 #include "StringView.h"
 
+#include "Detail/String/StringCore.hpp"
+#include "Detail/String/BasicStringHash.hpp"
+#include "Detail/String/BasicLongString.hpp"
+#include "Detail/String/BasicSmallString.hpp"
+
 #include <cstdlib>
 #include <cassert>
-#include <new>	
+#include <iterator>
 #include <utility>
 #include <initializer_list>
 #include <ostream>
@@ -31,10 +35,22 @@ namespace detail {
 
 // Utility macros
 
-#define SIGNED_SCALAR_DIGITS(type) ((sizeof(type) / 2) * 3 + sizeof(type)) + 2
-#define UNSIGNED_SCALAR_DIGITS(type) ((sizeof(type) / 2) * 3 + sizeof(type)) + 1
+#define LSD_STRING_SIGNED_SCALAR_DIGITS(type) ((sizeof(type) / 2) * 3 + sizeof(type)) + 2
+#define LSD_STRING_UNSIGNED_SCALAR_DIGITS(type) ((sizeof(type) / 2) * 3 + sizeof(type)) + 1
 
-}
+
+#define LSD_STRING_IF_SSO if constexpr (SSOEnabled)
+#define LSD_STRING_REQUIRES_SSO requires (SSOEnabled)
+#define LSD_STRING_REQUIRES_NOSSO requires (!SSOEnabled)
+
+#define LSD_STRING_IF_SSO_ENABLED LSD_STRING_IF_SSO if (m_short.enabled())
+#define LSD_STRING_IF_SSO_FITS(count) LSD_STRING_IF_SSO if (short_type::fits(count))
+#define LSD_STRING_IF_SSO_OTHER_ENABLED LSD_STRING_IF_SSO if (other.m_short.enabled())
+
+#define LSD_STRING_IF_SSO_ENABLED_AND_FITS(count) LSD_STRING_IF_SSO_ENABLED { if (short_type::fits(count))
+#define LSD_STRING_ELSE_DISABLE_SSO else shortToLong(); }
+
+} // namespace detail
 
 
 template <class CharTy, class Traits = CharTraits<CharTy>, class Alloc = std::allocator<CharTy>> class BasicString { // @todo custom compile time allocator implementation
@@ -55,10 +71,10 @@ public:
 	using pointer = value_type*;
 	using const_pointer = const_value*;
 
-	using iterator = Iterator<value_type>;
-	using const_iterator = Iterator<const_value>; 
-	using reverse_iterator = ReverseIterator<value_type>;
-	using const_reverse_iterator = ReverseIterator<const_value>; 
+	using iterator = ContinuousIterator<value_type>;
+	using const_iterator = ContinuousIterator<const_value>; 
+	using reverse_iterator = ReverseContinuousIterator<value_type>;
+	using const_reverse_iterator = ReverseContinuousIterator<const_value>; 
 
 	using container = BasicString;
 	using container_reference = container&;
@@ -71,55 +87,37 @@ public:
 	using ostream_type = std::basic_ostream<value_type, std::char_traits<value_type>>;
 	using istream_type = std::basic_istream<value_type, std::char_traits<value_type>>;
 
-	static constexpr size_type npos = -1;
+	static constexpr size_type npos = string::strNPos;
 
 private:
-	// Aggressive small string and padding calculation
+	using sso_long_string = string::BasicLongString<value_type, traits_type, allocator_type, 1>;
 
-	static constexpr size_type paddingSize = 
-		static_cast<size_type>(sizeof(value_type) / (sizeof(pointer) * 4) + 1);
-	static constexpr size_type smallStringCap = 
-		static_cast<size_type>((sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - 1) / sizeof(value_type)) - 1;
-	static constexpr size_type smallStringTrueCap = smallStringCap + 1;
-	static constexpr size_type smallStringPaddingSize = 
-		sizeof(pointer) * 3 + sizeof(pointer) * paddingSize - smallStringTrueCap * sizeof(value_type);
+	// SSO calculations
 
-	using small_string_type = value_type[smallStringTrueCap];
-	using small_string_tag = unsigned char[smallStringPaddingSize];
+	static constexpr size_type smallStringCapacity = (sizeof(sso_long_string) - alignof(value_type)) / sizeof(value_type);
+	static constexpr bool SSOEnabled = smallStringCapacity > 1;
 
 
-	// Internal string storage types
-
-	struct Short {
-		small_string_type data { };
-		small_string_tag tag { 0 };
-	};
-
-	struct Long {
-		pointer begin { };
-		pointer end { };
-		pointer cap { };
-
-		pointer padding[paddingSize] { }; // There has to be at least one block of padding for the tag
-	};
+	// String storage type
+	
+	using long_type = string::BasicLongString<value_type, traits_type, allocator_type, smallStringCapacity>;
+	using short_type = std::conditional_t<SSOEnabled,
+										  string::BasicSmallString<value_type, traits_type, smallStringCapacity>,
+										  std::in_place_t>;
 
 
-	// EraseAndInsertGap special return value
-	struct EraseAndInsertGapReturnInfo {
-		pointer result;
-		bool isMemReady;
-	};
-
-
-	// Helper type trait for string-view-likes
-
-	template <class StringViewLike, class = void> struct IsConvertibleToView : public std::false_type { };
-	template <class StringViewLike> struct IsConvertibleToView<StringViewLike, std::enable_if_t<
-		std::is_convertible_v<const StringViewLike&, view_type> && 
-		!std::is_convertible_v<const StringViewLike&, const_pointer>
-	>> : public std::true_type { };
-
-	template <class StringViewLike> static constexpr bool isConvertibleToView = IsConvertibleToView<StringViewLike>::value;
+	// Internally, the BasicString makes following promises:
+	// 1. If a character and a terminator can be stored within the size of SSOLong, small string optimization is enabled
+	//    Else, the container optimizes for size and disables any SSO completely, which means the extra padding is removed
+	// 2. When SSO is enabled:
+	//    a) The container is EITHER in SSO mode ...
+	//    b) ... OR the container always contains valid and allocated memory
+	//    c) m_long.m_end is constructed and its value is \0
+	//    d) The container will ONLY exit SSO mode if more memory needs to be allocated than SSO can support
+	//    e) The container will ONLY reenter SSO mode if requested by shrinkToFit()
+	// 3. When SSO is disabled:
+	//	  a) The container must not always contain valid memory
+	//	  b) m_long.m_end is constructed and its value is \0 IF the container contains valid memory
 
 public:
 	static_assert(!std::is_array_v<value_type>, "lsd::String: Character type has to a non-array!");
@@ -127,242 +125,278 @@ public:
 	static_assert(std::is_standard_layout_v<value_type>, "lsd::String: Character type has to  in standard layout!");
 	static_assert(std::is_same_v<value_type, typename traits_type::char_type>, "lsd::String: Character type has to be the same as the type provided to the character traits!");
 
+
 	constexpr BasicString() noexcept(noexcept(allocator_type())) : BasicString(allocator_type()) { }
-	constexpr explicit BasicString(const_alloc_reference alloc) : m_alloc(alloc) { }
-	constexpr BasicString(size_type count, value_type value, const_alloc_reference alloc = allocator_type()) : 
-		m_alloc(alloc) {
-		resize(count, value);
-	}
-	constexpr BasicString(const_container_reference other, size_type pos, const_alloc_reference alloc = allocator_type()) {
-		if (pos > other.size()) throw std::out_of_range("lsd::BasicString::BasicString(): Position exceded string bounds!");
-		else *this = std::move(BasicString(other.pBegin() + pos, other.pEnd(), alloc));
-	}
-	constexpr BasicString(container_rvreference other, size_type pos, const_alloc_reference alloc = allocator_type()) : m_alloc(alloc) {
-		if (pos > other.size()) throw std::out_of_range("lsd::BasicString::BasicString(): Position exceded string bounds!");
-		else {
-			if constexpr (allocator_traits::is_always_equal::value || !allocator_traits::propagate_on_container_move_assignment::value) 
-				*this = std::move(other);
-			else {
-				if (m_alloc == other.m_alloc) *this = std::move(other);
-				else *this = std::move(BasicString(other.pBegin() + pos, other.pEnd(), alloc));
-			}
+	constexpr explicit BasicString(const_alloc_reference alloc) noexcept(noexcept(allocator_type())) : m_alloc(alloc) { }
+
+	constexpr BasicString(size_type count, value_type value, const_alloc_reference alloc = allocator_type())
+		: m_alloc(alloc)
+	{
+		LSD_STRING_IF_SSO_FITS(count) {
+			m_short.construct(count, value);
+			return;
 		}
-		
+
+		disableSSO();
+		m_long.construct(m_alloc, count, value);
 	}
-	constexpr BasicString(const_container_reference other, size_type pos, size_type count, const_alloc_reference alloc = allocator_type()) {
-		if (pos > other.size()) throw std::out_of_range("lsd::BasicString::BasicString(): Position exceded string bounds!");
-		else *this = std::move(BasicString(other.pBegin() + pos, other.pBegin() + pos + std::min(count, other.size() - pos), alloc));
+
+	template <std::input_iterator Iter> constexpr BasicString(Iter first, Iter last, const_alloc_reference alloc = allocator_type())
+		: m_alloc(alloc)
+	{
+		constructFromRange(first, last);
 	}
-	constexpr BasicString(container_rvreference other, size_type pos, size_type count, const_alloc_reference alloc = allocator_type()) {
-		if (pos > other.size()) throw std::out_of_range("lsd::BasicString::BasicString(): Position exceded string bounds!");
-		else *this = std::move(BasicString(other.pBegin() + pos, other.pBegin() + pos + std::min(count, other.size() - pos), alloc));
-	}
+
 	constexpr BasicString(const_pointer s, size_type count, const_alloc_reference alloc = allocator_type())
 		 : BasicString(s, s + count, alloc) { }
 	constexpr BasicString(const_pointer s, const_alloc_reference alloc = allocator_type())
 		 : BasicString(s, s + traits_type::length(s), alloc) { }
-	template <class It> constexpr BasicString(It first, It last, const_alloc_reference alloc = allocator_type()) requires isIteratorValue<It> : 
-		m_alloc(alloc) {
-		if (first != last) {
-			auto count = last - first;
-			reserve(count);
 
-			if (smallStringMode())
-				for (auto it = m_short.data; first != last; it++, first++, m_short.tag[0]++) traits_type::assign(*it, *first);
-			else {
-				for (; first != last; m_long.end++, first++) allocator_traits::construct(m_alloc, m_long.end, *first);
-				allocator_traits::construct(m_alloc, m_long.end, value_type { });
-			}
-		}
+	constexpr BasicString(const_container_reference other) : 
+		BasicString(other, allocator_traits::select_on_container_copy_construction(other.allocator())) { }
+	constexpr BasicString(const_container_reference other, const_alloc_reference alloc) : 
+		BasicString(other, 0, alloc) { }
+	constexpr BasicString(const_container_reference other, size_type pos, size_type count, const_alloc_reference alloc = allocator_type())
+		: m_alloc(alloc)
+	{
+		constructFromString(other, pos, count);
 	}
-	constexpr BasicString(const_container_reference other) : BasicString(other.pBegin(), other.pEnd(), other.m_alloc) { }
-	constexpr BasicString(const_container_reference other, const_alloc_reference alloc) : BasicString(other.pBegin(), other.pEnd(), alloc) { }
-	constexpr BasicString(container_rvreference other) noexcept :
-		m_alloc(std::exchange(other.m_alloc, m_alloc)) {
-		if (other.smallStringMode()) {
-			m_short.tag[0] = other.m_short.tag[0];
-			traits_type::move(m_short.data, other.m_short.data, smallStringCap);
-		} else {
-			m_short.tag[0] = std::exchange(other.m_short.tag[0], 0); // Other is now practically empty in small string mode
-			m_long.begin = std::exchange(other.m_long.begin, pointer { });
-			m_long.end = std::exchange(other.m_long.end, pointer { });
-			m_long.cap = std::exchange(other.m_long.cap, pointer { });
-		}
+	constexpr BasicString(const_container_reference other, size_type pos, const_alloc_reference alloc = allocator_type())
+		: m_alloc(alloc)
+	{	
+		constructFromString(other, pos, npos);
 	}
-	constexpr BasicString(container_rvreference other, const_alloc_reference alloc) : 
-		m_alloc(alloc) {
-		if (other.smallStringMode()) {
-			m_short.tag[0] = other.m_short.tag[0];
-			traits_type::move(m_short.data, other.m_short.data, smallStringCap);
-		} else if (detail::allocatorPropagationNecessary(other.m_alloc, m_alloc)) {
-			auto count = other.m_long.end - other.m_long.begin;
 
-			if (count != 0) {
-				reserve(count);
-
-				for (auto it = other.m_long.begin; it != other.m_long.end; m_long.end++, it++) 
-					allocator_traits::construct(m_alloc, m_long.end, *it);
-				allocator_traits::construct(m_alloc, m_long.end, value_type { });
-			}
-		} else {
-			m_long.begin = std::exchange(other.m_long.begin, pointer { });
-			m_long.end = std::exchange(other.m_long.end, pointer { });
-			m_long.cap = std::exchange(other.m_long.cap, pointer { });
-		}
+	constexpr BasicString(container_rvreference other) noexcept
+		: m_alloc(std::exchange(other.m_alloc, m_alloc))
+	{
+		constructFromString(std::move(other));
 	}
+	constexpr BasicString(container_rvreference other, const_alloc_reference alloc)
+		: m_alloc(alloc)
+	{
+		constructFromString(std::move(other));
+	}
+	constexpr BasicString(container_rvreference other, size_type pos, const_alloc_reference alloc = allocator_type())
+		: m_alloc(alloc)
+	{
+		if (pos == 0)
+			constructFromString(std::move(other));
+		else
+			constructFromString(other, pos, npos);
+	}
+	constexpr BasicString(container_rvreference other, size_type pos, size_type count, const_alloc_reference alloc = allocator_type())
+		: m_alloc(alloc)
+	{
+		if (pos == 0)
+			constructFromString<true>(std::move(other), count);
+		else
+			constructFromString(other, pos, count);
+	}
+
 	constexpr BasicString(init_list ilist, const_alloc_reference alloc = allocator_type())
-		 : BasicString(ilist.begin(), ilist.end(), alloc) { }
-	template <class StringViewLike> explicit constexpr BasicString(const StringViewLike& sv, const_alloc_reference alloc = allocator_type()) requires isConvertibleToView<StringViewLike> {
-		view_type v(sv);
-		*this = std::move(BasicString(v.m_begin, v.m_end, alloc));
-	}
-	template <class StringViewLike> constexpr BasicString(const StringViewLike& sv, size_type pos, size_type count, const_alloc_reference alloc = allocator_type()) requires isConvertibleToView<StringViewLike> {
-		view_type v(sv);
-		if (pos > v.size()) throw std::out_of_range("lsd::BasicString::BasicString(): Position exceded string view bounds!");
-		else *this = std::move(BasicString(v.m_begin + pos, v.m_begin + pos + std::min(count, v.size() - pos), alloc));
-	}
-	
-	constexpr ~BasicString() {
-		if (!smallStringMode()) { // Extra check vor the validity of m_long.begin is not needed since it will always be valid when the string isn't in small string mode
-			destructBehind(m_long.begin - 1);
+		: BasicString(ilist.begin(), ilist.end(), alloc) { }
 
-			allocator_traits::deallocate(m_alloc, m_long.begin, m_long.cap - m_long.begin);
-			
-			m_long.begin = nullptr;
-			m_long.end = nullptr;
-			m_long.cap = nullptr;
-		}
+	template <detail::StringViewLike<view_type> View>
+	explicit constexpr BasicString(const View& sv, const_alloc_reference alloc = allocator_type())
+		: m_alloc(alloc)
+	{
+		const view_type view { sv };
+		constructFromRange(view.begin(), view.end());
 	}
+	template <detail::StringViewLike<view_type> View>
+	constexpr BasicString(const View& sv, size_type pos, size_type count, const_alloc_reference alloc = allocator_type())
+		: m_alloc(alloc)
+	{
+		const view_type view { view_type { sv }.substr(pos, count) };
+		constructFromRange(view.m_begin, view.m_end);
+	}
+
+
+	constexpr ~BasicString() {
+		LSD_STRING_IF_SSO_ENABLED
+			return;
+
+		if (m_long.m_begin)
+			m_long.dealloc(m_alloc);
+	}
+
+
+	// Assignment operators
 
 	constexpr container_reference operator=(const_container_reference other) {
-		return assign(other.pBegin(), other.pEnd(), other.m_alloc);
-	}
-	constexpr container_reference operator=(container_rvreference other) noexcept {
-		std::swap(other.m_short.tag[0], m_short.tag[0]);
+		if (this == &other)
+			return *this;
 
-		if (smallStringMode())
-			traits_type::move(m_short.data, other.m_short.data, smallStringCap);
-		else if (detail::allocatorPropagationNecessary(other.m_alloc, m_alloc))
-			assign(other.m_long.begin, other.m_long.end, other.m_alloc);
-		else {
-			std::swap(other.m_alloc, m_alloc);
-			std::swap(other.m_long.begin, m_long.begin);
-			std::swap(other.m_long.end, m_long.end);
-			std::swap(other.m_long.cap, m_long.cap);
-		}
+		if (!assignIfPossible<false>(long_type::propagateAllocatorCopy(m_alloc, other.m_alloc), other))
+			m_long.assign(m_alloc, other.m_long.size(), other.m_long.m_begin, other.m_long.m_end);
 
 		return *this;
 	}
+
+	constexpr container_reference operator=(container_rvreference other) noexcept {
+		if (this == &other)
+			return *this;
+
+		if (!assignIfPossible<true>(long_type::reallocOnMove(m_alloc, other.m_alloc), std::move(other)))
+			m_long.move(m_alloc, std::move(other.m_long), std::move(other.m_alloc));
+
+		return *this;
+	}
+
 	constexpr container_reference operator=(const_pointer s) {
 		return assign(s, s + traits_type::length(s));
 	}
 	constexpr container_reference operator=(value_type c) {
-		return assign(1, c);
+		return assign(size_type { 1 }, c);
 	}
+
 	constexpr container_reference operator=(init_list ilist) {
 		return assign(ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference operator=(const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
-		view_type v(sv);
-		return assign(v.m_begin, v.m_end);
+
+	template <detail::StringViewLike<view_type> View> constexpr container_reference operator=(const View& sv) {
+		const view_type view { sv };
+		return assign(view.begin(), view.end());
 	}
+
 	constexpr container_reference operator=(std::nullptr_t) = delete;
 
-	constexpr container_reference assign(size_type count, value_type value) {
-		clear();
-		resize(count, value);
-		return *this;
-	}
-	constexpr container_reference assign(const_container_reference other) {
-		assign(other.pBegin(), other.pEnd(), other.m_alloc);
-		return *this;
-	}
-	constexpr container_reference assign(const_container_reference other, size_type pos, size_type count = npos) {
-		auto s = other.size(); // Just in case to avoid traits_type::length()
-		if (pos > s) throw std::out_of_range("lsd::BasicString::operator=(): Requested position exceded string bounds!");
 
-		assign(other.pBegin() + pos, other.pBegin() + pos + std::min(count, s - pos), other.m_alloc);
+	// Manual assignment functions
+
+	constexpr container_reference assign(size_type count, value_type value) {
+		assignBasic(count, value);
 		return *this;
 	}
-	constexpr container_reference assign(container_rvreference other) noexcept {
-		*this = std::move(other);
+
+	template <std::random_access_iterator Iter> constexpr container_reference assign(Iter first, Iter last) {
+		const auto dist = std::distance(first, last);
+		if (dist == 0)
+			clear();
+		else
+			assignBasic(dist, first, last);
+
+		return *this;
+
+	}
+
+	template <std::random_access_iterator Iter> constexpr container_reference assign(Iter first, Iter last)
+		requires(!std::random_access_iterator<Iter>)
+	{
+		LSD_STRING_IF_SSO_ENABLED {
+			if (m_short.assign(first, last))
+				return *this;
+			else
+				disableSSO();
+		}
+
+		m_long.assign(m_alloc, first, last);
+
 		return *this;
 	}
+	
 	constexpr container_reference assign(const_pointer s, size_type count) {
 		return assign(s, s + count);
 	}
 	constexpr container_reference assign(const_pointer s) {
 		return assign(s, s + traits_type::length(s));
 	}
-	template <class It> constexpr container_reference assign(It first, It last) requires isIteratorValue<It> {
-		clear();
 
-		if (first != last) {
-			auto count = last - first;
-			smartReserve(count);
+	constexpr container_reference assign(const_container_reference other) {
+		if (this == &other)
+			return *this;
 
-			if (smallStringMode()) 
-				for (auto it = m_short.data; first != last; it++, first++, m_short.tag[0]++) traits_type::assign(*it, *first);
-			else {
-				for (; first != last; first++, m_long.end++) allocator_traits::construct(m_alloc, m_long.end, *first);
-				allocator_traits::construct(m_alloc, m_long.end, '\0');
-			}
-		}
+		const view_type view { other };
+		return assign(view.m_begin, view.m_end);
+	}
+	constexpr container_reference assign(const_container_reference other, size_type pos, size_type count = npos) {
+		const view_type view { other.subview(pos, count) };
+		return assign(view.m_begin, view.m_end);
+	}
+
+	constexpr container_reference assign(container_rvreference other)
+		noexcept(allocator_traits::propagate_on_container_move_assignment::value || allocator_traits::is_always_equal::value)
+	{
+		if constexpr (!allocator_traits::propagate_on_container_move_assignment::value && !allocator_traits::is_always_equal::value)
+			if (m_alloc != other.m_alloc)
+				return assign(other);
+
+		if (!assignIfSSO(other))
+			m_long.move(m_alloc, std::move(other.m_long), std::move(other.m_alloc));
 
 		return *this;
 	}
+
 	constexpr container_reference assign(init_list ilist) {
 		return assign(ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference assign(const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
-		view_type v(sv);
-		return assign(v.m_begin, v.m_end);
-	}
-	template <class StringViewLike> constexpr container_reference assign(const StringViewLike& sv, size_type pos, size_type count = npos) requires isConvertibleToView<StringViewLike> {
-		view_type v(sv);
-		if (pos > v.size()) throw std::out_of_range("lsd::BasicString::operator=(): Requested position exceded string bounds!");
 
-		return assign(v.m_begin + pos, v.m_begin + pos + std::min(count, v.size() - pos));
+	template <detail::StringViewLike<view_type> View> constexpr container_reference assign(const View& sv) {
+		const view_type view { sv };
+		return assign(view.m_begin, view.m_end);
 	}
+	template <class StringViewLike> constexpr container_reference assign(const StringViewLike& sv, size_type pos, size_type count = npos) {
+		const view_type view { view_type { sv }.substr(pos, count) };
+		return assign(view.m_begin, view.m_end);
+	}
+
 
 	constexpr void swap(container_reference other) {
-		std::swap(other.m_short.tag[0], m_short.tag[0]);
+		if (this == &other)
+			return;
 
-		auto so = std::move(other);
-		auto st = std::move(*this);
+		const bool differentAlloc = long_type::propagateAllocatorSwap(m_alloc, other.m_alloc);
 
-		*this = std::move(so);
-		other = std::move(st);
+		LSD_STRING_IF_SSO {
+			if (m_short.enabled()) {
+				if (other.m_short.enabled()) {
+					if constexpr (allocator_traits::propagate_on_container_swap::value) if (differentAlloc)
+						std::swap(m_alloc, other.m_alloc);
+
+					m_short.swap(other.m_short);
+				} else
+					other.swapLongWithShort(differentAlloc, *this);
+
+				return;
+			} else if (other.m_short.enabled()) {
+				swapLongWithShort(differentAlloc, other);
+				return;
+			}
+		}
+
+		m_long.swap(m_alloc, differentAlloc, other.m_long, other.m_alloc);
 	}
+
 
 	[[nodiscard]] constexpr iterator begin() noexcept {
 		return pBegin();
 	}
 	[[nodiscard]] constexpr const_iterator begin() const noexcept {
-		return pBegin();
+		return cpBegin();
 	}
 	[[nodiscard]] constexpr const_iterator cbegin() const noexcept {
-		return pBegin();
+		return cpBegin();
 	}
 	[[nodiscard]] constexpr iterator end() noexcept {
 		return pEnd();
 	}
 	[[nodiscard]] constexpr const_iterator end() const noexcept {
-		return pEnd();
+		return cpEnd();
 	}
 	[[nodiscard]] constexpr const_iterator cend() const noexcept {
-		return pEnd();
+		return cpEnd();
 	}
 	[[nodiscard]] constexpr reverse_iterator rbegin() noexcept {
 		auto e = pEnd();
 		return e ? e - 1 : nullptr;
 	}
 	[[nodiscard]] constexpr const_reverse_iterator rbegin() const noexcept {
-		auto e = pEnd();
+		auto e = cpEnd();
 		return e ? e - 1 : nullptr;
 	}
 	[[nodiscard]] constexpr const_reverse_iterator crbegin() const noexcept {
-		auto e = pEnd();
+		auto e = cpEnd();
 		return e ? e - 1 : nullptr;
 	}
 	[[nodiscard]] constexpr reverse_iterator rend() noexcept {
@@ -370,11 +404,11 @@ public:
 		return b ? b - 1 : nullptr;
 	}
 	[[nodiscard]] constexpr const_reverse_iterator rend() const noexcept {
-		auto b = pBegin();
+		auto b = cpBegin();
 		return b ? b - 1 : nullptr;
 	}
 	[[nodiscard]] constexpr const_reverse_iterator crend() const noexcept {
-		auto b = pBegin();
+		auto b = cpBegin();
 		return b ? b - 1 : nullptr;
 	}
 
@@ -382,332 +416,162 @@ public:
 		return *pBegin();
 	}
 	[[nodiscard]] constexpr const_reference front() const noexcept {
-		return *pBegin();
+		return *cpBegin();
 	}
 	[[nodiscard]] constexpr reference back() noexcept {
 		return *(pEnd() - 1);
 	}
 	[[nodiscard]] constexpr const_reference back() const noexcept {
-		return *(pEnd() - 1);
+		return *(cpEnd() - 1);
 	}
+
+
+	// Size and capacity modification functions
 	
 	constexpr void resize(size_type count) {
-		auto s = size();
-		if (count > s)
-			append(count - s, value_type { });
-		else if (count < s)
-			destructBehind(pBegin() + count);
+		resize(count, value_type { });
 	}
 	constexpr void resize(size_type count, const_reference value) {
-		auto s = size();
-		if (count > s)
-			append(count - s, value);
-		else if (count < s) 
-			destructBehind(pBegin() + count);
+		LSD_STRING_IF_SSO_ENABLED_AND_FITS(count) {
+			m_short.resize(count, value);
+			return;
+		} LSD_STRING_ELSE_DISABLE_SSO
+
+		m_long.resize(m_alloc, count, value);
 	}
 	constexpr void reserve(size_type count) {
-		++count; // null terminator
+		LSD_STRING_IF_SSO_ENABLED_AND_FITS(count)
+			return;
+		LSD_STRING_ELSE_DISABLE_SSO
 
-		if (count > maxSize()) throw std::length_error("lsd::BasicString::reserve(): Count + 1 exceded maximum allocation size");
-		else if (smallStringMode() && count > smallStringCap) {
-			auto ssSize = smallStringSize(); 
-
-			pointer begin { };
-			begin = allocator_traits::allocate(m_alloc, count);
-
-			auto beginIt = begin;
-			for (auto ssIt = m_short.data; ssIt <= (m_short.data + ssSize); ssIt++, beginIt++)  // <= because of null terminator
-				allocator_traits::construct(m_alloc, beginIt, *ssIt);
-
-			m_long.begin = begin;
-			m_long.end = m_long.begin + ssSize;
-			m_long.cap = m_long.begin + count;
-			m_short.tag[0] = smallStringTrueCap;
-		} else if (!smallStringMode()) {
-			auto cap = capacity();
-
-			if (count > cap) {
-				auto s = size();
-				auto oldBegin = std::exchange(m_long.begin, allocator_traits::allocate(m_alloc, count));
-
-				if (oldBegin) {
-					for (auto beginIt = m_long.begin, oldBeginIt = oldBegin; oldBeginIt != m_long.end + 1; oldBeginIt++, beginIt++) // Plus one for null terminator
-						allocator_traits::construct(m_alloc, beginIt, *oldBeginIt);
-
-					allocator_traits::deallocate(m_alloc, oldBegin, cap);
-				}
-
-				m_long.end = m_long.begin + s;
-				m_long.cap = m_long.begin + count;
-			}
-		}
+		m_long.reserve(m_alloc, count);
 	}
 	constexpr void shrinkToFit() {
-		if (!smallStringMode()) {
-			auto s = size() + 1; // + 1 because of the null terminator
-			auto cap = capacity();
+		LSD_STRING_IF_SSO_ENABLED
+			return;
 
-			if (s < cap) {
-				if (s <= smallStringCap) { // Returns string to small string mode
-					pointer oldBegin = m_long.begin;
-					pointer oldEnd = m_long.end + 1;
-					m_short.tag[0] = s - 1;
-
-					m_long.begin = nullptr;
-					m_long.end = nullptr;
-					m_long.cap = nullptr;
-
-					for (auto it = m_short.data, oldIt = oldBegin; oldIt != oldEnd; oldIt++, it++) traits_type::assign(*it, *oldIt);
-
-					allocator_traits::deallocate(m_alloc, oldBegin, cap);
-				} else {
-					auto oldBegin = std::exchange(m_long.begin, allocator_traits::allocate(m_alloc, s));
-
-					if (oldBegin) {
-						for (auto beginIt = m_long.begin, oldBeginIt = oldBegin; oldBeginIt != m_long.end + 1; beginIt++, oldBeginIt++)
-							allocator_traits::construct(m_alloc, beginIt, *oldBeginIt);
-
-						allocator_traits::deallocate(m_alloc, oldBegin, cap);
-					}
-
-					m_long.end = m_long.begin + s - 1;
-					m_long.cap = m_long.end + 1;
-				}
-			}
-		}
+		if (!m_long.shrinkToFit(m_alloc))
+			longToShort();
 	}
 	[[deprecated]] constexpr void shrink_to_fit() {
 		shrinkToFit();
 	}
 
-	constexpr container_reference insert(size_type index, size_type count, value_type c) {
-		insert(pBegin() + index, count, c);
-		
-		return *this;
+
+	// Index-based insert
+
+	constexpr container_reference insert(size_type index, size_type count, value_type value) {
+		return insertBasic(index, count, value);
+	}
+
+	template <std::input_iterator Iter> constexpr container_reference insert(size_type index, Iter first, Iter last) {
+		const auto dist = std::distance(first, last);
+		return insertBasic(index, dist, first, last);
 	}
 	constexpr container_reference insert(size_type index, const_pointer s) {
-		insert(pBegin() + index, s, s + traits_type::length(s));
-		
-		return *this;
+		return insert(index, s, s + traits_type::length(s));
 	}
 	constexpr container_reference insert(size_type index, const_pointer s, size_type count) {
-		insert(pBegin() + index, s, s + count);
-		
-		return *this;
+		return insert(index, s, s + count);
 	}
 	constexpr container_reference insert(size_type index, const_container_reference str) {
-		insert(pBegin() + index, str.pBegin(), str.pEnd());
-
-		return *this;
+		const view_type view { str };
+		return insert(index, view.m_begin, view.m_end);
 	}
 	constexpr container_reference insert(size_type index, const_container_reference str, size_type sIndex, size_type count = npos) {
-		insert(pBegin() + index, str.pBegin() + sIndex, str.pBegin() + sIndex + std::min(count, str.size() - sIndex));
-		
-		return *this;
+		const view_type view { str.subview(sIndex, count) };
+		return insert(index, view.m_begin, view.m_end);
 	}
+
+	// Iterator-based insert
+
 	constexpr iterator insert(const_iterator position, value_type value) {
-		return insert(position, 1, value);
+		return insertBasic<false>(position, 1, value);
 	}
 	constexpr iterator insert(const_iterator position, size_type count, value_type value) {
-		auto pos = const_cast<pointer>(position.get());
-
-		if (count != 0) {
-			auto info = eraseAndInsertGap(pos, 0, count);
-
-			if (info.isMemReady)
-				for (; count != 0; count--, info.result++) traits_type::assign(*info.result, value);
-			else
-				for (; count != 0; count--, info.result++) allocator_traits::construct(m_alloc, info.result, value);
-		
-			return info.result;
-		} else return pos;
+		return insertBasic(position, count, value);
 	}
-	template <class It> constexpr iterator insert(const_iterator position, It first, It last) requires isIteratorValue<It> {
-		auto pos = const_cast<pointer>(position.get());
-		
-		if (first != last) {
-			auto info = eraseAndInsertGap(pos, 0, last - first);
 
-			if (info.isMemReady)
-				for (; first != last; first++, info.result++) traits_type::assign(*info.result, *first);
-			else
-				for (; first != last; first++, info.result++) allocator_traits::construct(m_alloc, info.result, *first);
-		
-			return info.result;
-		} else return pos;
+	template <std::input_iterator Iter> constexpr iterator insert(const_iterator position, Iter first, Iter last) {
+		const auto dist = std::distance(first, last);
+		return insertBasic(position, dist, first, last);
 	}
+
 	constexpr iterator insert(const_iterator pos, init_list ilist) {
 		return insert(pos, ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference insert(size_type index, const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
-		insert(pBegin() + index, sv.m_begin, sv.m_end);
-		
-		return *this;
+
+	template <detail::StringViewLike<view_type> View>
+	constexpr container_reference insert(size_type index, const View& sv) {
+		const view_type view { sv };
+		return insert(index, view.m_begin, view.m_end);
 	}
-	template <class StringViewLike> constexpr container_reference insert(size_type index, const StringViewLike& sv, size_type svIndex, size_type count = npos) requires isConvertibleToView<StringViewLike> {
-		insert(pBegin() + index, sv.m_begin + svIndex, sv.m_begin + svIndex + std::min(count, sv.size() - svIndex));
-		
-		return *this;
+	template <detail::StringViewLike<view_type> View>
+	constexpr container_reference insert(size_type index, const View& sv, size_type svIndex, size_type count = npos) {
+		const view_type view { view_type { sv }.substr(svIndex, count) };
+		return insert(index, view.m_begin, view.m_end);
 	}
 
-	constexpr void pushBack(value_type value) {
-		this->operator+=(value);
-	}
-	[[deprecated]] constexpr void push_back(value_type value) {
-		pushBack(value);
-	}
 
-	constexpr container_reference replace(size_type pos, size_type count, const_container_reference str) {
-		return replace(pBegin() + pos, pBegin() + pos + count, str.pBegin(), str.pEnd());
-	}
-	constexpr container_reference replace(const_iterator first, const_iterator last, const_container_reference str) {
-		return replace(first, last, str.pBegin(), str.pEnd());
-	}
-	constexpr container_reference replace(size_type pos, size_type count, const_container_reference str, size_type sPos, size_type sCount = npos) {
-		if (sPos > str.size()) throw std::out_of_range("lsd::BasicString::replace(): Position exceded bounds of inserted string!");
-
-		auto beg = pBegin() + pos;
-		auto sBeg = str.pBegin() + sPos;
-
-		return replace(beg, beg + count, sBeg, sBeg + std::min(sCount, str.size() - sPos));
-	}
-	constexpr container_reference replace(size_type pos, size_type count, const_pointer str, size_type sCount) {
-		auto beg = pBegin() + pos;
-
-		return replace(beg, beg + count, str, str + sCount);
-	}
-	constexpr container_reference replace(const_iterator first, const_iterator last, const_pointer str, size_type sCount) {
-		return replace(first, last, str, str + sCount);
-	}
-	constexpr container_reference replace(size_type pos, size_type count, const_pointer str) {
-		auto beg = pBegin() + pos;
-
-		return replace(beg, beg + count, str, str + traits_type::length(str));
-	}
-	constexpr container_reference replace(const_iterator first, const_iterator last, const_pointer str) {
-		return replace(first, last, str, str + traits_type::length(str));
-	}
-	constexpr container_reference replace(size_type pos, size_type count, size_type cCount, value_type c) {
-		auto beg = pBegin() + pos;
-
-		return replace(beg, beg + count, cCount, c);
-	}
-	constexpr container_reference replace(const_iterator first, const_iterator last, size_type count, value_type c) {
-		auto pos = const_cast<pointer>(first.get());
-		
-		if (first != last || count != 0) {
-			auto info = eraseAndInsertGap(pos, last - first, count);
-
-			if (info.isMemReady)
-				for (; count != 0; count--, info.result++) traits_type::assign(*info.result, c);
-			else
-				for (; count != 0; count--, info.result++) allocator_traits::construct(m_alloc, info.result, c);
-		}
-
-		return *this;
-	}
-	template <class It> constexpr container_reference replace(const_iterator first, const_iterator last, It rFirst, It rLast) requires isIteratorValue<It> {
-		auto pos = const_cast<pointer>(first.get());
-		
-		if (first != last || rFirst != rLast) {
-			auto info = eraseAndInsertGap(pos, last - first, rLast - rFirst);
-
-			if (info.isMemReady)
-				for (; rFirst != rLast; rFirst++, info.result++) traits_type::assign(*info.result, *rFirst);
-			else
-				for (; rFirst != rLast; rFirst++, info.result++) allocator_traits::construct(m_alloc, info.result, *rFirst);
-		}
-
-		return *this;
-	}
-	constexpr container_reference replace(const_iterator first, const_iterator last, std::initializer_list<value_type> ilist) {
-		return replace(first, last, ilist.begin(), ilist.end());
-	}
-	template <class StringViewLike> constexpr container_reference replace(size_type pos, size_type count, const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
-		auto beg = pBegin() + pos;
-		view_type v(sv);
-
-		return replace(beg, beg + count, v.m_begin, v.m_end);
-	}
-	template <class StringViewLike> constexpr container_reference replace(const_iterator first, const_iterator last, const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
-		view_type v(sv);
-
-		return replace(first, last, v.m_begin, v.m_end);
-	}
-	template <class StringViewLike> constexpr container_reference replace(size_type pos, size_type count, const StringViewLike& sv, size_type vPos, size_type vCount = npos) requires isConvertibleToView<StringViewLike> {
-		view_type v(sv);
-
-		if (vPos > sv.size()) throw std::out_of_range("lsd::BasicString::replace(): Position exceded bounds of inserted string view!");
-
-		auto beg = pBegin() + pos;
-
-		return replace(beg, beg + count, v.m_begin + vPos, v.m_begin + vPos + vCount);
-	}
-
+	// Append functions
+	
 	constexpr container_reference append(size_type count, value_type value) {
-		auto s = size();
-		smartReserve(s + count);
-		
-		if (smallStringMode()) {
-			m_short.tag[0] += count;
-			for (auto it = (m_short.data + s); count > 0; count--, it++) traits_type::assign(*it, value);
-		} else {
-			for (; count > 0; count--, m_long.end++) allocator_traits::construct(m_alloc, m_long.end, value);
-			allocator_traits::construct(m_alloc, m_long.end, value_type { });
-		}
+		return appendBasic(count, value);
+	}
 
+	template <std::contiguous_iterator Iter> constexpr container_reference append(Iter first, Iter last) {
+		const auto dist = std::distance(first, last);
+		return appendBasic(dist, first, last);
+	}
+	template <std::input_iterator Iter> constexpr container_reference append(Iter first, Iter last)
+		requires(!std::contiguous_iterator<Iter>)
+	{
+		LSD_STRING_IF_SSO_ENABLED {
+			if (m_short.append(first, last))
+				return *this;
+			LSD_STRING_ELSE_DISABLE_SSO
+
+		m_long.append(m_alloc, first, last);
 		return *this;
 	}
-	constexpr container_reference append(const_container_reference str) {
-		return append(str.begin(), str.end());
-	}
-	constexpr container_reference append(const_container_reference str, size_type pos, size_type count = npos) {
-		auto s = str.size();
-		if (pos > s) throw std::out_of_range("lsd::BasicString::append(): Position exceded string bounds!");
 
-		return append(str.begin() + pos, str.begin() + pos + std::min(count, s - pos));
+	constexpr container_reference append(const value_type* s) {
+		return append(s, s + traits_type::length(s));
 	}
 	constexpr container_reference append(const value_type* s, size_type count) {
 		return append(s, s + count);
 	}
-	constexpr container_reference append(const value_type* s) {
-		return append(s, s + traits_type::length(s));
+
+	template <detail::StringViewLike<view_type> View> constexpr container_reference append(const View& sv) {
+		const view_type view { sv };
+		return append(view.m_begin, view.m_end);
 	}
-	template <class InputIt> constexpr container_reference append(InputIt first, InputIt last) requires isIteratorValue<InputIt> {
-		auto count = last - first;
-		auto s = size();
-
-		smartReserve(s + count);
-
-		if (smallStringMode()) 
-			for (auto it = (m_short.data + s); first != last; first++, it++, m_short.tag[0]++) traits_type::assign(*it, *first);
-		else {
-			for (; first != last; first++, m_long.end++) allocator_traits::construct(m_alloc, m_long.end, *first);
-			allocator_traits::construct(m_alloc, m_long.end, value_type { });
-		}
-
-		return *this;
+	template <detail::StringViewLike<view_type> View> constexpr container_reference append(const View& sv, size_type pos, size_type count = npos) {
+		const view_type view { view_type { sv }.substr(pos, count) };
+		return append(view.m_begin, view.m_begin);
 	}
+
+	constexpr container_reference append(const_container_reference str) {
+		const view_type view { str };
+		return append(view.m_begin, view.m_end);
+	}
+	constexpr container_reference append(const_container_reference str, size_type pos, size_type count = npos) {
+		const view_type view { str.subview(pos, count) };
+		return append(view.m_begin, view.m_end);
+	}
+
 	constexpr container_reference append(init_list ilist) {
 		return append(ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference append(const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
-		view_type view(sv);
-		return append(view.begin(), view.end());
-	}
-	template <class StringViewLike> constexpr container_reference append(const StringViewLike& sv, size_type pos, size_type count = npos) requires isConvertibleToView<StringViewLike> {
-		view_type view(sv);
-		auto s = view.size();
-		if (pos > s) throw std::out_of_range("lsd::BasicString::append(): Position exceded string view bounds!");
 
-		return append(view.begin() + pos, view.begin() + pos + std::min(count, s - pos));
-	}
+	// Appending addition operator
 
 	constexpr container_reference operator+=(const_container_reference str) {
-		return append(str.begin(), str.end());
+		return append(str);
 	}
-	constexpr container_reference operator+=(value_type value) {\
-		return append(1, value);
+	constexpr container_reference operator+=(value_type value) {
+		pushBack(value);
+		return *this;
 	}
 	constexpr container_reference operator+=(const value_type* s) {
 		return append(s, s + traits_type::length(s));
@@ -715,369 +579,157 @@ public:
 	constexpr container_reference operator+=(init_list ilist) {
 		return append(ilist.begin(), ilist.end());
 	}
-	template <class StringViewLike> constexpr container_reference operator+=(const StringViewLike& sv) requires isConvertibleToView<StringViewLike> {
-		view_type view(sv);
-		return append(view.begin(), view.end());
+	template <detail::StringViewLike<view_type> View> constexpr container_reference operator+=(const View& sv) {
+		const auto view { sv };
+		return append(view.m_begin, view.m_end);
 	}
+ 
+
+	// Push back
+
+	constexpr void pushBack(value_type value) {	// Special optimization
+		LSD_STRING_IF_SSO_ENABLED_AND_FITS(m_short.size() + 1) {
+			m_short.append(value);
+			return;
+		} LSD_STRING_ELSE_DISABLE_SSO
+
+		m_long.append(m_alloc, value);
+	}
+	[[deprecated]] constexpr void push_back(value_type value) {
+		pushBack(value);
+	}
+
+
+	// Index-based replace functions
+
+	constexpr container_reference replace(size_type pos, size_type count, size_type cCount, value_type value) {
+		return replaceBasic(pos, count, cCount, value);
+	}
+	
+	template <std::input_iterator Iter> constexpr container_reference replace(size_type pos, size_type count, Iter first, Iter last) {
+		const auto dist = std::distance(first, last);
+		return replaceBasic(pos, count, dist, first, last);
+	}
+
+	constexpr container_reference replace(size_type pos, size_type count, const_pointer str) {
+		return replace(pos, count, str, str + traits_type::length(str));
+	}
+	constexpr container_reference replace(size_type pos, size_type count, const_pointer str, size_type sCount) {
+		return replace(pos, count, str, str + sCount);
+	}
+
+	constexpr container_reference replace(size_type pos, size_type count, const_container_reference str) {
+		const view_type view { str };
+		return replace(pos, count, view.m_begin, view.m_end);
+	}
+	constexpr container_reference replace(size_type pos, size_type count, const_container_reference str, size_type sPos, size_type sCount = npos) {
+		const view_type view { str.subview(sPos, sCount) };
+		return replace(pos, count, view.m_begin, view.m_end);
+	}
+
+	template <detail::StringViewLike<view_type> View>
+	constexpr container_reference replace(size_type pos, size_type count, const View& sv) {
+		const view_type view { sv };
+		return replace(pos, count, view.m_begin, view.m_end);
+	}
+	template <detail::StringViewLike<view_type> View>
+	constexpr container_reference replace(size_type pos, size_type count, const View& sv, size_type vPos, size_type vCount = npos) {
+		const view_type view { view_type { sv }.substr(vPos, vCount) };
+		return replace(pos, count, view.m_begin, view.m_end);
+	}
+
+	// Iterator-based replace functions
+
+	constexpr container_reference replace(const_iterator first, const_iterator last, size_type count, value_type value) {
+		return replaceBasic(first, last, count, value);
+	}
+
+	template <std::input_iterator Iter> constexpr container_reference replace(const_iterator first, const_iterator last, Iter rFirst, Iter rLast) {
+		const auto dist = std::distance(rFirst, rLast);
+		return replaceBasic(first, last, dist, rFirst, rLast);
+	}
+
+	constexpr container_reference replace(const_iterator first, const_iterator last, const_pointer str, size_type sCount) {
+		return replace(first, last, str, str + sCount);
+	}
+	constexpr container_reference replace(const_iterator first, const_iterator last, const_pointer str) {
+		return replace(first, last, str, str + traits_type::length(str));
+	}
+
+	constexpr container_reference replace(const_iterator first, const_iterator last, const_container_reference str) {
+		const view_type view { str };
+		return replace(first, last, view.m_begin, view.m_end);
+	}
+
+	constexpr container_reference replace(const_iterator first, const_iterator last, std::initializer_list<value_type> ilist) {
+		return replace(first, last, ilist.begin(), ilist.end());
+	}
+	template <detail::StringViewLike<view_type> View>
+	constexpr container_reference replace(const_iterator first, const_iterator last, const View& sv) {
+		const view_type view { sv };
+		return replace(first, last, view.m_begin, view.m_end);
+	}
+
+
+	// Index-based erase
 
 	constexpr container_reference erase(size_type index = 0, size_type count = npos) {
-		erase(m_long.begin + index, m_long.begin + index + std::min(count, size() - index));
+		LSD_STRING_IF_SSO_ENABLED {
+			const auto siz = m_short.size();
+			const auto first = m_short.m_data + index;
+
+			m_short.template erase<true>(first, first + std::min(count, siz - index));
+
+			return *this;
+		}
+
+		const auto siz = m_long.size();
+		const auto first = m_long.m_begin + index;
+
+		m_long.template erase<true>(first, first + std::min(count, siz - index));
+
 		return *this;
 	}
+
+	// Iterator-based erase
+
 	constexpr iterator erase(const_iterator pos) {
-		assert((pos < end()) && "lsd::BasicString::erase: past-end iterator passed to erase!");
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.erase(pos.get());
 
-		auto it = m_long.begin + (pos - m_long.begin);
-
-		traits_type::move(it++, it, (m_long.end - it));
-
-		popBack();
-
-		return it;
+		return m_long.erase(pos.get());
 	}
 	constexpr iterator erase(const_iterator first, const_iterator last) {
-		auto it = std::move(last.get(), pEnd(), first.get());
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.template erase<false>(first.get(), last.get());
 
-		destructBehind(it);
-
-		return it;
+		return m_long.template erase<false>(first.get(), last.get());
 	}
 
 	constexpr void popBack() {
-		destructBehind(pEnd() - 2);
+		LSD_STRING_IF_SSO_ENABLED {
+			if (!m_short.empty())
+				m_short.terminateAt(m_short.size() - 1);
+
+			return;
+		}
+
+		if (!m_long.empty())
+			m_long.terminateAt(m_long.m_end - 1);
 	}
 	[[deprecated]] constexpr void pop_back() {
 		popBack();
 	}
 
 	constexpr void clear() {
-		if (smallStringMode()) {
-			std::fill_n(m_short.data, smallStringCap - 1, value_type { });
-			m_short.tag[0] = 0;
-		} else destructBehind(m_long.begin - 1);
-	}
-
-	constexpr size_type find(const_container_reference other, size_type pos = 0) const noexcept {
-		return find(other.cStr(), pos, other.size());
-	}
-	constexpr size_type find(const_pointer s, size_type pos, size_type count) const {
-		auto siz = size();
-		auto beg = pBegin();
-
-		if (siz >= count && pos <= siz - count)
-			for (auto it = beg + pos; it < (pEnd() - count); it++)
-				if (traits_type::compare(s, it, count) == 0) return it - beg;
-
-		return npos;
-	}
-	constexpr size_type find(const_pointer s, size_type pos = 0) const {
-		return find(s, pos, traits_type::length(s));
-	}
-	constexpr size_type find(value_type c, size_type pos = 0) const noexcept {
-		return find(std::addressof(c), pos, 1);
-	}
-	template <class StringViewLike> constexpr size_type find(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return find(v.m_begin, pos, v.size());
-	}
-
-	constexpr size_type rfind(const_container_reference other, size_type pos = npos) const noexcept {
-		return rfind(other.cStr(), pos, other.size());
-	}
-	constexpr size_type rfind(const_pointer s, size_type pos, size_type count) const {
-		auto siz = size();
-		auto beg = pBegin();
-		pos = std::min(pos, siz - count);
-
-		if (siz >= count)
-			for (auto it = (beg + pos); it != (beg - 1); it--)
-				if (traits_type::compare(s, it, count) == 0) return it - beg;
-
-		return npos;
-	}
-	constexpr size_type rfind(const_pointer s, size_type pos = npos) const {
-		return rfind(s, pos, traits_type::length(s));
-	}
-	constexpr size_type rfind(value_type c, size_type pos = npos) const noexcept {
-		return rfind(std::addressof(c), pos, 1);
-	}
-	template <class StringViewLike> constexpr size_type rfind(const StringViewLike& sv, size_type pos = npos) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return rfind(v.m_begin, pos, v.size());
-	}
-
-	constexpr size_type findFirstOf(const_container_reference other, size_type pos = 0) const noexcept {
-		return findFirstOf(other.cStr(), pos, other.size());
-	}
-	[[deprecated]] constexpr size_type find_first_of(const_container_reference other, size_type pos = 0) const noexcept {
-		return findFirstOf(other.cStr(), pos, other.size());
-	}
-	constexpr size_type findFirstOf(const_pointer s, size_type pos, size_type count) const {
-		auto beg = pBegin();
-
-		for (auto it = beg + pos; it < pEnd(); it++) 
-			for (auto sIt = s; sIt != (s + count); sIt++)
-				if (traits_type::eq(*it, *sIt)) return it - beg;
-			
-		return npos;
-	}
-	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos, size_type count) const {
-		return findFirstOf(s, pos, count);
-	}
-	constexpr size_type findFirstOf(const_pointer s, size_type pos = 0) const {
-		return findFirstOf(s, pos, traits_type::length(s));
-	}
-	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos = 0) const {
-		return findFirstOf(s, pos, traits_type::length(s));
-	}
-	constexpr size_type findFirstOf(value_type c, size_type pos = 0) const noexcept {
-		return findFirstOf(std::addressof(c), pos, 1);
-	}
-	[[deprecated]] constexpr size_type find_first_of(value_type c, size_type pos = 0) const noexcept {
-		return findFirstOf(std::addressof(c), pos, 1);
-	}
-	template <class StringViewLike> constexpr size_type findFirstOf(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return findFirstOf(v.m_begin, pos, v.size());
-	}
-	template <class StringViewLike> [[deprecated]] constexpr size_type find_first_of(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return findFirstOf(v.m_begin, pos, v.size());
-	}
-
-	constexpr size_type findLastOf(const_container_reference other, size_type pos = npos) const noexcept {
-		return findLastOf(other.cStr(), pos, other.size());
-	}
-	[[deprecated]] constexpr size_type find_last_of(const_container_reference other, size_type pos = npos) const noexcept {
-		return findLastOf(other.cStr(), pos, other.size());
-	}
-	constexpr size_type findLastOf(const_pointer s, size_type pos, size_type count) const {
-		auto siz = size();
-
-		if (siz != 0) {
-			auto beg = pBegin();
-			pos = std::min(pos, siz - 1);
-
-			for (auto it = beg + pos; it > (beg - 1); it--) 
-				for (auto sIt = s; sIt != (s + count); sIt++)
-					if (traits_type::eq(*it, *sIt)) return it - beg;
-		}
-			
-		return npos;
-	}
-	[[deprecated]] constexpr size_type find_last_of(const_pointer s, size_type pos, size_type count) const {
-		return findLastOf(s, pos, count);
-	}
-	constexpr size_type findLastOf(const_pointer s, size_type pos = npos) const {
-		return findLastOf(s, pos, traits_type::length(s));
-	}
-	[[deprecated]] constexpr size_type find_last_of(const_pointer s, size_type pos = npos) const {
-		return findLastOf(s, pos, traits_type::length(s));
-	}
-	constexpr size_type findLastOf(value_type c, size_type pos = npos) const noexcept {
-		return findLastOf(std::addressof(c), pos, 1);
-	}
-	[[deprecated]] constexpr size_type find_last_of(value_type c, size_type pos = npos) const noexcept {
-		return findLastOf(std::addressof(c), pos, 1);
-	}
-	template <class StringViewLike> constexpr size_type findLastOf(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return findLastOf(v.m_begin, pos, v.size());
-	}
-	template <class StringViewLike> [[deprecated]] constexpr size_type find_last_of(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return findLastOf(v.m_begin, pos, v.size());
-	}
-
-	constexpr size_type findFirstNotOf(const_container_reference other, size_type pos = 0) const noexcept {
-		return findFirstNotOf(other.cStr(), pos, other.size());
-	}
-	[[deprecated]] constexpr size_type find_first_not_of(const_container_reference other, size_type pos = 0) const noexcept {
-		return findFirstNotOf(other.cStr(), pos, other.size());
-	}
-	constexpr size_type findFirstNotOf(const_pointer s, size_type pos, size_type count) const {
-		auto beg = pBegin();
-
-		for (auto it = beg + pos; it < pEnd(); it++) {
-			auto found = false;
-			for (auto sIt = s; sIt != (s + count) && !found; sIt++)
-				if (traits_type::eq(*it, *sIt)) found = true;
-			if (!found) return it - beg;
+		LSD_STRING_IF_SSO_ENABLED {
+			m_short.terminateAt(0);
+			return;
 		}
 
-		return npos;
-	}
-	[[deprecated]] constexpr size_type find_first_not_of(const_pointer s, size_type pos, size_type count) const {
-		return findFirstNotOf(s, pos, count);
-	}
-	constexpr size_type findFirstNotOf(const_pointer s, size_type pos = 0) const {
-		return findFirstNotOf(s, pos, traits_type::length(s));
-	}
-	[[deprecated]] constexpr size_type find_first_not_of(const_pointer s, size_type pos = 0) const {
-		return findFirstNotOf(s, pos, traits_type::length(s));
-	}
-	constexpr size_type findFirstNotOf(value_type c, size_type pos = 0) const noexcept {
-		return findFirstNotOf(std::addressof(c), pos, 1);
-	}
-	[[deprecated]] constexpr size_type find_first_not_of(value_type c, size_type pos = 0) const noexcept {
-		return findFirstNotOf(std::addressof(c), pos, 1);
-	}
-	template <class StringViewLike> constexpr size_type findFirstNotOf(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return findFirstNotOf(v.m_begin, pos, v.size());
-	}
-	template <class StringViewLike> [[deprecated]] constexpr size_type find_first_not_of(const StringViewLike& sv, size_type pos = 0) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return findFirstNotOf(v.m_begin, pos, v.size());
+		m_long.terminateAt(m_long.m_begin);
 	}
 
-	constexpr size_type findLastNotOf(const_container_reference other, size_type pos = npos) const noexcept {
-		return findLastNotOf(other.cStr(), pos, other.size());
-	}
-	[[deprecated]] constexpr size_type find_last_not_of(const_container_reference other, size_type pos = npos) const noexcept {
-		return findLastNotOf(other.cStr(), pos, other.size());
-	}
-	constexpr size_type findLastNotOf(const_pointer s, size_type pos, size_type count) const {
-		auto siz = size();
-
-		if (siz != 0) {
-			auto beg = pBegin();
-			pos = std::min(pos, siz - 1);
-
-			for (auto it = beg + pos; it > (beg - 1); it--) {
-				auto found = false;
-				for (auto sIt = s; sIt != (s + count) && !found; sIt++)
-					if (traits_type::eq(*it, *sIt)) found = true;
-				if (!found) return it - beg;
-			}
-		}
-			
-		return npos;
-	}
-	[[deprecated]] constexpr size_type find_last_not_of(const_pointer s, size_type pos, size_type count) const {
-		return findLastNotOf(s, pos, count);
-	}
-	constexpr size_type findLastNotOf(const_pointer s, size_type pos = npos) const {
-		return findLastNotOf(s, pos, traits_type::length(s));
-	}
-	[[deprecated]] constexpr size_type find_last_not_of(const_pointer s, size_type pos = npos) const {
-		return findLastNotOf(s, pos, traits_type::length(s));
-	}
-	constexpr size_type findLastNotOf(value_type c, size_type pos = npos) const noexcept {
-		return findLastNotOf(std::addressof(c), pos, 1);
-	}
-	[[deprecated]] constexpr size_type find_last_not_of(value_type c, size_type pos = npos) const noexcept {
-		return findLastNotOf(std::addressof(c), pos, 1);
-	}
-	template <class StringViewLike> constexpr size_type findLastNotOf(const StringViewLike& sv, size_type pos = npos) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return findLastNotOf(v.m_begin, pos, v.size());
-	}
-	template <class StringViewLike> [[deprecated]] constexpr size_type find_last_not_of(const StringViewLike& sv, size_type pos = npos) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		auto v = view_type(sv);
-		return findLastNotOf(v.m_begin, pos, v.size());
-	}
-
-
-	constexpr int compare(const_container_reference str) const noexcept {
-		return compare(0, npos, str.cStr(), str.size());
-	}
-	constexpr int compare(size_type pos, size_type count, const_container_reference str) const {
-		return compare(pos, count, str.cStr(), str.size());
-	}
-	constexpr int compare(size_type pos, size_type count, const_container_reference str, size_type sPos, size_type sCount = npos) const {
-		return compare(pos, count, str.cStr() + sPos, std::min(sCount, str.size() - sPos));
-	}
-	constexpr int compare(const_pointer s) const {
-		return compare(0, npos, s, traits_type::length(s));
-	}
-	constexpr int compare(size_type pos, size_type count, const_pointer s) const {
-		return compare(pos, count, s, traits_type::length(s));
-	}
-	constexpr int compare(size_type pos, size_type count, const_pointer s, size_type sCount) const {
-		auto curSiz = size();
-		if (pos > curSiz) throw std::out_of_range("lsd::BasicString::compare(): Position exceded string bounds!");
-
-		auto siz = curSiz - pos;
-		count = std::min(count, std::min(sCount, siz));
-
-		auto r = traits_type::compare(pBegin() + pos, s, count);
-		if (r == 0) {
-			if (siz < sCount) return -2;
-			else if (siz > sCount) return 2;
-		}
-		
-		return r;
-	}
-	template <class StringViewLike> constexpr int compare(const StringViewLike& sv) const noexcept(std::is_nothrow_convertible_v<const StringViewLike&, view_type>) requires isConvertibleToView<StringViewLike> {
-		return compare(0, npos, sv.m_begin, sv.size());
-	}
-	template <class StringViewLike> constexpr int compare(size_type pos, size_type count, const StringViewLike& sv) const requires isConvertibleToView<StringViewLike> {
-		return compare(pos, count, sv.m_begin, sv.size());
-	}
-	template <class StringViewLike> constexpr int compare(size_type pos, size_type count, const StringViewLike& sv, size_type sPos, size_type sCount = npos) const requires isConvertibleToView<StringViewLike> {
-		return compare(pos, count, sv.m_begin + sPos, std::min(sCount, sv.size() - sPos));
-	}
-
-	constexpr bool startsWith(view_type sv) const noexcept	{
-		if (sv.size() <= size()) return traits_type::compare(pBegin(), sv.m_begin, sv.size());
-		else return false;
-	}
-	[[deprecated]] constexpr bool starts_with(view_type sv) const noexcept 	{
-		return startsWith(sv);
-	}
-	constexpr bool startsWith(value_type c) const noexcept {
-		return traits_type::eq(*pBegin(), c);
-	}
-	[[deprecated]] constexpr bool starts_with(value_type c) const noexcept {
-		return startsWith(c);
-	}
-	constexpr bool startsWith(const_pointer s) const {
-		return startsWith(view_type(s));
-	}
-	[[deprecated]] constexpr bool starts_with(pointer s) const {
-		return startsWith(s);
-	}
-
-	constexpr bool endsWith(view_type sv) const noexcept {
-		if (sv.size() <= size()) return traits_type::compare(pEnd() - sv.size() - 1, sv.m_begin, sv.size());
-		else return false;
-	}
-	[[deprecated]] constexpr bool ends_with(view_type sv) const noexcept 	{
-		return endsWith(sv);
-	}
-	constexpr bool endsWith(value_type c) const noexcept {
-		return traits_type::eq(back(), c);
-	}
-	[[deprecated]] constexpr bool ends_with(value_type c) const noexcept {
-		return endsWith(c);
-	}
-	constexpr bool endsWith(const_pointer s) const {
-		return endsWith(view_type(s));
-	}
-	[[deprecated]] constexpr bool ends_with(pointer s) const {
-		return endsWith(s);
-	}
-
-	constexpr bool contains(view_type sv) const noexcept {
-		auto siz = size();
-		auto beg = pBegin();
-
-		if (siz >= sv.size())
-			for (auto it = beg; it != (pEnd() - sv.size() + 1); it++)
-				if (traits_type::compare(sv.data(), it, sv.size()) == 0) return true;
-
-		return false;
-	}
-	constexpr bool contains(value_type c) const noexcept {
-		for (auto it = pBegin(); it != pEnd(); it++)
-			if (traits_type::eq(*it, c)) return true;
-
-		return false;
-	}
-	constexpr bool contains(const_pointer s) const {
-		return contains(view_type(s));
-	}
 
 	constexpr container substr(size_type pos = 0, size_type count = npos) const& {
 		return container(*this, pos, count);
@@ -1086,32 +738,42 @@ public:
 		return container(std::move(*this), pos, count);
 	}
 
-	constexpr size_type copy(pointer dst, size_type count, size_type pos = 0) const {
-		auto s = size();
-		if (pos > s) throw std::out_of_range("lsd::BasicString::copy(): Position exceded string bounds!");
-
-		count = std::min(count, s - pos);
-
-		traits_type::copy(dst, pBegin() + pos, count);
-
-		return count;
+	constexpr view_type subview(size_type pos = 0, size_type count = npos) const {
+		return subviewBasic<view_type>(pos, count);
+	}
+	constexpr view_type stdsubview(size_type pos = 0, size_type count = npos) const {
+		return subviewBasic<std_view_type>(pos, count);
 	}
 
-	template <class ReturnType, class Caster, class... Args> [[nodiscard]] ReturnType castTo(Caster caster, std::size_t* pos, Args&&... args) const {
-		auto it = pBegin();
-		pointer endPtr = { };
+	constexpr size_type copy(pointer dst, size_type count, size_type pos = 0) const {
+		const auto view = subview(pos, count);
+		const auto siz = view.size();
+		traits_type::copy(dst, view.m_begin, siz);
+
+		return siz;
+	}
+
+	template <class ReturnType, class Caster, class... Args> [[nodiscard]] ReturnType castTo(Caster&& caster, std::size_t* pos, Args&&... args) const {
+		const view_type view { *this };
+		pointer last { const_cast<pointer>(view.m_end) }; // @todo this should not be nesseceary
 
 		errno = 0;
-		auto res = caster(it, &endPtr, std::forward<Args>(args)...);
+		auto res = std::invoke(std::forward<Caster>(caster), view.m_begin, &last, std::forward<Args>(args)...);
 
-		if (errno == ERANGE) throw std::out_of_range("lsd::BasicString::castTo: Number exceeded type limits!");
-		if (endPtr == it) throw std::invalid_argument("lsd::BasicString::castTo: No valid conversion!"); ///@todo may need more checks
+		if (errno == ERANGE)
+			throw std::out_of_range("lsd::BasicString::castTo: Number exceeded type limits!");
+		if (view.m_begin == last)
+			throw std::invalid_argument("lsd::BasicString::castTo: No valid conversion!"); ///@todo may need more checks
 
-		if (pos) *pos = endPtr - it;
-		
+		if (pos)
+			*pos = view.size();
+
 		return res;
 	}
-	template <class CastType, std::size_t Count> [[nodiscard]] static container castFrom(CastType value, const_pointer format) requires(std::is_arithmetic_v<CastType> && (std::is_same_v<value_type, char> || std::is_same_v<value_type, wchar_t>)) {
+
+	template <class CastType, std::size_t Count> [[nodiscard]] static container castFrom(CastType value, const_pointer format) 
+		requires(std::is_arithmetic_v<CastType> && (std::is_same_v<value_type, char> || std::is_same_v<value_type, wchar_t>))
+	{
 		value_type buf[Count] = { };
 		if constexpr (std::is_same_v<value_type, char>)
 			std::snprintf(buf, Count, format, value);
@@ -1120,11 +782,224 @@ public:
 		return container(buf);
 	}
 
+
+	// Observation and search
+	
+	constexpr int compare(container s) const noexcept {
+		return view_type(*this).compare(s);
+	}
+	constexpr int compare(size_type pos, size_type count, container other) const {
+		return subview(pos, count).compare(other);
+	}
+	constexpr int compare(size_type pos, size_type count, container other, size_type oPos, size_type oCount) const {
+		return subview(pos, count).compare(other.subview(oPos, oCount));
+	}
+	constexpr int compare(const_pointer s) const {
+		return view_type(*this).compare(s);
+	}
+	constexpr int compare(size_type pos, size_type count, const_pointer s) const {
+		return subview(pos, count).compare(s);
+	}
+	constexpr int compare(size_type pos, size_type count, const_pointer s, size_type sCount) const {
+		return view_type(*this).compare(pos, count, s, sCount);
+	}
+
+
+	constexpr bool startsWith(container other) const noexcept {
+		return view_type(*this).startsWith(other);
+	}
+	[[deprecated]] constexpr bool starts_with(container other) const noexcept {
+		return startsWith(other);
+	}	
+	constexpr bool startsWith(value_type c) const noexcept {
+		return view_type(*this).startsWith(c);
+	}
+	[[deprecated]] constexpr bool starts_with(value_type c) const noexcept {
+		return startsWith(c);
+	}
+	constexpr bool startsWith(const_pointer s) const {
+		return view_type(*this).startsWith(s);
+	}
+	[[deprecated]] constexpr bool starts_with(const_pointer s) const {
+		return startsWith(s);
+	}
+
+	constexpr bool endsWith(container other) const noexcept {
+		return view_type(*this).endWith(other);
+	}
+	[[deprecated]] constexpr bool ends_with(container other) const noexcept {
+		return endsWith(other);
+	}
+	constexpr bool endsWith(value_type c) const noexcept {
+		return view_type(*this).endWith(c);
+	}
+	[[deprecated]] constexpr bool ends_with(value_type c) const noexcept {
+		return endsWith(c);
+	}
+	constexpr bool endsWith(const_pointer s) const {
+		return view_type(*this).endWith(s);
+	}
+	[[deprecated]] constexpr bool ends_with(const_pointer s) const {
+		return endsWith(s);
+	}
+	constexpr bool endsWith(const_pointer s, size_type len) const {
+		return view_type(*this).endWith(s, len);
+	}
+
+
+	constexpr bool contains(container other) const noexcept {
+		return view_type(*this).contains(view_type(other));
+	}
+	constexpr bool contains(value_type c) const noexcept {
+		return view_type(*this).contains(c);
+	}
+	constexpr bool contains(const_pointer s) const {
+		return view_type(*this).contains(s);
+	}
+	constexpr bool contains(const_pointer s, size_type len) const noexcept {
+		return view_type(*this).contains(s, len);
+	}
+
+	constexpr size_type find(container other, size_type pos = 0) const noexcept {
+		return view_type(*this).find(view_type(other), pos);
+	}
+	constexpr size_type find(const_pointer s, size_type pos, size_type count) const noexcept {
+		return view_type(*this).find(s, pos, count);
+	}
+	constexpr size_type find(const_pointer s, size_type pos = 0) const {
+		return view_type(*this).find(s, pos);
+	}
+	constexpr size_type find(value_type c, size_type pos = 0) const noexcept {
+		return view_type(*this).find(c, pos);
+	}
+
+	constexpr size_type rfind(container other, size_type pos = npos) const noexcept {
+		return view_type(*this).rfind(view_type(other), pos);
+	}
+	constexpr size_type rfind(const_pointer s, size_type pos, size_type count) const {
+		return view_type(*this).rfind(s, pos, count);
+	}
+	constexpr size_type rfind(const_pointer s, size_type pos = npos) const {
+		return view_type(*this).rfind(s, pos);
+	}
+	constexpr size_type rfind(value_type c, size_type pos = npos) const noexcept {
+		return view_type(*this).rfind(c, pos);
+	}
+
+	constexpr size_type findFirstOf(container other, size_type pos = 0) const noexcept {
+		return view_type(*this).findFirstOf(view_type(other), pos);
+	}
+	[[deprecated]] constexpr size_type find_first_of(container other, size_type pos = 0) const noexcept {
+		return findFirstOf(other, pos);
+	}
+	constexpr size_type findFirstOf(const_pointer s, size_type pos, size_type count) const {
+		return view_type(*this).findFirstOf(s, pos, count);
+	}
+	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos, size_type count) const {
+		return findFirstOf(s, pos, count);
+	}
+	constexpr size_type findFirstOf(const_pointer s, size_type pos = 0) const {
+		return view_type(*this).findFirstOf(s, pos);
+	}
+	[[deprecated]] constexpr size_type find_first_of(const_pointer s, size_type pos = 0) const {
+		return findFirstOf(s, pos);
+	}
+	constexpr size_type findFirstOf(value_type c, size_type pos = 0) const noexcept {
+		return view_type(*this).findFirstOf(c, pos);
+	}
+	[[deprecated]] constexpr size_type find_first_of(value_type c, size_type pos = 0) const noexcept {
+		return findFirstOf(c, pos);
+	}
+
+	constexpr size_type findLastOf(container other, size_type pos = npos) const noexcept {
+		return view_type(*this).findLastOf(view_type(other), pos);
+	}
+	[[deprecated]] constexpr size_type find_last_of(container other, size_type pos = npos) const noexcept {
+		return findLastOf(other, pos);
+	}
+	constexpr size_type findLastOf(const_pointer s, size_type pos, size_type count) const {
+		return view_type(*this).findLastOf(s, pos, count);
+	}
+	[[deprecated]] constexpr size_type find_last_of(const_pointer s, size_type pos, size_type count) const {
+		return findLastOf(s, pos, count);
+	}
+	constexpr size_type findLastOf(const_pointer s, size_type pos = npos) const {
+		return view_type(*this).findLastOf(s, pos);
+	}
+	[[deprecated]] constexpr size_type find_last_of(const_pointer s, size_type pos = npos) const {
+		return findLastOf(s, pos);
+	}
+	constexpr size_type findLastOf(value_type c, size_type pos = npos) const noexcept {
+		return view_type(*this).findLastOf(c, pos);
+	}
+	[[deprecated]] constexpr size_type find_last_of(value_type c, size_type pos = npos) const noexcept {
+		return findLastOf(c, pos);
+	}
+
+	constexpr size_type findFirstNotOf(container other, size_type pos = 0) const noexcept {
+		return view_type(*this).findFirstNotOf(view_type(other), pos);
+	}
+	[[deprecated]] constexpr size_type find_first_not_of(container other, size_type pos = 0) const noexcept {
+		return findFirstNotOf(other, pos);
+	}
+	constexpr size_type findFirstNotOf(const_pointer s, size_type pos, size_type count) const {
+		return view_type(*this).findFirstNotOf(s, pos, count);
+	}
+	[[deprecated]] constexpr size_type find_first_not_of(const_pointer s, size_type pos, size_type count) const {
+		return findFirstNotOf(s, pos, count);
+	}
+	constexpr size_type findFirstNotOf(const_pointer s, size_type pos = 0) const {
+		return view_type(*this).findFirstNotOf(s, pos);
+	}
+	[[deprecated]] constexpr size_type find_first_not_of(const_pointer s, size_type pos = 0) const {
+		return findFirstNotOf(s, pos);
+	}
+	constexpr size_type findFirstNotOf(value_type c, size_type pos = 0) const noexcept {
+		return view_type(*this).findFirstNotOf(c, pos);
+	}
+	[[deprecated]] constexpr size_type find_first_not_of(value_type c, size_type pos = 0) const noexcept {
+		return findFirstNotOf(c, pos);
+	}
+
+	constexpr size_type findLastNotOf(container other, size_type pos = npos) const noexcept {
+		return view_type(*this).findLastNotOf(view_type(other), pos);
+	}
+	[[deprecated]] constexpr size_type find_last_not_of(container other, size_type pos = 0) const noexcept {
+		return findLastNotOf(other, pos);
+	}
+	constexpr size_type findLastNotOf(const_pointer s, size_type pos, size_type count) const {
+		return view_type(*this).findLastNotOf(s, pos, count);
+	}
+	[[deprecated]] constexpr size_type find_last_not_of(const_pointer s, size_type pos, size_type count) const {
+		return findLastNotOf(s, pos, count);
+	}
+	constexpr size_type findLastNotOf(const_pointer s, size_type pos = npos) const {
+		return view_type(*this).findLastNotOf(s, pos);
+	}
+	[[deprecated]] constexpr size_type find_last_not_of(const_pointer s, size_type pos = npos) const {
+		return findLastNotOf(s, pos);
+	}
+	constexpr size_type findLastNotOf(value_type c, size_type pos = npos) const noexcept {
+		return view_type(*this).findLastNotOf(c, pos);
+	}
+	[[deprecated]] constexpr size_type find_last_not_of(value_type c, size_type pos = npos) const noexcept {
+		return findLastNotOf(c, pos);
+	}
+
+
+	// Member access functions
+
 	[[nodiscard]] constexpr size_type size() const noexcept {
-		return smallStringMode() ? smallStringSize() : (m_long.end - m_long.begin);
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.size();
+
+		return m_long.size();
 	}
 	[[nodiscard]] constexpr size_type length() const noexcept {
-		return smallStringMode() ? smallStringSize() : (m_long.end - m_long.begin);
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.size();
+
+		return m_long.size();
 	}
 	[[nodiscard]] constexpr size_type maxSize() const noexcept {
 		return allocator_traits::max_size(m_alloc);
@@ -1133,30 +1008,42 @@ public:
 		return maxSize();
 	}
 	[[nodiscard]] constexpr size_type capacity() const noexcept {
-		return smallStringMode() ? smallStringCap : (m_long.cap - m_long.begin);
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.capacity();
+
+		return m_long.capacity();
 	}
 	[[nodiscard]] constexpr bool empty() const noexcept {
-		return smallStringMode() ? traits_type::eq(m_short.data[0], value_type { }) : (m_long.begin == m_long.end);
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.empty();
+
+		return m_long.empty();
 	}
 
 	[[nodiscard]] constexpr pointer data() noexcept {
 		return pBegin();
 	}
 	[[nodiscard]] constexpr const_pointer data() const noexcept {
-		return pBegin();
+		return cpBegin();
 	}
 	[[nodiscard]] constexpr const_pointer cStr() const noexcept {
-		return pBegin();
+		return cpBegin();
 	}
 	[[deprecated]] [[nodiscard]] constexpr const_pointer c_str() const noexcept {
-		return pBegin();
+		return cpBegin();
 	}
 
 	[[nodiscard]] constexpr operator view_type() const noexcept {
-		return view_type(pBegin(), pEnd());
+		LSD_STRING_IF_SSO_ENABLED
+			return view_type(m_short.m_data, m_short.m_data + m_short.size());
+
+		return view_type(m_long.m_begin, m_long.m_end);
 	}
 	[[nodiscard]] constexpr operator std_view_type() const noexcept {
-		return std_view_type(pBegin(), pEnd());
+		LSD_STRING_IF_SSO_ENABLED
+			return std_view_type(m_short.m_data, m_short.m_data + m_short.size());
+
+		return std_view_type(m_long.m_begin, m_long.m_end);
 	}
 
 	[[nodiscard]] constexpr allocator_type allocator() const noexcept {
@@ -1166,44 +1053,58 @@ public:
 		return allocator();
 	}
 
-	[[nodiscard]] constexpr const_reference at(size_type index) const {
-		if (smallStringMode()) {
-			if (index >= smallStringSize()) throw std::out_of_range("lsd::BasicString::at(): Index exceded array bounds!");
-			return m_short.data[index];
-		} else {
-			auto ptr = m_long.begin + index;
-			if (ptr >= m_long.end) throw std::out_of_range("lsd::BasicString::at(): Index exceded array bounds!");
-			return *ptr;
-		}
-	}
 	[[nodiscard]] constexpr reference at(size_type index) {
-		if (smallStringMode()) {
-			if (index >= smallStringSize()) throw std::out_of_range("lsd::BasicString::at(): Index exceded array bounds!");
-			return m_short.data[index];
-		} else {
-			auto ptr = m_long.begin + index;
-			if (ptr >= m_long.end) throw std::out_of_range("lsd::BasicString::at(): Index exceded array bounds!");
-			return *ptr;
+		LSD_STRING_IF_SSO_ENABLED {
+			if (index >= m_short.size())
+				throw std::out_of_range("lsd::BasicString::at(): Index exceeded bounds!");
+	
+			return m_short.m_data[index];
 		}
+
+		const auto ptr = m_long.m_begin + index;
+		if (ptr >= m_long.m_end)
+			throw std::out_of_range("lsd::BasicString::at(): Index exceeded bounds!");
+
+		return *ptr;
+	}
+	[[nodiscard]] constexpr const_reference at(size_type index) const {
+		LSD_STRING_IF_SSO_ENABLED {
+			if (index >= m_short.size())
+				throw std::out_of_range("lsd::BasicString::at(): Index exceeded bounds!");
+	
+			return m_short.m_data[index];
+		}
+
+		const auto* const ptr = m_long.m_begin + index;
+		if (ptr >= m_long.m_end)
+			throw std::out_of_range("lsd::BasicString::at(): Index exceeded bounds!");
+
+		return *ptr;
+	}
+
+	[[nodiscard]] constexpr reference operator[](size_type index) {
+		LSD_STRING_IF_SSO_ENABLED {
+			assert((index < m_short.size()) && "lsd::BasicString::operator[]: Index exceeded bounds!");
+			return m_short.m_data[index];
+		}
+
+		const auto ptr = m_long.m_begin + index;
+		assert((index < m_long.size()) && "lsd::BasicString::operator[]: Index exceeded bounds!");
+		return *ptr;
 	}
 	[[nodiscard]] constexpr const_reference operator[](size_type index) const {
-		if (smallStringMode()) {
-			return m_short.data[index];
-		} else {
-			auto ptr = m_long.begin + index;
-			assert((ptr < m_long.end) && "lsd::BasicString::operator[]: Index exceded array bounds!");
-			return *ptr;
+		LSD_STRING_IF_SSO_ENABLED {
+			assert((index < m_short.size()) && "lsd::BasicString::operator[]: Index exceeded bounds!");
+			return m_short.m_data[index];
 		}
+
+		const auto* const ptr = m_long.m_begin + index;
+		assert((ptr < m_long.m_end) && "lsd::BasicString::operator[]: Index exceeded bounds!");
+		return *ptr;
 	}
-	[[nodiscard]] constexpr reference operator[](size_type index) {
-		if (smallStringMode()) {
-			return m_short.data[index];
-		} else {
-			auto ptr = m_long.begin + index;
-			assert((ptr < m_long.end) && "lsd::BasicString::operator[]: Index exceded array bounds!");
-			return *ptr;
-		}
-	}
+
+
+	// Friend operators
 
 	friend constexpr container operator+(const_container_reference lhs, const_container_reference rhs) {
 		return container(lhs).append(rhs);
@@ -1212,7 +1113,9 @@ public:
 		return container(lhs).append(rhs);
 	}
 	friend constexpr container operator+(const_container_reference lhs, value_type rhs) {
-		return container(lhs).append(rhs);
+		container value { lhs };
+		value.pushBack(rhs);
+		return value;
 	}
 	friend constexpr container operator+(const_container_reference lhs, std::type_identity_t<view_type> rhs) {
 		return container(lhs).append(rhs);
@@ -1221,37 +1124,39 @@ public:
 		return container(lhs).append(rhs);
 	}
 	friend constexpr container operator+(value_type lhs, const_container_reference rhs) {
-		return container(lhs).append(rhs);
+		return container(1, lhs).append(rhs);
 	}
 	friend constexpr container operator+(std::type_identity_t<view_type> lhs, const_container_reference rhs) {
 		return container(lhs).append(rhs);
 	}
 	friend constexpr container operator+(container_rvreference lhs, container_rvreference rhs) {
-		return container(lhs).append(rhs);
+		return container(std::move(lhs)).append(std::move(rhs));
 	}
 	friend constexpr container operator+(container_rvreference lhs, const_container_reference rhs) {
-		return container(lhs).append(rhs);
+		return container(std::move(lhs)).append(rhs);
 	}
 	friend constexpr container operator+(container_rvreference lhs, const_pointer rhs) {
-		return container(lhs).append(rhs);
+		return container(std::move(lhs)).append(rhs);
 	}
 	friend constexpr container operator+(container_rvreference lhs, value_type rhs) {
-		return container(lhs).append(rhs);
+		container value { std::move(lhs) };
+		value.pushBack(rhs);
+		return value;
 	}
 	friend constexpr container operator+(container_rvreference lhs, std::type_identity_t<view_type> rhs) {
-		return container(lhs).append(rhs);
+		return container(std::move(lhs)).append(rhs);
 	}
 	friend constexpr container operator+(const_container_reference lhs, container_rvreference rhs) {
 		return container(lhs).append(rhs);
 	}
 	friend constexpr container operator+(const_pointer lhs, container_rvreference rhs) {
-		return container(lhs).append(rhs);
+		return container(lhs).append(std::move(rhs));
 	}
 	friend constexpr container operator+(value_type lhs, container_rvreference rhs) {
-		return container(lhs).append(rhs);
+		return container(1, lhs).append(std::move(rhs));
 	}
 	friend constexpr container operator+(std::type_identity_t<view_type> lhs, container_rvreference rhs) {
-		return container(lhs).append(rhs);
+		return container(lhs).append(std::move(rhs));
 	}
 
 	friend constexpr bool operator==(const_container_reference s1, const_container_reference s2) {
@@ -1273,184 +1178,316 @@ public:
 		stream << string.cStr();
 		return stream;
 	}
-	friend istream_type& operator>>(istream_type& stream, const_container_reference string) {
-		stream >> string.cStr();
+	friend istream_type& operator>>(istream_type& stream, container_reference string) {
+		using sentry_type = istream_type::sentry;
+
+		sentry_type sentry { stream };
+		if (!sentry) {
+			stream.setstate(std::ios_base::failbit);
+			return stream;
+		}
+
+		string.clear();
+
+		const auto streamWidth = stream.width();
+		const auto maxReadCount = (streamWidth == 0) ? string.maxSize() : static_cast<size_type>(streamWidth);
+
+		size_type readCount = 0;
+		for (; readCount < maxReadCount; readCount++) {
+			const auto next = stream.peek();
+			if (traits_type::eqIntType(next, traits_type::eof()))
+				break;
+			if (std::isspace(traits_type::toCharType(next), stream.getloc()))
+				break;
+
+			string.pushBack(stream.get());
+		}
+
+		if (readCount == 0)
+			stream.setstate(std::ios_base::failbit);
+
+		stream.width(0);
+
 		return stream;
 	}
+
 
 private:
 	[[no_unique_address]] allocator_type m_alloc { };
 
 	union {
-		Short m_short { };
-		Long m_long;
+		[[no_unique_address]] short_type m_short { };
+		long_type m_long;
 	};
 
-	constexpr bool smallStringMode() const noexcept {
-		return bool(m_short.tag[0] < smallStringTrueCap);
-	}
-	constexpr size_type smallStringSize() const noexcept {
-		assert(smallStringMode() && "lsd::BasicString::smallStringSize(): BasicString was not a small string!");
 
-		return m_short.tag[0];
-	}
+	// Initialization functions
 
-	constexpr pointer pBegin() noexcept {
-		if (smallStringMode()) return m_short.data;
-		else return m_long.begin;
-	}
-	constexpr const_pointer pBegin() const noexcept {
-		if (smallStringMode()) return m_short.data;
-		else return m_long.begin;
-	}
-	constexpr pointer pEnd() noexcept {
-		if (smallStringMode()) return m_short.data + smallStringSize();
-		else return m_long.end;
-	}
-	constexpr const_pointer pEnd() const noexcept {
-		if (smallStringMode()) return m_short.data + smallStringSize();
-		else return m_long.end;
-	}
+	template<std::random_access_iterator Iter> constexpr void constructFromRange(Iter first, Iter last) {
+		const auto dist = std::distance(first, last);
 
-	constexpr void smartReserve(size_type size) noexcept {
-		auto cap = capacity();
-
-		if (size >= smallStringCap && size > cap) { // Attempts to keep small string mode
-			auto newCap = std::max(cap * 2, static_cast<size_type>(2)) - 2;
-			reserve((newCap < size) ? size : newCap);
+		LSD_STRING_IF_SSO_FITS(dist) {
+			m_short.construct(dist, first, last);
+			return;
 		}
+
+		disableSSO(); 
+		m_long.construct(m_alloc, dist, first, last);
+	}
+	template<std::input_iterator Iter> constexpr void constructFromRange(Iter first, Iter last)
+		requires (!std::random_access_iterator<Iter>) {
+
+		LSD_STRING_IF_SSO if (m_short.construct(first, last))
+			return;
+
+		disableSSO(); 
+		m_long.construct(m_alloc, first, last);
 	}
 
-	template <class It> constexpr container_reference assign(It first, It last, const_alloc_reference alloc) requires isIteratorValue<It> {
-		clear();
-		m_alloc = alloc;
+	constexpr void constructFromString(const_container_reference other, size_type pos, size_type count) {
+		const view_type view { other.subview(pos, count) };
+		const auto siz = view.size();
 
-		if (first != last) {
-			auto count = last - first;
-			smartReserve(count);
+		LSD_STRING_IF_SSO_FITS(siz) {
+			m_short.construct(siz, view.m_begin, view.m_end);
+			return;
+		}
 
-			if (smallStringMode()) 
-				for (auto it = m_short.data; first != last; it++, first++) traits_type::assign(*it, *first);
-			else {
-				for (; first != last; first++, m_long.end++) allocator_traits::construct(m_alloc, m_long.end, *first);
-				allocator_traits::construct(m_alloc, m_long.end, '\0');
+		disableSSO(); 
+		m_long.construct(m_alloc, siz, view.m_begin, view.m_end);
+	}
+
+	template <bool Terminate = false>
+	constexpr void constructFromString(container_rvreference other, size_type count = npos) {
+		LSD_STRING_IF_SSO_OTHER_ENABLED {
+			m_short.template construct<Terminate>(std::move(other.m_short), count);
+			return;
+		}
+
+		disableSSO(); 
+		m_long.template construct<Terminate>(m_alloc, std::move(other.m_long), other.m_alloc, count);
+	}
+
+
+	// Swapping
+
+	constexpr void swapLongWithShort(bool differentAlloc, container_reference other) {
+		// m_long is active, whilst other.m_short is active
+
+		long_type data { std::move(m_long) };
+		m_short.construct(other.m_short.size(), other.m_short.m_data, other.m_short.m_data + other.m_short.size());
+		other.m_short.disable();
+
+		if constexpr (!allocator_traits::propagate_on_container_swap::value) if (differentAlloc) { // We need to allocate a new bufer for other, and retrieve its short
+			other.m_long.construct(m_alloc, data.size(), data.m_begin, data.m_end);
+			data.dealloc(m_alloc);
+
+			return;
+		}
+
+		// If the allocators are the same or if they should be propagated, then the buffers can just be swapped
+		if constexpr (allocator_traits::propagate_on_container_swap::value) if (differentAlloc)
+			std::swap(m_alloc, other.m_alloc);
+
+		other.m_long = std::move(data);
+	}
+
+	// Move and assignment
+
+	template <class... Args> constexpr void assignBasic(size_type count, Args&&... args) {
+		LSD_STRING_IF_SSO_ENABLED {
+			if (short_type::fits(count)) {
+				m_short.assign(count, std::forward<Args>(args)...);
+				return;
+			} else
+				disableSSO();
+		}
+
+		m_long.assign(m_alloc, count, std::forward<Args>(args)...);
+	}
+
+ 	constexpr bool assignIfSSO(const_container_reference other) {
+		LSD_STRING_IF_SSO {
+			if (other.m_short.enabled() || m_short.enabled() && short_type::fits(other.m_long.size())) {
+				const view_type view { other };
+				assign(view.m_begin, view.m_end);
+
+				return true;
+			} else if (m_short.enabled()) {
+				disableSSO();
+
+				return false;
 			}
 		}
+
+		return false;
+	}
+
+	template <bool Move = true>
+	constexpr bool assignIfPossible(bool propagate, std::conditional_t<Move, container_rvreference, const_container_reference> other) {
+		LSD_STRING_IF_SSO {
+			if (propagate) {
+				m_long.template propagateAlloc<Move>(m_short.enabled(), m_alloc, other.m_alloc);
+				m_short.enable();
+			}
+
+			return assignIfSSO(other);
+		} else if (propagate)
+			m_long.template propagateAlloc<Move>(m_short.enabled(), m_alloc, other.m_alloc);
+	}
+
+
+	// Basic container content modification
+
+	template <class... Args> constexpr container_reference insertBasic(size_type index, size_type count, Args&&... args) {
+		if (count == 0)
+			return *this;
+
+		LSD_STRING_IF_SSO_ENABLED_AND_FITS(m_short.size() + count) {
+			m_short.template insert<true>(m_short.m_data + index, count, std::forward<Args>(args)...);
+			return *this;
+		} LSD_STRING_ELSE_DISABLE_SSO
+
+		m_long.template insert<true>(m_alloc, m_long.m_begin + index, count, std::forward<Args>(args)...);
+		return *this;
+	}
+	template <bool CheckCount = true, class... Args> constexpr pointer insertBasic(const_iterator position, size_type count, Args&&... args) {
+		if constexpr (CheckCount) if (count == 0)
+			return const_cast<pointer>(position.get());
+
+		LSD_STRING_IF_SSO_ENABLED_AND_FITS(m_short.size() + count)
+			return m_short.template insert<true>(position.get(), count, std::forward<Args>(args)...);
+		LSD_STRING_ELSE_DISABLE_SSO
+
+		return m_long.template insert<true>(m_alloc, position.get(), count, std::forward<Args>(args)...);
+	}
+
+	template <class... Args> constexpr container_reference appendBasic(size_type count, Args&&... args) {
+		if (count == 0)
+			return *this;
+
+		LSD_STRING_IF_SSO_ENABLED_AND_FITS(m_short.size() + count) {
+			m_short.append(count, std::forward<Args>(args)...);
+			return *this;
+		} LSD_STRING_ELSE_DISABLE_SSO
+
+		m_long.append(m_alloc, count, std::forward<Args>(args)...);
+		return *this;
+	}
+
+	template <class... Args>
+	constexpr container_reference replaceBasic(size_type pos, size_type count, size_type insertCount, Args&&... args) {
+		if (insertCount == 0)
+			return *this;
+
+		LSD_STRING_IF_SSO_ENABLED {
+			const auto siz = m_short.size();
+			if (short_type::fits(siz - count + insertCount)) {
+				const auto first = m_short.m_data + pos;
+				m_short.template replace<true>(count, first, first + count, insertCount, std::forward<Args>(args)...);
+
+				return *this;
+			} LSD_STRING_ELSE_DISABLE_SSO
+
+		const auto first = m_long.m_begin + pos;
+		m_long.template replace<true>(m_alloc, count, first, first + count, insertCount, std::forward<Args>(args)...);
+
+		return *this;
+	}
+	template <class... Args>
+	constexpr container_reference replaceBasic(const_iterator first, const_iterator last, size_type insertCount, Args&&... args) {
+		if (insertCount == 0)
+			return *this;
+
+		const auto dist = std::distance(first, last);
+
+		LSD_STRING_IF_SSO_ENABLED {
+			const auto siz = m_short.size();
+			if (short_type::fits(siz - dist + insertCount)) {
+				m_short.template replace<false>(dist, first.get(), last.get(), insertCount, std::forward<Args>(args)...);
+
+				return *this;
+			} LSD_STRING_ELSE_DISABLE_SSO
+
+		m_long.template replace<false>(m_alloc, dist, first.get(), last.get(), insertCount, std::forward<Args>(args)...);
 
 		return *this;
 	}
 
-	constexpr EraseAndInsertGapReturnInfo eraseAndInsertGap(pointer position, size_type eraseCount, size_type gapSize) { // Does not check for validity of eraseCount or gapSize
-		auto oldSize = size();
-		auto newSize = oldSize + gapSize - eraseCount + 1;
 
-		if (smallStringMode() && (newSize < smallStringCap)) { // Small string mode
-			auto moveSrc = position + eraseCount;
-			auto moveDst = moveSrc + gapSize;
-			traits_type::move(moveDst, moveSrc, pEnd() - moveSrc + 1);
+	// Generalized string range getter functions
 
-			m_short.tag[0] = newSize - 1;
+	constexpr pointer pBegin() noexcept {
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.m_data;
+		return m_long.m_begin;
+	}
+	constexpr const_pointer cpBegin() const noexcept {
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.m_data;
+		return m_long.m_begin;
+	}
+	constexpr pointer pEnd() noexcept {
+		LSD_STRING_IF_SSO_ENABLED {
+			return m_short.m_data + m_short.size();
+		} return m_long.m_end;
+	}
+	constexpr const_pointer cpEnd() const noexcept {
+		LSD_STRING_IF_SSO_ENABLED {
+			return m_short.m_data + m_short.size();
+		} return m_long.m_end;
+	}
 
-			return { position, true };
-		} else if (smallStringMode() && (newSize >= smallStringCap)) { // Exit small string mode
-			auto index = position - m_short.data;
+	template <class ViewType>
+	constexpr ViewType subviewBasic(size_type pos = 0, size_type count = npos) const {
+		LSD_STRING_IF_SSO_ENABLED {
+			const auto siz = m_short.size();
+			if (pos > siz)
+				throw std::out_of_range("lsd::BasicString::subview()/stdsubview(): Out of range position!");
 
-			// Reserve memory without constructing new memory, similar to smartReserve()
-			auto doubleCap = std::max(capacity() * 2, static_cast<size_type>(2)) - 2;
-			auto reserveCount = (newSize > doubleCap) ? newSize : doubleCap;
-			auto newBegin = allocator_traits::allocate(m_alloc, reserveCount);
-			auto newEnd = newBegin + newSize - 1;
+			const auto first = m_short.m_data + pos;
+			return ViewType(first, first + std::min(count, siz - pos));
+		}
 
-			// Prepare some iterators for the following parts
-			auto it = newBegin;
-			auto pos = it + index;
-			auto begIt = pBegin();
+		const auto siz = m_long.size();
+		if (pos > siz)
+			throw std::out_of_range("lsd::BasicString::subview()/stdsubview(): Out of range position!");
 
-			// Re-construct the string in front of pos/position
-			for (; it < pos; it++, begIt++) // Does not need extra check for validity of begin, since if the string was empty, it would be in small string mode
-				allocator_traits::construct(m_alloc, it, *begIt);
+		const auto first = m_long.m_begin + pos;
+		return ViewType(first, first + std::min(count, siz - pos));
+	}
 
-			it += gapSize;
-			begIt += eraseCount;
 
-			// Reconstruct the remaining parts of the string
-			for (; it <= newEnd; it++, begIt++)
-				allocator_traits::construct(m_alloc, it, *begIt);
+	// Conversion functions
+	
+	constexpr void shortToLong() {
+		long_type data { };
+		const auto siz = m_short.size();
+		data.construct(m_alloc, siz, m_short.m_data, m_short.m_data + siz);
+	
+		m_short.disable();
+		m_long = std::move(data);
+	}
 
-			// Assign everything after initialization is finished
-			m_short.tag[0] = smallStringTrueCap;
-			m_long.begin = newBegin;
-			m_long.end = newEnd;
-			m_long.cap = m_long.begin + reserveCount;
+	constexpr void longToShort() {
+		long_type data { std::move(m_long) };
+		const auto siz = data.size();
 
-			return { pos, false };
-		} else { // not in small string mode
-			auto cap = capacity();
+		m_short.construct(siz, data.m_begin, data.m_end);
+		data.dealloc(m_alloc);
+	}
 
-			if (newSize > cap) {
-				auto index = position - m_long.begin;
-
-				// Reserve memory without constructing new memory, similar to smartReserve()
-				auto doubleCap = std::max(cap * 2, static_cast<size_type>(2)) - 2;
-				auto reserveCount = (newSize > doubleCap) ? newSize : doubleCap;
-				auto oldBegin = std::exchange(m_long.begin, allocator_traits::allocate(m_alloc, reserveCount));
-				
-				// Calculate new pointers
-				m_long.end = m_long.begin + newSize - 1;
-				m_long.cap = m_long.begin + reserveCount;
-
-				// Prepare some iterators for the following parts
-				auto pos = m_long.begin + index;
-				auto it = m_long.begin;
-				auto begIt = oldBegin;
-
-				// Re-construct the string in front of pos/position
-				for (; it < pos; it++, begIt++) // Does not need extra check for validity of begin, since if the string was empty, it would be in small string mode
-					allocator_traits::construct(m_alloc, it, *begIt);
-				
-				it += gapSize;
-				begIt += eraseCount;
-
-				// Reconstruct the remaining parts of the string
-				for (; it <= m_long.end; it++, begIt++)
-					allocator_traits::construct(m_alloc, it, *begIt);
-
-				allocator_traits::deallocate(m_alloc, oldBegin, cap);
-
-				return { pos, false };
-			} else {
-				auto oldEnd = std::exchange(m_long.end, m_long.end + gapSize - eraseCount);
-
-				if (oldSize != 0) {
-					auto endIt = m_long.end;
-					auto oldEndIt = oldEnd;
-					auto moveBegin = position + std::min(eraseCount, gapSize);
-
-					for (auto count = m_long.end - oldEnd; count > 0 && oldEndIt > moveBegin; --oldEndIt, --endIt, count--) {
-						allocator_traits::construct(m_alloc, endIt, *oldEndIt);
-						allocator_traits::destroy(m_alloc, oldEndIt);
-					}
-
-					for (; oldEndIt != moveBegin; --endIt, --oldEndIt) { // Custom std::move_backward
-						traits_type::assign(*endIt, *oldEndIt);
-						allocator_traits::destroy(m_alloc, oldEndIt);
-					}
-				}
-				
-				return { position, false };
-			}
+	constexpr void disableSSO() {
+		LSD_STRING_IF_SSO_ENABLED {
+			m_short.disable();
+			m_long = nullptr;
 		}
 	}
 
-	constexpr void destructBehind(pointer position) {
-		if (smallStringMode())
-			for (auto it = m_short.data + smallStringSize(); it != position; it--, m_short.tag[0]--) traits_type::assign(*it, value_type { });
-		else {
-			for (; m_long.end != position; m_long.end--) allocator_traits::destroy(m_alloc, m_long.end);
-			allocator_traits::construct(m_alloc, ++m_long.end, value_type { });
-		}
-	}
+
+	friend class Hash<BasicString>;
 };
+
 
 using String = BasicString<char>;
 using WString = BasicString<wchar_t>;
@@ -1484,20 +1521,20 @@ constexpr WString operator""_s(const wchar_t* str, std::size_t len) {
 } // Inline namespace string_literals
 
 
-template <class C> struct Hash<BasicString<C>> {
-	using string_type = BasicString<C>;
-	using view_type = BasicStringView<C>;
+template <class Char> struct Hash<BasicString<Char>> {
+	using string_type = BasicString<Char>;
+	using view_type = BasicStringView<Char>;
 
 	constexpr std::size_t operator()(const string_type& s) const noexcept { // Uses the djb2 instead of murmur- or CityHash
-		return detail::basicStringHash(s.data(), s.size());
+		return Hash<view_type>()(view_type(s));
 	}
 
 	constexpr std::size_t operator()(const view_type& v) const noexcept {
 		return Hash<view_type>()(v);
 	}
 
-	constexpr std::size_t operator()(const C* str) const noexcept {
-		return Hash<const C*>()(str);
+	constexpr std::size_t operator()(const Char* str) const noexcept {
+		return Hash<const Char*>()(str);
 	}
 };
 
@@ -1555,22 +1592,22 @@ template <class C> struct Hash<BasicString<C>> {
 
 
 [[nodiscard]] inline String toString(int value) {
-	return String::castFrom<int, SIGNED_SCALAR_DIGITS(int)>(value, "%i");
+	return String::castFrom<int, LSD_STRING_SIGNED_SCALAR_DIGITS(int)>(value, "%i");
 }
 [[nodiscard]] inline String toString(long value) {
-	return String::castFrom<long, SIGNED_SCALAR_DIGITS(long)>(value, "%li");
+	return String::castFrom<long, LSD_STRING_SIGNED_SCALAR_DIGITS(long)>(value, "%li");
 }
 [[nodiscard]] inline String toString(long long value) {
-	return String::castFrom<long long, SIGNED_SCALAR_DIGITS(long long)>(value, "%lli");
+	return String::castFrom<long long, LSD_STRING_SIGNED_SCALAR_DIGITS(long long)>(value, "%lli");
 }
 [[nodiscard]] inline String toString(unsigned value) {
-	return String::castFrom<unsigned, UNSIGNED_SCALAR_DIGITS(unsigned)>(value, "%u");
+	return String::castFrom<unsigned, LSD_STRING_UNSIGNED_SCALAR_DIGITS(unsigned)>(value, "%u");
 }
 [[nodiscard]] inline String toString(unsigned long value) {
-	return String::castFrom<unsigned long, UNSIGNED_SCALAR_DIGITS(unsigned long)>(value, "%lu");
+	return String::castFrom<unsigned long, LSD_STRING_UNSIGNED_SCALAR_DIGITS(unsigned long)>(value, "%lu");
 }
 [[nodiscard]] inline String toString(unsigned long long value) {
-	return String::castFrom<unsigned long long, UNSIGNED_SCALAR_DIGITS(unsigned long long)>(value, "%llu");
+	return String::castFrom<unsigned long long, LSD_STRING_UNSIGNED_SCALAR_DIGITS(unsigned long long)>(value, "%llu");
 }
 [[nodiscard]] inline String toString(float value) {
 	return String::castFrom<float, sizeof(float) * 8 + 1>(value, "%g");
@@ -1583,22 +1620,22 @@ template <class C> struct Hash<BasicString<C>> {
 }
 
 [[nodiscard]] inline WString toWString(int value) {
-	return WString::castFrom<int, SIGNED_SCALAR_DIGITS(int)>(value, L"%i");
+	return WString::castFrom<int, LSD_STRING_SIGNED_SCALAR_DIGITS(int)>(value, L"%i");
 }
 [[nodiscard]] inline WString toWString(long value) {
-	return WString::castFrom<long, SIGNED_SCALAR_DIGITS(long)>(value, L"%li");
+	return WString::castFrom<long, LSD_STRING_SIGNED_SCALAR_DIGITS(long)>(value, L"%li");
 }
 [[nodiscard]] inline WString toWString(long long value) {
-	return WString::castFrom<long long, SIGNED_SCALAR_DIGITS(long long)>(value, L"%lli");
+	return WString::castFrom<long long, LSD_STRING_SIGNED_SCALAR_DIGITS(long long)>(value, L"%lli");
 }
 [[nodiscard]] inline WString toWString(unsigned value) {
-	return WString::castFrom<unsigned, UNSIGNED_SCALAR_DIGITS(unsigned)>(value, L"%u");
+	return WString::castFrom<unsigned, LSD_STRING_UNSIGNED_SCALAR_DIGITS(unsigned)>(value, L"%u");
 }
 [[nodiscard]] inline WString toWString(unsigned long value) {
-	return WString::castFrom<unsigned long, UNSIGNED_SCALAR_DIGITS(unsigned long)>(value, L"%lu");
+	return WString::castFrom<unsigned long, LSD_STRING_UNSIGNED_SCALAR_DIGITS(unsigned long)>(value, L"%lu");
 }
 [[nodiscard]] inline WString toWString(unsigned long long value) {
-	return WString::castFrom<unsigned long long, UNSIGNED_SCALAR_DIGITS(unsigned long long)>(value, L"%llu");
+	return WString::castFrom<unsigned long long, LSD_STRING_UNSIGNED_SCALAR_DIGITS(unsigned long long)>(value, L"%llu");
 }
 [[nodiscard]] inline WString toWString(float value) {
 	return WString::castFrom<float, sizeof(float) * 8 + 1>(value, L"%g");
@@ -1624,7 +1661,7 @@ template <class CharTy, class Traits, class Alloc> auto quoted(const lsd::BasicS
 
 // Templated strncmp
 
-template <class Ty> bool strncmp(Ty first, const char* second, std::size_t size) requires isIteratorValue<Ty> {
+template <std::input_iterator Iter> bool strncmp(Iter first, const char* second, std::size_t size) {
 	for (; size > 0; size--, first++, second++) {
 		if (*first != *second) return false;
 	}
