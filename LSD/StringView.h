@@ -132,7 +132,9 @@ public:
 	constexpr size_type copy(pointer dest, size_type count, size_type pos = 0) const {
 		if (pos > size())
 			throw std::out_of_range("lsd::BasicStringView::copy(): Position exceeded string bounds!");
-		return std::distance(dest, traits_type::copy(dest, m_begin + pos, std::min(count, size() - pos)));
+
+		traits_type::copy(dest, m_begin + pos, std::min(count, size() - pos));
+		return std::min(count, size() - pos);
 	}
 
 	constexpr container substr(size_type pos = 0, size_type count = npos) const {
@@ -372,13 +374,14 @@ public:
 	}
 
 	[[nodiscard]] constexpr const_reference at(size_type index) const {
-		auto ptr = m_begin + index;
-		if (ptr >= m_end) throw std::out_of_range("lsd::BasicString::at(): Index exceeded string bounds!");
+		const auto ptr = m_begin + index;
+		if (ptr >= m_end)
+			throw std::out_of_range("lsd::BasicStringView::at(): Index exceeded string bounds!");
 		return *ptr;
 	}
-	[[nodiscard]] constexpr const_reference operator[](size_type index) const {
-		auto ptr = m_begin + index;
-		assert((ptr < m_end) && "lsd::BasicString::operator[]: Index exceeded string bounds!");
+	[[nodiscard]] constexpr const_reference operator[](size_type index) const noexcept {
+		const auto ptr = m_begin + index;
+		assert((ptr < m_end) && "lsd::BasicStringView::operator[]: Index exceeded string bounds!");
 		return *ptr;
 	}
 
@@ -452,7 +455,7 @@ template <class C> struct Hash<BasicStringView<C>> {
 	using traits_type = view_type::traits_type;
 
 	constexpr std::size_t operator()(view_type s) const noexcept { // Uses the djb2 instead of murmur- or CityHash
-		return detail::basicStringHash(s.data(), s.size());
+		return detail::basicStringHash(s.data(), s.data() + s.size());
 	}
 
 	constexpr std::size_t operator()(const C* s) const noexcept {

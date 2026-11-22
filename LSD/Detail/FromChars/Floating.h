@@ -8,7 +8,7 @@
  * @copyright Copyright (c) 2024
  *************************/
 
-#include "../CoreUtility.h"
+#include "../CoreUtility.hpp"
 #include "Core.h"
 #include "Integral.h"
 #include "ParseFloat.h"
@@ -131,7 +131,7 @@ constexpr std::uint64_t expAndRawMantToMant(std::uint64_t a, std::uint64_t b, ty
 
 
 // Fast conversion path
-template <ContinuousIteratorType Iterator, class Numerical> constexpr bool fastPath(
+template <BidirectionalContinuousIteratorType Iterator, class Numerical> constexpr bool fastPath(
 	const FloatParseResult<Iterator>& parseRes, Numerical& result
 ) {
 	std::int64_t e = parseRes.exponent - parseRes.fracSize;
@@ -169,7 +169,7 @@ template <ContinuousIteratorType Iterator, class Numerical> constexpr bool fastP
 
 
 // Slower path based on the eisel lemire algorithm
-template <ContinuousIteratorType Iterator, class Numerical> constexpr bool eiselLemire(
+template <BidirectionalContinuousIteratorType Iterator, class Numerical> constexpr bool eiselLemire(
 	const FloatParseResult<Iterator>& parseRes, Numerical& result
 ) {
 	using fp_info = FloatingPointInfo<Numerical>;

@@ -37,13 +37,12 @@ public:
 	size_type offset = 0;
 };
 
-template <
-	class Key,
-	class Ty, // When Ty is void, treat as a set
-	class Hash,
-	class Equal,
-	class Alloc
-> class BasicUnorderedDense {
+template <class Key,
+		 class Ty, // When Ty is void, treat as a set
+		 class Hash,
+		 class Equal,
+		 class Alloc>
+class BasicUnorderedDense {
 public:
 	// Type aliases and constants
 

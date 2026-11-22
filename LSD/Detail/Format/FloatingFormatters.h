@@ -14,7 +14,7 @@
 #include "FormatSpecs.h"
 #include "FormatContext.h"
 
-#include "../CoreUtility.h"
+#include "../CoreUtility.hpp"
 #include "../../String.h"
 #include "../../StringView.h"
 

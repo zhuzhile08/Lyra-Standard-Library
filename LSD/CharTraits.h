@@ -53,7 +53,8 @@ public:
 			return dst;
 
 		if consteval {
-			return std::copy(src, src + count, dst + count);
+			std::copy(src, src + count, dst + count);
+			return dst;
 		} else {
 			return static_cast<char_type*>(std::memcpy(dst, src, count * sizeof(char_type)));
 		}
@@ -64,12 +65,12 @@ public:
 			return dst;
 
 		if consteval {
-			if (const auto dstEnd = dst + count; dst > src && dst < dstEnd) {
+			if (const auto dstEnd = dst + count; dst > src && dst < dstEnd)
 				std::copy_backward(src, src + count, dstEnd);
-				return dst;
-			}
+			else
+				std::copy(src, src + count, dst);
 
-			return std::copy(src, src + count, dst);
+			return dst;
 		} else {
 			return static_cast<char_type*>(std::memmove(dst, src, count * sizeof(char_type)));
 		}

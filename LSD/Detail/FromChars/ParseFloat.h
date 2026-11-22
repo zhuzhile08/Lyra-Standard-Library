@@ -37,7 +37,7 @@ namespace detail {
 
 // Structural implementation of the floating point spec
 
-template <ContinuousIteratorType Iterator> struct FloatParseResult {
+template <BidirectionalContinuousIteratorType Iterator> struct FloatParseResult {
 public:
 	bool negative = false;
 
@@ -95,7 +95,7 @@ requires (
 
 // The parser itself
 
-template <ContinuousIteratorType Iterator, class Floating> constexpr std::errc parseFloatingPoint(
+template <BidirectionalContinuousIteratorType Iterator, class Floating> constexpr std::errc parseFloatingPoint(
 	FloatParseResult<Iterator>& result,
 	Iterator begin,
 	Iterator end,

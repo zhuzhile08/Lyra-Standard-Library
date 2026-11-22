@@ -10,63 +10,14 @@
 
 #pragma once
 
-#include "Iterators.h"
-#include "Detail/ForwardListNode.h"
+#include "Detail/List/ForwardListNode.hpp"
+#include "Detail/List/Iterator.hpp"
 
-#include <initializer_list>
-#include <functional>
 #include <utility>
+#include <initializer_list>
+#include <memory>
 
 namespace lsd {
-
-template <class Ty> class ForwardListIterator {
-public:
-	using difference_type = std::ptrdiff_t;
-	using iterator_category = std::forward_iterator_tag;
-
-	using value_type = Ty;
-	using const_value = const value_type;
-	using pointer = value_type*;
-	using const_pointer = const pointer;
-	using reference = value_type&;
-	using const_reference = const_value&;
-
-	using node_base = detail::ForwardListNodeBase;
-	using node_type = detail::ForwardListNode<value_type>;
-	using node_pointer = node_type*;
-
-	using container = ForwardListIterator;
-	using container_reference = container&;
-	using const_container_reference = const container&;
-
-	constexpr ForwardListIterator() noexcept = default;
-	constexpr ForwardListIterator(node_base* pointer) noexcept : m_pointer(pointer) { }
-
-	constexpr reference operator*() const { return static_cast<node_pointer>(m_pointer)->value; }
-	constexpr pointer operator->() const noexcept { return &static_cast<node_pointer>(m_pointer)->value; }
-	constexpr node_base* get() noexcept { return m_pointer; }
-	constexpr const node_base* get() const noexcept { return m_pointer; }
-
-	constexpr container_reference operator++() noexcept { 
-		m_pointer = m_pointer->next; 
-		return *this; 
-	}
-	constexpr container operator++(int) noexcept { 
-		container tmp = *this; 
-		++(*this); 
-		return tmp; 
-	}
-
-	constexpr operator ForwardListIterator<const_value>() const noexcept {
-		return m_pointer;
-	}
-
-	friend constexpr bool operator==(const_container_reference first, const_container_reference second) noexcept { return first.m_pointer == second.m_pointer; }
-
-private:
-	node_base* m_pointer;
-};
-
 
 template <class Ty, class Alloc = std::allocator<Ty>> class ForwardList {
 public:
@@ -93,7 +44,7 @@ public:
 	using init_list = std::initializer_list<value_type>;
 
 private:
-	using node_type = detail::ForwardListNode<value_type>;
+	using node_type = forward_list::ForwardListNode<value_type>;
 	using node_pointer = node_type*;
 
 	using node_alloc = allocator_traits::template rebind_alloc<node_type>;
@@ -107,7 +58,7 @@ public:
 		m_alloc(alloc) { insertAfter(beforeBegin(), count, value); }
 	constexpr ForwardList(size_type count, const_alloc_reference alloc = allocator_type()) : 
 		m_alloc(alloc) { resize(count); }
-	template <class It> constexpr ForwardList(It first, It last, const_alloc_reference alloc = allocator_type()) requires isIteratorValue<It> : 
+	template <std::input_iterator Iter> constexpr ForwardList(Iter first, Iter last, const_alloc_reference alloc = allocator_type()) : 
 		m_alloc(alloc) { insertAfter(beforeBegin(), first, last); }
 	constexpr ForwardList(const_container_reference other, const_alloc_reference alloc = allocator_type()) :
 		m_alloc(alloc) { insertAfter(beforeBegin(), other.begin(), other.end()); }
@@ -125,7 +76,7 @@ public:
 		clear();
 		insertAfter(beforeBegin(), count, value);
 	}
-	template <class It> constexpr void assign(It first, It last) requires isIteratorValue<It> {
+	template <std::input_iterator Iter> constexpr void assign(Iter first, Iter last) {
 		clear();
 		insertAfter(beforeBegin(), first, last);
 	}
@@ -197,7 +148,7 @@ public:
 	}
 
 	constexpr iterator insertAfter(const_iterator pos, const_reference value) {
-		auto it = const_cast<detail::ForwardListNodeBase*>(pos.get());
+		auto it = const_cast<forward_list::ForwardListNodeBase*>(pos.get());
 		auto next = it->next;
 		
 		it->next = node_traits::allocate(m_alloc, 1);
@@ -208,7 +159,7 @@ public:
 		return it->next;
 	}
 	constexpr iterator insertAfter(const_iterator pos, rvreference value) {
-		auto it = const_cast<detail::ForwardListNodeBase*>(pos.get());
+		auto it = const_cast<forward_list::ForwardListNodeBase*>(pos.get());
 		auto next = it->next;
 		
 		it->next = node_traits::allocate(m_alloc, 1);
@@ -219,7 +170,7 @@ public:
 		return it->next;
 	}
 	constexpr iterator insertAfter(const_iterator pos, size_type count, const_reference value) {
-		auto it = const_cast<detail::ForwardListNodeBase*>(pos.get());
+		auto it = const_cast<forward_list::ForwardListNodeBase*>(pos.get());
 		auto next = it->next;
 
 		auto ptr = it;
@@ -234,8 +185,8 @@ public:
 
 		return ptr;
 	}
-	template <class It> constexpr iterator insertAfter(const_iterator pos, It first, It last) requires isIteratorValue<It> {
-		auto it = const_cast<detail::ForwardListNodeBase*>(pos.get());
+	template <std::input_iterator Iter> constexpr iterator insertAfter(const_iterator pos, Iter first, Iter last) {
+		auto it = const_cast<forward_list::ForwardListNodeBase*>(pos.get());
 		auto next = it->next;
 
 		auto ptr = it;
@@ -254,7 +205,7 @@ public:
 		return insertAfter(pos, ilist.begin(), ilist.end());
 	}
 	template <class... Args> constexpr iterator emplaceAfter(const_iterator pos, Args&&... args) {
-		auto it = const_cast<detail::ForwardListNodeBase*>(pos.get());
+		auto it = const_cast<forward_list::ForwardListNodeBase*>(pos.get());
 		auto next = it->next;
 		
 		it->next = node_traits::allocate(m_alloc, 1);
@@ -273,7 +224,7 @@ public:
 	[[deprecated]] constexpr iterator insert_after(const_iterator pos, size_type count, const_reference value) {
 		return insertAfter(pos, count, value);
 	}
-	template <class It> [[deprecated]] constexpr iterator insert_after(const_iterator pos, It first, It last) requires isIteratorValue<It> {
+	template <std::input_iterator Iter> [[deprecated]] constexpr iterator insert_after(const_iterator pos, Iter first, Iter last) {
 		return insertAfter(pos, first, last);
 	}
 	[[deprecated]] constexpr iterator insert_after(const_iterator pos, init_list ilist) {
@@ -337,7 +288,7 @@ public:
 	}
 
 	constexpr iterator eraseAfter(const_iterator pos) {
-		auto it = const_cast<detail::ForwardListNodeBase*>(pos.get());
+		auto it = const_cast<forward_list::ForwardListNodeBase*>(pos.get());
 		auto next = std::exchange(it->next, it->next->next);
 
 		node_traits::destroy(m_alloc, baseToNode(next));
@@ -347,8 +298,8 @@ public:
 	}
 	constexpr iterator eraseAfter(const_iterator first, const_iterator last) {
 		if (first != last) {
-			auto fptr = const_cast<detail::ForwardListNodeBase*>(first.get());
-			auto lptr = const_cast<detail::ForwardListNodeBase*>(last.get());
+			auto fptr = const_cast<forward_list::ForwardListNodeBase*>(first.get());
+			auto lptr = const_cast<forward_list::ForwardListNodeBase*>(last.get());
 			auto next = std::exchange(fptr->next, lptr);
 
 			while (next != lptr) {
@@ -392,11 +343,11 @@ public:
 
 private:
 	[[no_unique_address]] node_alloc m_alloc { };
-	detail::ForwardListNodeBase m_beforeHead { };
+	forward_list::ForwardListNodeBase m_beforeHead { };
 
-	static constexpr node_pointer baseToNode(detail::ForwardListNodeBase* base) noexcept {
+	static constexpr node_pointer baseToNode(forward_list::ForwardListNodeBase* base) noexcept {
 		return static_cast<node_pointer>(base);
 	}
 };
 
-}
+} // namespace lsd

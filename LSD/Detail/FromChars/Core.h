@@ -26,7 +26,7 @@ enum class CharsFormat {
 };
 
 
-template <ContinuousIteratorType Iterator> struct FromCharsResult {
+template <BidirectionalContinuousIteratorType Iterator> struct FromCharsResult {
 public:
 	Iterator ptr;
 	std::errc ec;
@@ -41,7 +41,7 @@ public:
 namespace detail {
 
 // Caseless strncmp
-template <ContinuousIteratorType Iterator, ContinuousIteratorType Comparison> 
+template <BidirectionalContinuousIteratorType Iterator, BidirectionalContinuousIteratorType Comparison> 
 constexpr bool caselessStrNCmp(Iterator begin, Iterator end, Comparison cmp, std::size_t count) requires(
 	std::is_integral_v<typename std::iterator_traits<Iterator>::value_type> &&
 	std::is_integral_v<typename std::iterator_traits<Comparison>::value_type>

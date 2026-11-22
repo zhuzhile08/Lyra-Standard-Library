@@ -232,7 +232,7 @@ public:
 		return *this;
 	}
 
-	template <lsd::ContinuousIteratorType Iterator> [[nodiscard]] static constexpr json_type parse(Iterator begin, Iterator end) {
+	template <lsd::BidirectionalContinuousIteratorType Iterator> [[nodiscard]] static constexpr json_type parse(Iterator begin, Iterator end) {
 		// First node
 		json_type json;
 		if (begin == end) return json;

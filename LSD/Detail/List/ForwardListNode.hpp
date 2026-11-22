@@ -10,11 +10,11 @@
 
 #pragma once
 
-#include <type_traits>
+#include <utility>
 
 namespace lsd {
 
-namespace detail {
+namespace forward_list {
 
 struct ForwardListNodeBase {
 public:
@@ -25,7 +25,7 @@ template <class Ty> class ForwardListNode : public ForwardListNodeBase {
 public:
 	using value_type = Ty;
 
-	constexpr ForwardListNode() requires std::is_default_constructible_v<value_type> = default;
+	constexpr ForwardListNode() = default;
 	template <class... Args> constexpr ForwardListNode(Args&&... args) noexcept : value(std::forward<Args>(args)...) { }
 
 	value_type value; 
