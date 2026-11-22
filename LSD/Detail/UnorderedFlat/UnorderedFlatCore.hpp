@@ -21,8 +21,6 @@
 #include <type_traits>
 
 
-// #define LSD_UNORDERED_FLAT_REALLOCATE_ON_METADATA_REALLOCATION
-
 #define LSD_UNORDERED_FLAT_IS_SET constexpr (std::is_void_v<mapped_type>)
 #define LSD_UNORDERED_FLAT_REQUIRES_MAP requires(!std::is_void_v<mapped_type>)
 #define LSD_UNORDERED_FLAT_REQUIRES_MAP_AND_KEY_NON_CONVERTIBLE_TO_ITER requires(!std::is_void_v<mapped_type> && !std::is_convertible_v<K&&, const_iterator> && !std::is_convertible_v<K&&, iterator>)
@@ -571,7 +569,10 @@ public:
 
 	constexpr size_type hashToGroup(size_type hash) const noexcept {
 		static constexpr auto sizeLength = 8 * sizeof(size_type);
-		return (groupCount <= 1) ? 0 : (hash >> (sizeLength - std::countr_zero(groupCount)));
+		if (groupCount <= 1) [[unlikely]]
+			return 0;
+		else [[likely]]
+			return hash >> (sizeLength - std::countr_zero(groupCount));
 	}
 
 
@@ -631,10 +632,6 @@ private:
 	}
 	constexpr size_type probeFromLast(size_type last, size_type index) const noexcept {
 		return (last + index) & (groupCount - 1);
-	}
-
-	constexpr size_type iteratorToGroupIndex(const_iterator it) {
-		return reinterpret_cast<const metadata_group*>(it.metadataArray(it.groupIndex())) - metadata;
 	}
 
 
