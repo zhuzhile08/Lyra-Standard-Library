@@ -10,7 +10,6 @@
 
 #pragma once
 
-#include "StringCore.hpp"
 #include "../CoreUtility.hpp"
 
 #include <utility>
@@ -63,7 +62,7 @@ public:
 
 	template <std::random_access_iterator Iter> constexpr void construct(size_type distance, Iter first, Iter last) {
 		if (m_size = 0; distance != 0) {
-			copyFromRange(distance, first, last);
+			copyFromRange(distance, first);
 			createTerminator();
 		}
 	}
@@ -100,7 +99,7 @@ public:
 
 	template <std::input_iterator Iter> constexpr void assign(size_type distance, Iter first, Iter last) {
 		m_size = 0;
-		copyFromRange(distance, first, last);
+		copyFromRange(distance, first);
 		createTerminator();
 	}
 	template <std::input_iterator Iter> constexpr bool assign(Iter first, Iter last) {
@@ -160,7 +159,7 @@ public:
 			throw std::out_of_range("lsd::BasicString::insert(): Out of range position!");
 
 		auto p = const_cast<pointer>(pos);
-		return insertGap(0, p, p, count, &BasicSmallString::pushBackValues, count, value);
+		return insertGap(0, p, p, &BasicSmallString::pushBackValues, count, value);
 	}
 
 	template <bool ThrowException = false, std::input_iterator Iter>
@@ -170,8 +169,8 @@ public:
 		else if (pos - m_data > size())
 			throw std::out_of_range("lsd::BasicString::insert(): Out of range position!");
 
-		auto p = const_cast<pointer>(pos);
-		return insertGap(0, p, p, distance, &BasicSmallString::copyFromRange<Iter>, distance, begin, end);
+		const auto p = const_cast<pointer>(pos);
+		return insertGap(0, p, p, &BasicSmallString::copyFromRange<Iter>, distance, begin);
 	}
 
 	template <bool CreateTerminator = true> constexpr bool append(value_type value) {
@@ -191,7 +190,7 @@ public:
 	}
 
 	template <std::contiguous_iterator Iter> constexpr void append(size_type distance, Iter begin, Iter end) {
-		copyFromRange(distance, begin, end);
+		copyFromRange(distance, begin);
 		createTerminator();
 	}
 	template <std::input_iterator Iter> constexpr bool append(Iter begin, Iter end)
@@ -213,7 +212,7 @@ public:
 		if constexpr (ThrowException) if (first - m_data > size())
 			throw std::out_of_range("lsd::BasicString::replace(): Out of range position!");
 
-		insertGap(eraseCount, const_cast<pointer>(first), const_cast<pointer>(last), count, &BasicSmallString::pushBackValues, count, value);
+		insertGap(eraseCount, const_cast<pointer>(first), const_cast<pointer>(last), &BasicSmallString::pushBackValues, count, value);
 	}
 
 	template <bool ThrowException = false, std::input_iterator Iter>
@@ -223,7 +222,7 @@ public:
 		if constexpr (ThrowException) if (first - m_data > size())
 			throw std::out_of_range("lsd::BasicString::replace(): Out of range position!");
 
-		insertGap(eraseCount, const_cast<pointer>(first), const_cast<pointer>(last), distance, &BasicSmallString::copyFromRange<Iter>, distance, begin, end);
+		insertGap(eraseCount, const_cast<pointer>(first), const_cast<pointer>(last), &BasicSmallString::copyFromRange<Iter>, distance, begin);
 	}
 
 
@@ -295,7 +294,7 @@ private:
 
 	// Container content modification
 
-	template <std::input_iterator Iter> constexpr void copyFromRange(std::size_t distance, Iter first, Iter last) {
+	template <std::input_iterator Iter> constexpr void copyFromRange(size_type distance, Iter first) {
 		traits_type::copy(m_data + size(), first, distance);
 		m_size += distance;
 	}
@@ -314,20 +313,19 @@ private:
 	constexpr pointer insertGap(size_type eraseCount,
 								pointer first,
 								pointer last,
-								size_type gapSize,
 								Inserter&& inserter,
+								size_type insertCount,
 								Args&&... args) {
-		const auto newSize = size() + gapSize - eraseCount;
+		const auto oldSize = size();
+		const auto newSize = oldSize + insertCount - eraseCount;
 
-		const auto end = m_data + size();
-		const auto newEnd = end + gapSize - eraseCount;
+		const auto oldEnd = m_data + oldSize;
+		const auto newEnd = m_data + newSize;
 
-		traits_type::assign(*newEnd, value_type { }); // Null terminator, probably better for cache locality if created here
-		traits_type::move(first + gapSize, last, end - last);
+		traits_type::move(first + insertCount, last, std::distance(last, oldEnd) + 1);
 
 		m_size = first - m_data;
-		std::invoke(std::forward<Inserter>(inserter), this, std::forward<Args>(args)...);
-
+		std::invoke(std::forward<Inserter>(inserter), this, insertCount, std::forward<Args>(args)...);
 		m_size = newSize;
 
 		return first;

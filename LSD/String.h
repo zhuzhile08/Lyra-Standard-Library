@@ -10,14 +10,11 @@
 
 #pragma once
 
-#include "Detail/CoreUtility.hpp"
-#include "Utility.h"
 #include "Iterators.h"
 #include "CharTraits.h"
 #include "StringView.h"
 
 #include "Detail/String/StringCore.hpp"
-#include "Detail/String/BasicStringHash.hpp"
 #include "Detail/String/BasicLongString.hpp"
 #include "Detail/String/BasicSmallString.hpp"
 
@@ -125,6 +122,11 @@ public:
 	static_assert(std::is_standard_layout_v<value_type>, "lsd::String: Character type has to  in standard layout!");
 	static_assert(std::is_same_v<value_type, typename traits_type::char_type>, "lsd::String: Character type has to be the same as the type provided to the character traits!");
 
+
+	friend class Hash<BasicString>;
+
+
+	// Construction & Destruction
 
 	constexpr BasicString() noexcept(noexcept(allocator_type())) : BasicString(allocator_type()) { }
 	constexpr explicit BasicString(const_alloc_reference alloc) noexcept(noexcept(allocator_type())) : m_alloc(alloc) { }
@@ -1053,54 +1055,31 @@ public:
 		return allocator();
 	}
 
+
 	[[nodiscard]] constexpr reference at(size_type index) {
-		LSD_STRING_IF_SSO_ENABLED {
-			if (index >= m_short.size())
-				throw std::out_of_range("lsd::BasicString::at(): Index exceeded bounds!");
-	
-			return m_short.m_data[index];
-		}
+		LSD_STRING_IF_SSO_ENABLED
+			return *verifyAt(m_short.m_data, m_short.m_data + m_short.size(), index);
 
-		const auto ptr = m_long.m_begin + index;
-		if (ptr >= m_long.m_end)
-			throw std::out_of_range("lsd::BasicString::at(): Index exceeded bounds!");
-
-		return *ptr;
+		return *verifyAt(m_long.m_begin, m_long.m_end, index);
 	}
 	[[nodiscard]] constexpr const_reference at(size_type index) const {
-		LSD_STRING_IF_SSO_ENABLED {
-			if (index >= m_short.size())
-				throw std::out_of_range("lsd::BasicString::at(): Index exceeded bounds!");
-	
-			return m_short.m_data[index];
-		}
+		LSD_STRING_IF_SSO_ENABLED
+			return *verifyAt(m_short.m_data, m_short.m_data + m_short.size(), index);
 
-		const auto* const ptr = m_long.m_begin + index;
-		if (ptr >= m_long.m_end)
-			throw std::out_of_range("lsd::BasicString::at(): Index exceeded bounds!");
-
-		return *ptr;
+		return *verifyAt(m_long.m_begin, m_long.m_end, index);
 	}
 
-	[[nodiscard]] constexpr reference operator[](size_type index) {
-		LSD_STRING_IF_SSO_ENABLED {
-			assert((index < m_short.size()) && "lsd::BasicString::operator[]: Index exceeded bounds!");
-			return m_short.m_data[index];
-		}
+	[[nodiscard]] constexpr reference operator[](size_type index) noexcept {
+		LSD_STRING_IF_SSO_ENABLED
+			return *verifySubscript(m_short.m_data, m_short.m_data + m_short.size(), index);
 
-		const auto ptr = m_long.m_begin + index;
-		assert((index < m_long.size()) && "lsd::BasicString::operator[]: Index exceeded bounds!");
-		return *ptr;
+		return *verifySubscript(m_long.m_begin, m_long.m_end, index);
 	}
-	[[nodiscard]] constexpr const_reference operator[](size_type index) const {
-		LSD_STRING_IF_SSO_ENABLED {
-			assert((index < m_short.size()) && "lsd::BasicString::operator[]: Index exceeded bounds!");
-			return m_short.m_data[index];
-		}
+	[[nodiscard]] constexpr const_reference operator[](size_type index) const noexcept {
+		LSD_STRING_IF_SSO_ENABLED
+			return *verifySubscript(m_short.m_data, m_short.m_data + m_short.size(), index);
 
-		const auto* const ptr = m_long.m_begin + index;
-		assert((ptr < m_long.m_end) && "lsd::BasicString::operator[]: Index exceeded bounds!");
-		return *ptr;
+		return *verifySubscript(m_long.m_begin, m_long.m_end, index);
 	}
 
 
@@ -1219,6 +1198,49 @@ private:
 		[[no_unique_address]] short_type m_short { };
 		long_type m_long;
 	};
+
+
+	// Generalized string range getter functions
+
+	constexpr pointer pBegin() noexcept {
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.m_data;
+		return m_long.m_begin;
+	}
+	constexpr const_pointer cpBegin() const noexcept {
+		LSD_STRING_IF_SSO_ENABLED
+			return m_short.m_data;
+		return m_long.m_begin;
+	}
+	constexpr pointer pEnd() noexcept {
+		LSD_STRING_IF_SSO_ENABLED {
+			return m_short.m_data + m_short.size();
+		} return m_long.m_end;
+	}
+	constexpr const_pointer cpEnd() const noexcept {
+		LSD_STRING_IF_SSO_ENABLED {
+			return m_short.m_data + m_short.size();
+		} return m_long.m_end;
+	}
+
+	template <class ViewType>
+	constexpr ViewType subviewBasic(size_type pos = 0, size_type count = npos) const {
+		LSD_STRING_IF_SSO_ENABLED {
+			const auto siz = m_short.size();
+			if (pos > siz)
+				throw std::out_of_range("lsd::BasicString::subview()/stdsubview(): Out of range position!");
+
+			const auto first = m_short.m_data + pos;
+			return ViewType(first, first + std::min(count, siz - pos));
+		}
+
+		const auto siz = m_long.size();
+		if (pos > siz)
+			throw std::out_of_range("lsd::BasicString::subview()/stdsubview(): Out of range position!");
+
+		const auto first = m_long.m_begin + pos;
+		return ViewType(first, first + std::min(count, siz - pos));
+	}
 
 
 	// Initialization functions
@@ -1415,49 +1437,6 @@ private:
 	}
 
 
-	// Generalized string range getter functions
-
-	constexpr pointer pBegin() noexcept {
-		LSD_STRING_IF_SSO_ENABLED
-			return m_short.m_data;
-		return m_long.m_begin;
-	}
-	constexpr const_pointer cpBegin() const noexcept {
-		LSD_STRING_IF_SSO_ENABLED
-			return m_short.m_data;
-		return m_long.m_begin;
-	}
-	constexpr pointer pEnd() noexcept {
-		LSD_STRING_IF_SSO_ENABLED {
-			return m_short.m_data + m_short.size();
-		} return m_long.m_end;
-	}
-	constexpr const_pointer cpEnd() const noexcept {
-		LSD_STRING_IF_SSO_ENABLED {
-			return m_short.m_data + m_short.size();
-		} return m_long.m_end;
-	}
-
-	template <class ViewType>
-	constexpr ViewType subviewBasic(size_type pos = 0, size_type count = npos) const {
-		LSD_STRING_IF_SSO_ENABLED {
-			const auto siz = m_short.size();
-			if (pos > siz)
-				throw std::out_of_range("lsd::BasicString::subview()/stdsubview(): Out of range position!");
-
-			const auto first = m_short.m_data + pos;
-			return ViewType(first, first + std::min(count, siz - pos));
-		}
-
-		const auto siz = m_long.size();
-		if (pos > siz)
-			throw std::out_of_range("lsd::BasicString::subview()/stdsubview(): Out of range position!");
-
-		const auto first = m_long.m_begin + pos;
-		return ViewType(first, first + std::min(count, siz - pos));
-	}
-
-
 	// Conversion functions
 	
 	constexpr void shortToLong() {
@@ -1484,8 +1463,23 @@ private:
 		}
 	}
 
+	
+	// Helper functions
 
-	friend class Hash<BasicString>;
+	template <class Pointer>
+	static constexpr Pointer verifyAt(Pointer begin, Pointer end, size_type index) {
+		const auto ptr = begin + index;
+		if (ptr >= end)
+			throw std::out_of_range("lsd::BasicString::at(): Index exceeded bounds!");
+
+		return ptr;
+	}
+	template <class Pointer>
+	static constexpr Pointer verifySubscript(Pointer begin, Pointer end, size_type index) noexcept {
+		const auto ptr = begin + index;
+		assert((ptr < end) && "lsd::BasicString::operator[]: Index exceeded bounds!");
+		return ptr;
+	}
 };
 
 

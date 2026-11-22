@@ -75,7 +75,7 @@ public:
 			m_end = std::exchange(other.m_end, pointer { });
 			m_cap = std::exchange(other.m_cap, pointer { });
 		} else {
-			allocateBuffer(alloc, other.size());
+			allocBuffer(alloc, other.size());
 			copyFromRange(other.size(), other.m_begin, other.m_end);
 			createTerminator();
 		}
@@ -122,7 +122,7 @@ public:
 	template <bool Terminate = false>
 	constexpr void construct(alloc_reference alloc, container_rvreference other, const_alloc_reference otherAlloc, size_type count) {
 		if constexpr (!alloc_traits::is_always_equal::value) if (alloc != otherAlloc) {
-			allocateBuffer(alloc, other.size());
+			allocBuffer(alloc, other.size());
 			if constexpr (Terminate)
 				copyFromRange(other.size(), other.m_begin, other.m_begin + std::min(count, other.size()));
 			else
@@ -316,7 +316,7 @@ public:
 			throw std::out_of_range("lsd::BasicString::insert(): Out of range position!");
 
 		auto p = const_cast<pointer>(pos);
-		return insertGap(alloc, 0, p, p, count, &BasicLongString::pushBackValues, count, value);
+		return insertGap(alloc, 0, p, p, &BasicLongString::pushBackValues, count, value);
 	}
 
 	template <bool ThrowException, std::input_iterator Iter>
@@ -327,7 +327,7 @@ public:
 			throw std::out_of_range("lsd::BasicString::insert(): Out of range position!");
 
 		auto p = const_cast<pointer>(pos);
-		return insertGap(alloc, 0, p, p, distance, &BasicLongString::copyFromRange<Iter>, distance, begin, end);
+		return insertGap(alloc, 0, p, p, &BasicLongString::copyFromRange<Iter>, distance, begin, end);
 	}
 
 	template <bool CreateTerminator = true> constexpr void append(alloc_reference alloc, value_type value) {
@@ -368,7 +368,7 @@ public:
 		if constexpr (ThrowException) if (first > m_end)
 			throw std::out_of_range("lsd::BasicString::replace(): Out of range position!");
 		
-		insertGap(alloc, eraseCount, const_cast<pointer>(first), const_cast<pointer>(last), count, &BasicLongString::pushBackValues, count, value);
+		insertGap(alloc, eraseCount, const_cast<pointer>(first), const_cast<pointer>(last), &BasicLongString::pushBackValues, count, value);
 	}
 
 	template <bool ThrowException, std::input_iterator Iter>
@@ -378,7 +378,7 @@ public:
 		if constexpr (ThrowException) if (first > m_end)
 			throw std::out_of_range("lsd::BasicString::replace(): Out of range position!");
 
-		insertGap(alloc, eraseCount, const_cast<pointer>(first), const_cast<pointer>(last), distance, &BasicLongString::copyFromRange<Iter>, distance, begin, end);
+		insertGap(alloc, eraseCount, const_cast<pointer>(first), const_cast<pointer>(last), &BasicLongString::copyFromRange<Iter>, distance, begin, end);
 	}
 
 
@@ -426,7 +426,7 @@ public:
 		return alloc_traits::max_size(alloc);
 	}
 	[[nodiscard]] constexpr size_type capacity() const noexcept {
-		return m_cap - m_begin;
+		return (m_cap == m_begin) ? 0 : m_cap - m_begin - 1;
 	}
 	[[nodiscard]] constexpr bool empty() const noexcept {
 		return m_begin == m_end;
@@ -443,8 +443,8 @@ private:
 	// Buffer allocation
 	
 	constexpr void allocateFresh(alloc_reference alloc, size_type cap) {
-		m_begin = alloc_traits::allocate(alloc, cap);
-		m_cap = m_begin + cap;
+		m_begin = alloc_traits::allocate(alloc, cap + 1);
+		m_cap = m_begin + cap + 1;
 		m_end = m_begin;
 	}
 
@@ -468,9 +468,9 @@ private:
 			throw std::length_error("lsd::BasicString::reserveImpl(): Size exceeded maximum allocation size!");
 
 		if (m_begin) {
-			auto oldBegin = std::exchange(m_begin, alloc_traits::allocate(alloc, cap));
+			auto oldBegin = std::exchange(m_begin, alloc_traits::allocate(alloc, cap + 1));
 			auto oldEnd = std::exchange(m_end, m_begin);
-			auto oldCap = std::exchange(m_cap, m_begin + cap);
+			auto oldCap = std::exchange(m_cap, m_begin + cap + 1);
 
 			copyFromRange(oldEnd - oldBegin, oldBegin, oldEnd);
 
@@ -489,7 +489,7 @@ private:
 
 	// Container content modification
 
-	template <std::input_iterator Iter> constexpr void copyFromRange(std::size_t distance, Iter first, Iter last) {
+	template <std::input_iterator Iter> constexpr void copyFromRange(size_type distance, Iter first, Iter last) {
 		m_end = traits_type::copy(m_end, first, distance) + distance;
 	}
 
@@ -532,16 +532,15 @@ private:
 
 	template <class Inserter, class... Args>
 	constexpr pointer insertGap(alloc_reference alloc,
-								size_type eraseCount,
+								size_type eraseCount, // eraseCount == std::distance(first, last)
 								pointer first,
 								pointer last,
-								size_type gapSize,
 								Inserter&& inserter,
+								size_type insertCount,
 								Args&&... args) {
 		const auto oldSize = size();
 		const auto oldCap = capacity();
-
-		const auto newSize = oldSize + gapSize - eraseCount;
+		const auto newSize = oldSize + insertCount - eraseCount;
 
 		if (newSize > oldCap) { // New memory needs to be reserved
 			const auto oldBegin = m_begin;
@@ -553,24 +552,24 @@ private:
 
 			if (oldBegin != oldEnd) { // Copy contents from last container if it was valid
 				copyFromRange(firstOffset, oldBegin, first);
-				std::invoke(std::forward<Inserter>(inserter), this, std::forward<Args>(args)...);
+				std::invoke(std::forward<Inserter>(inserter), this, insertCount, std::forward<Args>(args)...);
 				copyFromRange(oldEnd - last, last, oldEnd);
-
-				alloc_traits::deallocate(alloc, oldBegin, oldCap);
-			}
+			} else
+				std::invoke(std::forward<Inserter>(inserter), this, insertCount, std::forward<Args>(args)...);
 
 			createTerminator();
+			
+			if (oldCap != 0)
+				alloc_traits::deallocate(alloc, oldBegin, oldCap);
 
 			return m_begin + firstOffset;
 		} else { // Continue using old memory
-			const auto newEnd = m_end + gapSize - eraseCount;
+			const auto newEnd = m_begin + newSize;
 
-			traits_type::assign(*newEnd, value_type { }); // Null terminator, probably better for cache locality if created here
-			traits_type::move(first + gapSize, last, m_end - last);
+			traits_type::move(first + insertCount, last, m_end - last + 1); // Add one to move the null terminator along
 
 			m_end = first;
-			std::invoke(std::forward<Inserter>(inserter), this, std::forward<Args>(args)...);
-
+			std::invoke(std::forward<Inserter>(inserter), this, insertCount, std::forward<Args>(args)...);
 			m_end = newEnd;
 
 			return first;
