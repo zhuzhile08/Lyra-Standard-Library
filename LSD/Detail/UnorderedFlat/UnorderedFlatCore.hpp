@@ -646,8 +646,9 @@ private:
 	}
 
 	constexpr void clearArray() {
-		for (auto it = begin(); it.m_pointer != nullptr; it++)
-			allocator_traits::destroy(alloc, it.m_pointer);
+		if constexpr (!std::is_trivially_destructible_v<value_type>)
+			for (auto it = begin(); it.m_pointer != nullptr; it++)
+				allocator_traits::destroy(alloc, it.m_pointer);
 
 		size = 0;
 	}
@@ -834,17 +835,12 @@ private:
 
 		// If the old array wasn't empty, we move over the old elements
 		if (size != 0) {
-			int count = 0;
 			for (auto it = iterator(oldMetadata, oldArray); it.m_pointer != nullptr; it++) {
 				const auto hash = postMixOrHash(pairToKey(*it));
 
 				allocator_traits::construct(alloc, insertShortHashAndGetIterator<false>(metadata_group::hashToMetadata(hash), hashToGroup(hash)), std::move(*it));
 				allocator_traits::destroy(alloc, it.m_pointer);
-
-				++count;
 			}
-
-			std::printf("%zu, %zu\n", count, size);
 		}
 
 		allocator_traits::deallocate(alloc, oldArray, oldGroupCount * bucketGroupSize());

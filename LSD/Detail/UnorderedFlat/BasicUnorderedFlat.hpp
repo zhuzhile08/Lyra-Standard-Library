@@ -326,7 +326,12 @@ public:
 		return 0;
 	}
 	constexpr size_type erase(const key_type& key) {
-		return erase(key);
+		if (const auto it = find(key); it.m_pointer != nullptr) {
+			erase(it);
+			return 1;
+		}
+
+		return 0;
 	}
 
 	constexpr value_type extract(const_iterator pos) {

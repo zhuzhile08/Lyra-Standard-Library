@@ -73,7 +73,6 @@ public:
 	static constexpr size_type bucketCount = 15; // Bucket size refers to the actual elements stored
 	static constexpr size_type groupSize = 16; // Group size refers to the total byte count of the group
 
-	static constexpr word_type empty = 0x0000;
 	static constexpr size_type full = 0x7FFF;
 
 private:
@@ -139,8 +138,8 @@ public:
 		};
 
 		// The only bits set will be the ones which perfectly map to the short hash pattern
-		return foldWord<std::bit_and>(~(m_metadata[0] ^ multiplexBitPattern[shortHash & 0xF]) & 
-									  ~(m_metadata[1] ^ multiplexBitPattern[shortHash >> 4]));
+		return foldWord<true>(~(m_metadata[0] ^ multiplexBitPattern[shortHash & 0xF]) & 
+							  ~(m_metadata[1] ^ multiplexBitPattern[shortHash >> 4]));
 	}
 
 	constexpr std::uint32_t matchOccupied() const noexcept {
@@ -195,16 +194,23 @@ public:
 	}
 
 	static constexpr size_type matchOccupied(const_word_pointer metadata) noexcept {
-		return foldWord<std::bit_or>(metadata[0] | metadata[0]);
+		return foldWord<false>(metadata[0] | metadata[1]);
 	}
 
+
+	static constexpr size_type empty(const_word_pointer metadata) noexcept {
+		return ((metadata[0] | metadata[1]) & UINT64_C(0x7FFF7FFF7FFF7FFF)) == 0;
+	}
+
+
 	static constexpr bool isSentinel(const_word_pointer metadata, size_type index) noexcept {
+		static constexpr auto pattern = occupiedBitPattern << sentinelIndex;
+
 		if (index != sentinelIndex)
 			return false;
 
-		const auto pattern = occupiedBitPattern << index;
-		const auto topEmpty = (metadata[1] & pattern) == 0;
 		const auto bottomSet = (metadata[0] & pattern) == 0x4000;
+		const auto topEmpty = (metadata[1] & pattern) == 0;
 
 		return topEmpty && bottomSet;
 	}
@@ -244,13 +250,14 @@ private:
 		metadata[1] = metadata[1] & clear | highBits;
 	}
 
-	template <template <class> class Operator> static constexpr size_type foldWord(word_type word) noexcept {
-		using oper = Operator<word_type>;
-
-		const auto fold1 = (oper()(word, word << 16)) >> 48;
-		const auto fold2 = oper()(word, word >> 16);
-
-		return static_cast<size_type>(oper()(fold1, fold2)) & full;
+	template <bool Strict> static constexpr size_type foldWord(word_type word) noexcept {
+		if constexpr (Strict) {
+			word &= word >> 32;
+			return static_cast<size_type>(word & (word >> 16)) & full;
+		} else {
+			word |= word >> 32;
+			return static_cast<size_type>(word | (word >> 16)) & full;
+		}
 	}
 };
 

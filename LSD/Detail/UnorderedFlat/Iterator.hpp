@@ -54,9 +54,17 @@ public:
 
 	constexpr container_reference operator++() noexcept {
 		const auto index = groupIndex();
-		m_pointer -= index;
-
+		const auto next = index + 1;
 		const auto metadata = metadataArray(index);
+		
+		if (next < metadata_group::bucketCount - 1 && metadata_group::occupied(metadata, next)) [[likely]] {
+			++m_metadata;
+			++m_pointer;
+
+			return *this;
+		}
+
+		m_pointer -= index;
 		basicIncrement(metadata, metadata_group::matchOccupied(metadata) & (0b1111111111111110 << index));
 	
 		return *this;
@@ -113,18 +121,21 @@ private:
 	}
 
 	constexpr void basicIncrement(const_word_pointer metadata, size_type occupied) noexcept {
-		for (; occupied == 0; occupied = metadata_group::matchOccupied(metadata)) {
-			metadata += metadata_group::groupWordSize;
-	
-			m_pointer += metadata_group::bucketCount;
+		if (occupied == 0) {
+			do {
+				metadata += metadata_group::groupWordSize;
+				m_pointer += metadata_group::bucketCount;
+			} while (metadata_group::empty(metadata));
+
+			occupied = metadata_group::matchOccupied(metadata);
 		}
 
-		const auto emptyCount = std::countr_zero(occupied);
-		if (metadata_group::isSentinel(metadata, emptyCount))
+		const auto index = std::countr_zero(occupied);
+		if (metadata_group::isSentinel(metadata, index)) [[unlikely]]
 			m_pointer = nullptr;
-		else {
-			m_metadata = reinterpret_cast<metadata_pointer>(metadata) + emptyCount;
-			m_pointer += emptyCount;
+		else [[likely]] {
+			m_metadata = reinterpret_cast<metadata_pointer>(metadata) + index;
+			m_pointer += index;
 		}
 	}
 
