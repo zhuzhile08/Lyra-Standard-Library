@@ -71,17 +71,16 @@ public:
 	constexpr explicit Vector(size_type count, const_alloc_reference alloc = allocator_type()) : 
 		Vector(count, value_type { }, alloc) { }
 
-	template <std::random_access_iterator Iter> constexpr Vector(Iter first, Iter last, const_alloc_reference alloc = allocator_type()) : m_alloc(alloc) {
-		if (first != last) {
-			allocBuffer(std::distance(first, last));
-			moveFromRange(first, last);
+	template <std::input_iterator Iter> constexpr Vector(Iter first, Iter last, const_alloc_reference alloc = allocator_type()) : m_alloc(alloc) {
+		if constexpr (std::random_access_iterator<Iter>) {
+			for (; first != last; first++)
+				emplaceBack(std::move(*first));
+		} else {
+			if (first != last) {
+				allocBuffer(std::distance(first, last));
+				moveFromRange(first, last);
+			}
 		}
-	}
-	template <std::input_iterator Iter> constexpr Vector(Iter first, Iter last, const_alloc_reference alloc = allocator_type())
-		requires(!std::random_access_iterator<Iter>) : m_alloc(alloc) {
-
-		for (; first != last; first++)
-			emplaceBack(std::move(*first));
 	}
 
 	constexpr Vector(const_container_reference other, const std::type_identity_t<allocator_type>& alloc) : m_alloc(alloc) {
@@ -100,13 +99,13 @@ public:
 		m_cap(std::exchange(other.m_cap, pointer { })) { }
 	constexpr Vector(container_rvreference other, const std::type_identity_t<allocator_type>& alloc)
 		requires(alloc_traits::is_always_equal::value) :
-		m_alloc(alloc),
-		m_begin(std::exchange(other.m_begin, pointer { })),
-		m_end(std::exchange(other.m_end, pointer { })),
-		m_cap(std::exchange(other.m_cap, pointer { })) { }
+			m_alloc(alloc),
+			m_begin(std::exchange(other.m_begin, pointer { })),
+			m_end(std::exchange(other.m_end, pointer { })),
+			m_cap(std::exchange(other.m_cap, pointer { })) { }
 	constexpr Vector(container_rvreference other, const std::type_identity_t<allocator_type>& alloc)
-		requires(!alloc_traits::is_always_equal::value) : m_alloc(alloc) {
-
+		requires(!alloc_traits::is_always_equal::value) : m_alloc(alloc)
+	{
 		if (m_alloc == other.m_alloc) {
 			swapBuffers(other);
 		} else {
@@ -131,7 +130,7 @@ public:
 
 
 	constexpr container_reference operator=(const_container_reference other) {
-		if (this == &other)
+		if (this == std::addressof(other))
 			return *this;
 
 		if constexpr (
@@ -165,7 +164,7 @@ public:
 	constexpr container_reference operator=(container_rvreference other)
 		noexcept(alloc_traits::propagate_on_container_move_assignment::value || alloc_traits::is_always_equal::value) {
 
-		if (this == &other)
+		if (this == std::addressof(other))
 			return *this;
 
 		if constexpr (
@@ -292,7 +291,7 @@ public:
 
 
 	constexpr void resize(size_type count, const_reference value) {
-		auto siz = size();
+		const auto siz = size();
 		if (count > siz) {
 			smartReserve(count);
 			pushBackValues(count - siz, value);
@@ -303,14 +302,14 @@ public:
 		resize(count, value_type { });
 	}
 	constexpr void reserve(size_type count) {
-		auto cap = capacity();
+		const auto cap = capacity();
 
 		if (count > cap)
 			reserveImpl(count);
 	}
 	constexpr void shrinkToFit() {
-		auto siz = size();
-		auto cap = capacity();
+		const auto siz = size();
+		const auto cap = capacity();
 
 		if (siz != 0 && siz < cap)
 			reserveImpl(siz);
@@ -373,7 +372,7 @@ public:
 	constexpr iterator erase(const_iterator pos) {
 		assert((pos < m_end && pos >= m_begin) && "lsd::Vector::erase: Past-end iterator passed to erase!");
 
-		auto it = const_cast<pointer>(pos.get());
+		const auto it = const_cast<pointer>(pos.get());
 
 		if (auto next = it + 1; next < m_end) // The element to be erased is not the last one
 			std::move(next, m_end, it); // Move the other elements normally
@@ -385,7 +384,7 @@ public:
 	constexpr iterator erase(const_iterator first, const_iterator last) {
 		assert((first < m_end && first >= m_begin && last <= m_end && last >= m_begin && last >= first) && "lsd::Vector::erase: Invalid range passed to erase!");
 
-		auto it = const_cast<pointer>(first.get());
+		const auto it = const_cast<pointer>(first.get());
 
 		if (last == first)
 			return it;
@@ -442,24 +441,16 @@ public:
 	}
 
 	[[nodiscard]] constexpr const_reference at(size_type index) const {
-		auto ptr = m_begin + index;
-		if (ptr >= m_end) throw std::out_of_range("lsd::Vector::at(): Index exceeded array bounds!");
-		return *ptr;
+		return *verifyAt(index);
 	}
 	[[nodiscard]] constexpr reference at(size_type index) {
-		auto ptr = m_begin + index;
-		if (ptr >= m_end) throw std::out_of_range("lsd::Vector::at(): Index exceeded array bounds!");
-		return *ptr;
+		return *verifyAt(index);
 	}
 	[[nodiscard]] constexpr const_reference operator[](size_type index) const {
-		auto ptr = m_begin + index;
-		assert((ptr < m_end) && "lsd::Vector::operator[]: Index exceeded array bounds!");
-		return *ptr;
+		return *verifySubstript(index);
 	}
 	[[nodiscard]] constexpr reference operator[](size_type index) {
-		auto ptr = m_begin + index;
-		assert((ptr < m_end) && "lsd::Vector::operator[]: Index exceeded array bounds!");
-		return *ptr;
+		return *verifySubstript(index);
 	}
 
 
@@ -484,6 +475,9 @@ private:
 	pointer m_begin { };
 	pointer m_end { };
 	pointer m_cap { };
+
+
+	// Memory allocation
 
 	constexpr void smartReserve(size_type cap) {
 		auto oldCap = capacity();
@@ -534,6 +528,8 @@ private:
 	}
 
 
+	// Content modification
+
 	template <std::input_iterator Iter> constexpr void copyFromRange(Iter first, Iter last) {
 		for (; first != last; first++, m_end++)
 			alloc_traits::construct(m_alloc, m_end, *first);
@@ -571,6 +567,9 @@ private:
 		++m_end;
 	}
 
+
+	// Swapping
+
 	constexpr void swapContents(container_reference other, size_type otherSize) {
 		reserve(otherSize);
 		const auto otherEnd = std::swap_ranges(m_begin, m_end, other.m_begin);
@@ -583,22 +582,24 @@ private:
 		other.m_end = otherEnd;
 	}
 
-
 	constexpr void swapBuffers(container_reference other) noexcept {
 		std::swap(m_begin, other.m_begin);
 		std::swap(m_end, other.m_end);
 		std::swap(m_cap, other.m_cap);
 	}
 
+
+
+	// Gap insertion for insert
+
 	template <class Inserter1, class Inserter2, class... Args>
 	constexpr pointer insertGap(pointer position, 
 								size_type gapSize,
-							Inserter1&& inserter1,
+								Inserter1&& inserter1,
 								Inserter2&& inserter2,
 								Args&&... args) {
 		const auto oldSize = size();
 		const auto oldCap = capacity();
-
 		const auto newSize = oldSize + gapSize;
 
 		if (newSize > oldCap) { // New memory needs to be reserved
@@ -615,34 +616,52 @@ private:
 
 				for (auto it = oldEnd; it != oldBegin;) // Move backwards to destroy everything, oldEnd is currently in cache
 					alloc_traits::destroy(m_alloc, --it);
+			} else
+				std::invoke(std::forward<Inserter1>(inserter1), this, std::forward<Args>(args)...);
 
+			if (oldCap != 0)
 				alloc_traits::deallocate(m_alloc, oldBegin, oldCap);
-			}
 
 			return m_begin + offset;
-		} else {
-			auto oldEnd = m_end;
-			m_end += gapSize;
+		} else { // Insert gap in place
+			const auto newEnd = m_end + gapSize;
 
 			if (oldSize != 0) {
 				const auto oldEnd = m_end;
-				const auto newEnd = m_end + gapSize;
 
 				auto endIt = newEnd;
-
 				while (endIt != oldEnd && m_end != position) // First, the back elements are constructed newly
 					alloc_traits::construct(m_alloc, --endIt, std::move(*--m_end));
 
 				std::move_backward(position, m_end, endIt); // As the rest is already constructed, they can be moved into the proper position
 
-				m_end = position;
-				std::invoke(std::forward<Inserter2>(inserter2), this, std::forward<Args>(args)...);
+				const auto gapEnd = position + gapSize;
+				for (auto it = position; it != gapEnd; it++)
+					alloc_traits::destroy(m_alloc, it);
 
-				m_end = newEnd;
+				m_end = position;
 			}
+
+			std::invoke(std::forward<Inserter2>(inserter2), this, std::forward<Args>(args)...);
+			m_end = newEnd;
 
 			return position;
 		}
+	}
+
+
+	// Helper functions
+
+	[[nodiscard]] constexpr pointer verifyAt(size_type index) const {
+		auto ptr = m_begin + index;
+		if (ptr >= m_end)
+			throw std::out_of_range("lsd::Vector::at(): Index exceeded array bounds!");
+		return ptr;
+	}
+	[[nodiscard]] constexpr pointer verifySubstript(size_type index) const noexcept {
+		auto ptr = m_begin + index;
+		assert((ptr < m_end) && "lsd::Vector::operator[]: Index exceeded array bounds!");
+		return ptr;
 	}
 };
 
