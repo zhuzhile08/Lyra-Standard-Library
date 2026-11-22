@@ -1,5 +1,5 @@
 /*************************
- * @file UnorderedFlatMap.h
+ * @file UnorderedFlatMap.hpp
  * @author Zhile Zhu (zhuzhile08@gmail.com)
  * 
  * @brief Unordered flat map
@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "Detail/BasicUnorderedFlat.h"
-#include "Detail/CoreUtility.h"
+#include "Detail/UnorderedFlat/BasicUnorderedFlat.hpp"
+#include "Hash.h"
 
 #include <memory>
 

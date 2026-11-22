@@ -1,5 +1,5 @@
 /*************************
- * @file UnorderedFlatSet.h
+ * @file UnorderedFlatSet.hpp
  * @author Zhile Zhu (zhuzhile08@gmail.com)
  * 
  * @brief Unordered flat set
@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "Detail/BasicUnorderedDense.h"
-#include "Detail/CoreUtility.h"
+#include "Detail/UnorderedFlat/BasicUnorderedFlat.hpp"
+#include "Hash.h"
 
 #include <memory>
 
